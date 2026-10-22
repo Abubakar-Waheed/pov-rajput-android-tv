@@ -138,7 +138,7 @@ Requires Windows PowerShell/PowerShell, network access for the initial tool/depe
 
 ## Preview publication
 
-Publication of this preview has been approved for [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv) and the [v0.2.2-preview release](https://github.com/MM-482/pov-android-tv/releases/tag/v0.2.2-preview). The reviewed APK is a debug-signed sideload preview; publication does not change its signing or validation limits. The prepared Android workflow has not yet established a successful hosted run.
+The reviewed preview is published in [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv) and the [v0.2.2-preview release](https://github.com/MM-482/pov-android-tv/releases/tag/v0.2.2-preview). The APK is a debug-signed sideload preview; publication does not change its signing or validation limits. The first hosted build exposed a Windows drive mismatch between temporary output and the checkout. The workflow on `main` now uses the runner's temporary directory for that step; see the [current hosted build results](https://github.com/MM-482/pov-android-tv/actions). This build-environment correction does not change the released APK or its corresponding tagged source ZIP.
 
 ## Connect accounts
 

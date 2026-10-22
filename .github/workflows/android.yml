@@ -32,6 +32,10 @@ jobs:
         run: .\scripts\bootstrap.ps1
 
       - name: Build debug APK, run unit tests, and run lint
+        # AGP unit-test paths must stay on the checkout's Windows drive.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: .\scripts\build.ps1
 
       - name: Save debug APK
