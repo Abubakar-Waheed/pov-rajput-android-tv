@@ -1,0 +1,63 @@
+package dev.pov.tv.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class EpisodeFilenameTest {
+    private val episode = PlaybackIdentity("tt0903747", "series", "Example Show", 1, 2)
+
+    @Test fun selectsRequestedEpisodeInsteadOfLargestFile() {
+        val files = listOf(
+            VideoCandidate(10, "Example.Show.S01E01.mkv", 8_000_000),
+            VideoCandidate(20, "Example.Show.S01E02.mkv", 2_000_000)
+        )
+        assertEquals(20L, EpisodeFilename.select(files, "Example Show Season 1", episode).id)
+    }
+
+    @Test fun sampleIsNeverSelectedAsTheOnlyVideo() {
+        expectFailure { EpisodeFilename.select(listOf(VideoCandidate(0, "sample.mkv", 1_000)), "Sample", episode) }
+    }
+
+    @Test fun duplicateEpisodeVersionsAreAmbiguousWithoutExactFilename() {
+        val files = listOf(
+            VideoCandidate(1, "Example.Show.S01E02.720p.mkv", 2_000),
+            VideoCandidate(2, "Example.Show.S01E02.1080p.mkv", 4_000)
+        )
+        expectFailure { EpisodeFilename.select(files, "Example Show", episode) }
+        assertEquals(2L, EpisodeFilename.select(files, "Example.Show.S01E02.1080p.mkv", episode).id)
+    }
+
+    @Test fun wrongSingleEpisodeIsRejected() {
+        expectFailure {
+            EpisodeFilename.select(listOf(VideoCandidate(0, "Example.Show.S02E02.mp4", 2_000)), "Example Show", episode)
+        }
+    }
+
+    @Test fun episodeRangeAndConsecutiveEpisodeTagsIncludeRequestedEpisode() {
+        assertFalse(EpisodeFilename.isExplicitMismatch("Example.S01E01-E03.mkv", 1, 2))
+        assertFalse(EpisodeFilename.isExplicitMismatch("Example.S01E01E02.mkv", 1, 2))
+        assertTrue(EpisodeFilename.isExplicitMismatch("Example.S01E01E02.mkv", 1, 3))
+        assertFalse(EpisodeFilename.isExplicitMismatch("Example.1x02.mkv", 1, 2))
+        assertTrue(EpisodeFilename.isExplicitMismatch("Example.2x02.mkv", 1, 2))
+    }
+
+    @Test fun multiMoviePackRequiresAnExactFilename() {
+        val movie = PlaybackIdentity("tt0133093", "movie", "The Matrix")
+        val files = listOf(VideoCandidate(1, "The.Matrix.1999.mkv", 3_000), VideoCandidate(2, "The.Matrix.Reloaded.mkv", 4_000))
+        expectFailure { EpisodeFilename.select(files, "The Matrix Collection", movie) }
+        assertEquals(1L, EpisodeFilename.select(files, "The Matrix 1999", movie).id)
+    }
+
+    @Test fun legitimateTrailerParkTitleIsPlayable() {
+        val movie = PlaybackIdentity("tt0384254", "movie", "Trailer Park Boys")
+        assertEquals(1L, EpisodeFilename.select(listOf(VideoCandidate(1, "Trailer.Park.Boys.2006.mkv", 3_000)), movie.title, movie).id)
+    }
+
+    private fun expectFailure(block: () -> Unit) {
+        var failed = false
+        try { block() } catch (_: IllegalStateException) { failed = true }
+        assertTrue("Expected an ambiguous or mismatched video to be rejected", failed)
+    }
+}

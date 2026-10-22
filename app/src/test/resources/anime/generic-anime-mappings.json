@@ -1,0 +1,1922 @@
+{
+  "verifiedDate": "2026-10-22",
+  "source": "Kitsu public anime details, Anime Kitsu per-video metadata, Cinemeta canonical metadata",
+  "46474": {
+    "anime": {
+      "id": "46474",
+      "title": "Frieren: Beyond Journey\u2019s End",
+      "type": "series",
+      "subtype": "TV",
+      "year": "2023"
+    },
+    "mapping": {
+      "meta": {
+        "id": "kitsu:46474",
+        "kitsu_id": "46474",
+        "type": "series",
+        "animeType": "TV",
+        "name": "Sousou no Frieren",
+        "imdb_id": "tt22248376",
+        "videos": [
+          {
+            "id": "kitsu:46474:1",
+            "title": "The Journey's End",
+            "episode": 1,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 1,
+            "absoluteEpisode": 1,
+            "released": "2023-09-29T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:2",
+            "title": "It Didn't Have to Be Magic...",
+            "episode": 2,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 2,
+            "absoluteEpisode": 2,
+            "released": "2023-09-29T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:3",
+            "title": "Killing Magic",
+            "episode": 3,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 3,
+            "absoluteEpisode": 3,
+            "released": "2023-09-29T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:4",
+            "title": "The Land Where Souls Rest",
+            "episode": 4,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 4,
+            "absoluteEpisode": 4,
+            "released": "2023-09-29T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:5",
+            "title": "Phantoms of the Dead",
+            "episode": 5,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 5,
+            "absoluteEpisode": 5,
+            "released": "2023-10-06T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:6",
+            "title": "The Hero of the Village",
+            "episode": 6,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 6,
+            "absoluteEpisode": 6,
+            "released": "2023-10-13T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:7",
+            "title": "Like a Fairy Tale",
+            "episode": 7,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 7,
+            "absoluteEpisode": 7,
+            "released": "2023-10-20T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:8",
+            "title": "Frieren the Slayer",
+            "episode": 8,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 8,
+            "absoluteEpisode": 8,
+            "released": "2023-10-27T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:9",
+            "title": "Aura the Guillotine",
+            "episode": 9,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 9,
+            "absoluteEpisode": 9,
+            "released": "2023-11-03T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:10",
+            "title": "A Powerful Mage",
+            "episode": 10,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 10,
+            "absoluteEpisode": 10,
+            "released": "2023-11-10T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:11",
+            "title": "Winter in the Northern Lands",
+            "episode": 11,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 11,
+            "absoluteEpisode": 11,
+            "released": "2023-11-17T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:12",
+            "title": "A Real Hero",
+            "episode": 12,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 12,
+            "absoluteEpisode": 12,
+            "released": "2023-11-24T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:13",
+            "title": "Aversion to One's Own Kind",
+            "episode": 13,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 13,
+            "absoluteEpisode": 13,
+            "released": "2023-12-01T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:14",
+            "title": "Privilege of the Young",
+            "episode": 14,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 14,
+            "absoluteEpisode": 14,
+            "released": "2023-12-08T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:15",
+            "title": "Smells Like Trouble",
+            "episode": 15,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 15,
+            "absoluteEpisode": 15,
+            "released": "2023-12-15T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:16",
+            "title": "Long-Lived Friends",
+            "episode": 16,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 16,
+            "absoluteEpisode": 16,
+            "released": "2023-12-22T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:17",
+            "title": "Take Care",
+            "episode": 17,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 17,
+            "absoluteEpisode": 17,
+            "released": "2024-01-05T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:18",
+            "title": "First-Class Mage Exam",
+            "episode": 18,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 18,
+            "absoluteEpisode": 18,
+            "released": "2024-01-12T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:19",
+            "title": "Well-Laid Plans",
+            "episode": 19,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 19,
+            "absoluteEpisode": 19,
+            "released": "2024-01-19T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:20",
+            "title": "Necessary Killing",
+            "episode": 20,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 20,
+            "absoluteEpisode": 20,
+            "released": "2024-01-26T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:21",
+            "title": "The World of Magic",
+            "episode": 21,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 21,
+            "absoluteEpisode": 21,
+            "released": "2024-02-02T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:22",
+            "title": "Future Enemies",
+            "episode": 22,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 22,
+            "absoluteEpisode": 22,
+            "released": "2024-02-09T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:23",
+            "title": "Conquering the Labyrinth",
+            "episode": 23,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 23,
+            "absoluteEpisode": 23,
+            "released": "2024-02-16T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:24",
+            "title": "Perfect Replicas",
+            "episode": 24,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 24,
+            "absoluteEpisode": 24,
+            "released": "2024-02-23T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:25",
+            "title": "A Fatal Vulnerability",
+            "episode": 25,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 25,
+            "absoluteEpisode": 25,
+            "released": "2024-03-01T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:26",
+            "title": "The Height of Magic",
+            "episode": 26,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 26,
+            "absoluteEpisode": 26,
+            "released": "2024-03-08T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:27",
+            "title": "An Era of Humans",
+            "episode": 27,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 27,
+            "absoluteEpisode": 27,
+            "released": "2024-03-15T14:00:00.000Z"
+          },
+          {
+            "id": "kitsu:46474:28",
+            "title": "It Would Be Embarrassing When We Met Again",
+            "episode": 28,
+            "imdb_id": "tt22248376",
+            "imdbSeason": 1,
+            "imdbEpisode": 28,
+            "absoluteEpisode": 28,
+            "released": "2024-03-22T14:00:00.000Z"
+          }
+        ]
+      }
+    },
+    "canonical": {
+      "imdbId": "tt22248376",
+      "type": "series",
+      "title": "Frieren: Beyond Journey's End",
+      "episodes": [
+        {
+          "season": 0,
+          "episode": 1,
+          "released": "2023-10-11T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 2,
+          "released": "2023-10-25T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 3,
+          "released": "2023-11-15T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 4,
+          "released": "2023-11-29T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 5,
+          "released": "2023-12-14T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 6,
+          "released": "2023-12-27T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 7,
+          "released": "2024-01-10T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 8,
+          "released": "2024-01-24T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 9,
+          "released": "2024-02-07T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 10,
+          "released": "2024-02-19T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 11,
+          "released": "2024-03-10T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 12,
+          "released": "2024-03-24T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 13,
+          "released": "2024-03-29T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 14,
+          "released": "2024-03-29T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 15,
+          "released": "2024-03-23T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 16,
+          "released": "2025-04-02T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 17,
+          "released": "2025-05-07T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 18,
+          "released": "2025-06-04T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 19,
+          "released": "2025-07-02T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 20,
+          "released": "2025-08-06T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 21,
+          "released": "2025-09-05T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 22,
+          "released": "2026-01-19T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 23,
+          "released": "2026-02-02T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 24,
+          "released": "2026-02-17T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 25,
+          "released": "2026-03-02T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 26,
+          "released": "2026-03-16T14:00:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 27,
+          "released": "2026-05-22T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 1,
+          "released": "2023-09-29T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 2,
+          "released": "2023-09-29T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 3,
+          "released": "2023-09-29T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 4,
+          "released": "2023-09-29T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 5,
+          "released": "2023-10-06T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 6,
+          "released": "2023-10-13T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 7,
+          "released": "2023-10-20T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 8,
+          "released": "2023-10-27T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 9,
+          "released": "2023-11-03T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 10,
+          "released": "2023-11-10T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 11,
+          "released": "2023-11-17T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 12,
+          "released": "2023-11-24T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 13,
+          "released": "2023-12-01T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 14,
+          "released": "2023-12-08T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 15,
+          "released": "2023-12-15T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 16,
+          "released": "2023-12-22T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 17,
+          "released": "2024-01-05T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 18,
+          "released": "2024-01-12T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 19,
+          "released": "2024-01-19T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 20,
+          "released": "2024-01-26T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 21,
+          "released": "2024-02-02T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 22,
+          "released": "2024-02-09T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 23,
+          "released": "2024-02-16T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 24,
+          "released": "2024-02-23T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 25,
+          "released": "2024-03-01T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 26,
+          "released": "2024-03-08T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 27,
+          "released": "2024-03-15T14:00:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 28,
+          "released": "2024-03-22T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 1,
+          "released": "2026-01-16T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 2,
+          "released": "2026-01-23T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 3,
+          "released": "2026-01-30T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 4,
+          "released": "2026-02-06T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 5,
+          "released": "2026-02-13T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 6,
+          "released": "2026-02-27T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 7,
+          "released": "2026-03-06T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 8,
+          "released": "2026-03-13T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 9,
+          "released": "2026-03-20T14:00:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 10,
+          "released": "2026-03-27T14:00:00.000Z"
+        }
+      ]
+    }
+  },
+  "12268": {
+    "anime": {
+      "id": "12268",
+      "title": "My Hero Academia Season 2",
+      "type": "series",
+      "subtype": "TV",
+      "year": "2017"
+    },
+    "mapping": {
+      "meta": {
+        "id": "kitsu:12268",
+        "kitsu_id": "12268",
+        "type": "series",
+        "animeType": "TV",
+        "name": "Boku no Hero Academia 2",
+        "imdb_id": "tt5626028",
+        "videos": [
+          {
+            "id": "kitsu:12268:1",
+            "title": "That's the Idea, Ochako",
+            "episode": 1,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 1,
+            "absoluteEpisode": 14,
+            "released": "2017-04-01T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:2",
+            "title": "Roaring Sports Festival",
+            "episode": 2,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 2,
+            "absoluteEpisode": 15,
+            "released": "2017-04-08T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:3",
+            "title": "In Their Own Quirky Ways",
+            "episode": 3,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 3,
+            "absoluteEpisode": 16,
+            "released": "2017-04-15T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:4",
+            "title": "Strategy, Strategy, Strategy",
+            "episode": 4,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 4,
+            "absoluteEpisode": 17,
+            "released": "2017-04-22T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:5",
+            "title": "Cavalry Battle Finale",
+            "episode": 5,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 5,
+            "absoluteEpisode": 18,
+            "released": "2017-04-29T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:6",
+            "title": "The Boy Born with Everything",
+            "episode": 6,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 6,
+            "absoluteEpisode": 19,
+            "released": "2017-05-06T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:7",
+            "title": "Victory or Defeat",
+            "episode": 7,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 7,
+            "absoluteEpisode": 20,
+            "released": "2017-05-13T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:8",
+            "title": "Battle on, Challengers!",
+            "episode": 8,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 8,
+            "absoluteEpisode": 21,
+            "released": "2017-05-20T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:9",
+            "title": "Bakugo VS Uraraka",
+            "episode": 9,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 9,
+            "absoluteEpisode": 22,
+            "released": "2017-05-27T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:10",
+            "title": "Shouto Todoroki: Origin",
+            "episode": 10,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 10,
+            "absoluteEpisode": 23,
+            "released": "2017-06-03T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:11",
+            "title": "Fight on, Iida",
+            "episode": 11,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 11,
+            "absoluteEpisode": 24,
+            "released": "2017-06-10T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:12",
+            "title": "Todoroki VS Bakugou",
+            "episode": 12,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 12,
+            "absoluteEpisode": 25,
+            "released": "2017-06-17T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:13",
+            "title": "Time to Pick Some Names",
+            "episode": 13,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 13,
+            "absoluteEpisode": 26,
+            "released": "2017-06-24T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:14",
+            "title": "Bizarre! Grantorino Appears",
+            "episode": 14,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 14,
+            "absoluteEpisode": 27,
+            "released": "2017-07-08T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:15",
+            "title": "Midoriya and Shigaraki",
+            "episode": 15,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 15,
+            "absoluteEpisode": 28,
+            "released": "2017-07-15T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:16",
+            "title": "Hero Killer: Stain vs U.A. Students",
+            "episode": 16,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 16,
+            "absoluteEpisode": 29,
+            "released": "2017-07-22T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:17",
+            "title": "Climax",
+            "episode": 17,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 17,
+            "absoluteEpisode": 30,
+            "released": "2017-07-29T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:18",
+            "title": "The Aftermath of Hero Killer Stain",
+            "episode": 18,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 18,
+            "absoluteEpisode": 31,
+            "released": "2017-08-05T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:19",
+            "title": "Everyone's Internships",
+            "episode": 19,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 19,
+            "absoluteEpisode": 32,
+            "released": "2017-08-12T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:20",
+            "title": "Listen Up!! A Tale from the Past",
+            "episode": 20,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 20,
+            "absoluteEpisode": 33,
+            "released": "2017-08-19T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:21",
+            "title": "Gear up for Final Exams",
+            "episode": 21,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 21,
+            "absoluteEpisode": 34,
+            "released": "2017-09-02T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:22",
+            "title": "Yaoyorozu: Rising",
+            "episode": 22,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 22,
+            "absoluteEpisode": 35,
+            "released": "2017-09-09T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:23",
+            "title": "Stripping the Varnish",
+            "episode": 23,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 23,
+            "absoluteEpisode": 36,
+            "released": "2017-09-16T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:24",
+            "title": "Katsuki Bakugou: Origin",
+            "episode": 24,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 24,
+            "absoluteEpisode": 37,
+            "released": "2017-09-23T08:30:00.000Z"
+          },
+          {
+            "id": "kitsu:12268:25",
+            "title": "Encounter",
+            "episode": 25,
+            "imdb_id": "tt5626028",
+            "imdbSeason": 2,
+            "imdbEpisode": 25,
+            "absoluteEpisode": 38,
+            "released": "2017-09-30T08:30:00.000Z"
+          }
+        ]
+      }
+    },
+    "canonical": {
+      "imdbId": "tt5626028",
+      "type": "series",
+      "title": "My Hero Academia",
+      "episodes": [
+        {
+          "season": 0,
+          "episode": 1,
+          "released": "2016-11-27T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 2,
+          "released": "2017-03-25T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 3,
+          "released": "2017-06-02T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 4,
+          "released": "2018-08-30T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 5,
+          "released": "2019-02-13T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 6,
+          "released": "2019-02-13T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 7,
+          "released": "2019-12-20T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 8,
+          "released": "2020-08-15T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 9,
+          "released": "2020-08-15T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 10,
+          "released": "2020-07-15T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 11,
+          "released": "2021-10-29T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 12,
+          "released": "2022-02-16T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 13,
+          "released": "2022-06-16T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 14,
+          "released": "2022-06-16T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 15,
+          "released": "2023-10-20T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 16,
+          "released": "2024-04-06T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 17,
+          "released": "2024-04-13T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 18,
+          "released": "2024-04-20T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 19,
+          "released": "2024-04-27T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 20,
+          "released": "2024-08-02T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 21,
+          "released": "2025-02-19T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 22,
+          "released": "2024-04-12T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 23,
+          "released": "2026-05-02T08:30:00.000Z"
+        },
+        {
+          "season": 0,
+          "episode": 24,
+          "released": "2026-08-03T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 1,
+          "released": "2016-04-03T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 2,
+          "released": "2016-04-10T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 3,
+          "released": "2016-04-17T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 4,
+          "released": "2016-04-24T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 5,
+          "released": "2016-05-01T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 6,
+          "released": "2016-05-08T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 7,
+          "released": "2016-05-15T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 8,
+          "released": "2016-05-22T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 9,
+          "released": "2016-05-29T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 10,
+          "released": "2016-06-05T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 11,
+          "released": "2016-06-12T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 12,
+          "released": "2016-06-19T08:30:00.000Z"
+        },
+        {
+          "season": 1,
+          "episode": 13,
+          "released": "2016-06-26T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 1,
+          "released": "2017-04-01T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 2,
+          "released": "2017-04-08T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 3,
+          "released": "2017-04-15T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 4,
+          "released": "2017-04-22T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 5,
+          "released": "2017-04-29T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 6,
+          "released": "2017-05-06T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 7,
+          "released": "2017-05-13T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 8,
+          "released": "2017-05-20T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 9,
+          "released": "2017-05-27T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 10,
+          "released": "2017-06-03T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 11,
+          "released": "2017-06-10T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 12,
+          "released": "2017-06-17T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 13,
+          "released": "2017-06-24T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 14,
+          "released": "2017-07-08T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 15,
+          "released": "2017-07-15T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 16,
+          "released": "2017-07-22T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 17,
+          "released": "2017-07-29T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 18,
+          "released": "2017-08-05T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 19,
+          "released": "2017-08-12T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 20,
+          "released": "2017-08-19T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 21,
+          "released": "2017-09-02T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 22,
+          "released": "2017-09-09T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 23,
+          "released": "2017-09-16T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 24,
+          "released": "2017-09-23T08:30:00.000Z"
+        },
+        {
+          "season": 2,
+          "episode": 25,
+          "released": "2017-09-30T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 1,
+          "released": "2018-04-07T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 2,
+          "released": "2018-04-14T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 3,
+          "released": "2018-04-21T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 4,
+          "released": "2018-04-28T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 5,
+          "released": "2018-05-05T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 6,
+          "released": "2018-05-12T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 7,
+          "released": "2018-05-19T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 8,
+          "released": "2018-05-26T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 9,
+          "released": "2018-06-02T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 10,
+          "released": "2018-06-09T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 11,
+          "released": "2018-06-16T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 12,
+          "released": "2018-06-23T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 13,
+          "released": "2018-06-30T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 14,
+          "released": "2018-07-14T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 15,
+          "released": "2018-07-21T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 16,
+          "released": "2018-07-28T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 17,
+          "released": "2018-08-04T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 18,
+          "released": "2018-08-11T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 19,
+          "released": "2018-08-18T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 20,
+          "released": "2018-08-25T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 21,
+          "released": "2018-09-01T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 22,
+          "released": "2018-09-08T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 23,
+          "released": "2018-09-15T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 24,
+          "released": "2018-09-22T08:30:00.000Z"
+        },
+        {
+          "season": 3,
+          "episode": 25,
+          "released": "2018-09-29T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 1,
+          "released": "2019-10-12T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 2,
+          "released": "2019-10-19T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 3,
+          "released": "2019-10-26T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 4,
+          "released": "2019-11-09T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 5,
+          "released": "2019-11-16T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 6,
+          "released": "2019-11-23T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 7,
+          "released": "2019-11-30T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 8,
+          "released": "2019-12-07T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 9,
+          "released": "2019-12-14T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 10,
+          "released": "2019-12-21T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 11,
+          "released": "2019-12-28T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 12,
+          "released": "2020-01-04T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 13,
+          "released": "2020-01-11T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 14,
+          "released": "2020-01-18T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 15,
+          "released": "2020-01-25T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 16,
+          "released": "2020-02-01T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 17,
+          "released": "2020-02-08T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 18,
+          "released": "2020-02-15T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 19,
+          "released": "2020-02-22T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 20,
+          "released": "2020-02-29T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 21,
+          "released": "2020-03-07T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 22,
+          "released": "2020-03-14T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 23,
+          "released": "2020-03-21T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 24,
+          "released": "2020-03-28T08:30:00.000Z"
+        },
+        {
+          "season": 4,
+          "episode": 25,
+          "released": "2020-04-04T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 1,
+          "released": "2021-03-27T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 2,
+          "released": "2021-04-03T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 3,
+          "released": "2021-04-10T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 4,
+          "released": "2021-04-17T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 5,
+          "released": "2021-04-24T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 6,
+          "released": "2021-05-01T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 7,
+          "released": "2021-05-08T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 8,
+          "released": "2021-05-15T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 9,
+          "released": "2021-05-22T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 10,
+          "released": "2021-05-29T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 11,
+          "released": "2021-06-05T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 12,
+          "released": "2021-06-12T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 13,
+          "released": "2021-06-19T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 14,
+          "released": "2021-06-26T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 15,
+          "released": "2021-07-10T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 16,
+          "released": "2021-07-17T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 17,
+          "released": "2021-07-24T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 18,
+          "released": "2021-07-31T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 19,
+          "released": "2021-08-14T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 20,
+          "released": "2021-08-21T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 21,
+          "released": "2021-08-28T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 22,
+          "released": "2021-09-04T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 23,
+          "released": "2021-09-11T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 24,
+          "released": "2021-09-18T08:30:00.000Z"
+        },
+        {
+          "season": 5,
+          "episode": 25,
+          "released": "2021-09-25T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 1,
+          "released": "2022-10-01T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 2,
+          "released": "2022-10-08T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 3,
+          "released": "2022-10-15T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 4,
+          "released": "2022-10-22T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 5,
+          "released": "2022-10-29T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 6,
+          "released": "2022-11-05T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 7,
+          "released": "2022-11-12T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 8,
+          "released": "2022-11-19T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 9,
+          "released": "2022-11-26T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 10,
+          "released": "2022-12-03T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 11,
+          "released": "2022-12-10T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 12,
+          "released": "2022-12-17T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 13,
+          "released": "2022-12-24T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 14,
+          "released": "2023-01-07T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 15,
+          "released": "2023-01-14T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 16,
+          "released": "2023-01-21T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 17,
+          "released": "2023-01-28T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 18,
+          "released": "2023-02-04T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 19,
+          "released": "2023-02-11T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 20,
+          "released": "2023-02-18T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 21,
+          "released": "2023-02-25T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 22,
+          "released": "2023-03-04T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 23,
+          "released": "2023-03-11T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 24,
+          "released": "2023-03-18T08:30:00.000Z"
+        },
+        {
+          "season": 6,
+          "episode": 25,
+          "released": "2023-03-25T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 1,
+          "released": "2024-05-04T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 2,
+          "released": "2024-05-11T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 3,
+          "released": "2024-05-18T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 4,
+          "released": "2024-05-25T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 5,
+          "released": "2024-06-01T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 6,
+          "released": "2024-06-08T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 7,
+          "released": "2024-06-15T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 8,
+          "released": "2024-06-22T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 9,
+          "released": "2024-06-29T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 10,
+          "released": "2024-07-13T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 11,
+          "released": "2024-07-20T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 12,
+          "released": "2024-08-03T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 13,
+          "released": "2024-08-17T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 14,
+          "released": "2024-08-24T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 15,
+          "released": "2024-08-31T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 16,
+          "released": "2024-09-07T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 17,
+          "released": "2024-09-14T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 18,
+          "released": "2024-09-21T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 19,
+          "released": "2024-09-28T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 20,
+          "released": "2024-10-05T08:30:00.000Z"
+        },
+        {
+          "season": 7,
+          "episode": 21,
+          "released": "2024-10-12T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 1,
+          "released": "2025-10-04T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 2,
+          "released": "2025-10-11T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 3,
+          "released": "2025-10-18T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 4,
+          "released": "2025-10-25T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 5,
+          "released": "2025-11-01T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 6,
+          "released": "2025-11-08T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 7,
+          "released": "2025-11-15T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 8,
+          "released": "2025-11-22T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 9,
+          "released": "2025-11-29T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 10,
+          "released": "2025-12-06T08:30:00.000Z"
+        },
+        {
+          "season": 8,
+          "episode": 11,
+          "released": "2025-12-13T08:30:00.000Z"
+        }
+      ]
+    }
+  },
+  "11614": {
+    "anime": {
+      "id": "11614",
+      "title": "Your Name.",
+      "type": "movie",
+      "subtype": "movie",
+      "year": "2016"
+    },
+    "mapping": {
+      "meta": {
+        "id": "kitsu:11614",
+        "kitsu_id": "11614",
+        "type": "movie",
+        "animeType": "movie",
+        "name": "Kimi no Na wa.",
+        "imdb_id": "tt5311514",
+        "videos": [
+          {
+            "id": "kitsu:11614",
+            "title": "Episode 1",
+            "episode": 1,
+            "imdb_id": "tt5311514",
+            "imdbSeason": 1,
+            "imdbEpisode": 1,
+            "absoluteEpisode": null,
+            "released": "2016-08-26T00:00:00.000Z"
+          }
+        ]
+      }
+    },
+    "canonical": {
+      "imdbId": "tt5311514",
+      "type": "movie",
+      "title": "Your Name.",
+      "episodes": []
+    }
+  }
+}

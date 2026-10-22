@@ -1,0 +1,19 @@
+POV Standalone - independent Android TV port preview
+
+Standalone app made by Mark Mateo. Based on the original POV Kodi add-on by kodifitzwell.
+
+POV visual identity and original fanart: kodifitzwell, sourced from POV 6.10.06 at https://github.com/kodifitzwell/repo (revision 2ea2eb7f330988ade16d388d3832b8e4b60c6b24). The selected launcher icon is generated design concept 3, created using the original POV icon as its reference. The upstream add-on manifest declares GNU GPL version 3. The original author is not affiliated with this Android port.
+
+The new Android application source is provided under GNU GPL version 3. The accompanying source distribution includes the license text. Original assets are retained with their attribution. No upstream default application credentials are included in this application.
+
+AndroidX Media3 - Android Open Source Project, Apache License 2.0. https://github.com/androidx/media
+Kotlin standard library - JetBrains, Apache License 2.0. https://github.com/JetBrains/kotlin
+
+Catalog metadata and artwork are supplied at runtime by Cinemeta / their respective rights holders. https://github.com/Stremio/stremio-addons
+Anime discovery metadata and artwork: Kitsu, https://kitsu.app/ and https://hummingbird-me.github.io/api-docs/ . Exact IMDb mapping fallback: Anime Kitsu, an independent metadata service by TheBeastLT, https://github.com/TheBeastLT/stremio-kitsu-anime . No provider source code or full mapping database is incorporated. These services and original artwork rights remain with their respective owners; this app is independent of them.
+Source-provider responses are supplied at runtime by the configured third-party provider. Providers are independent services; availability is not guaranteed.
+
+TorBox, Trakt, Kodi and other names belong to their respective owners. This app is not an official TorBox, Trakt or Kodi product.
+
+Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
+GNU GPL version 3: https://www.gnu.org/licenses/gpl-3.0.txt

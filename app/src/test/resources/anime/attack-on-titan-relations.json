@@ -1,0 +1,1686 @@
+{
+  "7442": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "1071",
+        "attributes": {
+          "role": "other"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "7889"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1072",
+        "attributes": {
+          "role": "alternative_version"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "8672"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1073",
+        "attributes": {
+          "role": "alternative_version"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "8673"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1074",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1075",
+        "attributes": {
+          "role": "spinoff"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "8674"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1076",
+        "attributes": {
+          "role": "spinoff"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "11315"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1077",
+        "attributes": {
+          "role": "side_story"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "7694"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1078",
+        "attributes": {
+          "role": "sequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "8671"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "1079",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "7838"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "18901",
+        "attributes": {
+          "role": "spinoff"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "13718"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "22053",
+        "attributes": {
+          "role": "side_story"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "42250"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "31036",
+        "attributes": {
+          "role": "character"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "46202"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33269",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47129"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33275",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47130"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33283",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47131"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33534",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47259"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "7889",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Chibi Theatre: Fly, Cadets, Fly!",
+          "titles": {
+            "en": "Attack on Titan Chibi Theatre: Fly, Cadets, Fly!",
+            "en_jp": "Shingeki no Kyojin Picture Drama",
+            "ja_jp": "\u300c\u9032\u6483\u306e\u5de8\u4eba\u300d\u3061\u307f\u30ad\u30e3\u30e9\u5287\u5834\"\u3068\u3093\u3067\u3051! \u8a13\u7df4\u5175\u56e3\""
+          },
+          "subtype": "special",
+          "startDate": "2013-07-17",
+          "ageRating": "PG",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "8672",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: Crimson Bow and Arrow",
+          "titles": {
+            "en": "Attack on Titan: Crimson Bow and Arrow",
+            "en_jp": "Shingeki no Kyojin Movie 1: Guren no Yumiya",
+            "en_us": "Attack on Titan: Crimson Bow and Arrow",
+            "ja_jp": "\u5287\u5834\u7248\u300c\u9032\u6483\u306e\u5de8\u4eba\u300d\u524d\u7de8\uff5e\u7d05\u84ee\u306e\u5f13\u77e2\uff5e"
+          },
+          "subtype": "movie",
+          "startDate": "2014-11-22",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "8673",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: Wings of Freedom",
+          "titles": {
+            "en": "Attack on Titan: Wings of Freedom",
+            "en_jp": "Shingeki no Kyojin Movie 2: Jiyuu no Tsubasa",
+            "en_us": "Attack on Titan: Wings of Freedom",
+            "ja_jp": "\u5287\u5834\u7248\u300c\u9032\u6483\u306e\u5de8\u4eba\u300d\u5f8c\u7de8\uff5e\u81ea\u7531\u306e\u7ffc\uff5e"
+          },
+          "subtype": "movie",
+          "startDate": "2015-06-27",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "8674",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: No Regrets",
+          "titles": {
+            "en": "Attack on Titan: No Regrets",
+            "en_jp": "Shingeki no Kyojin: Kuinaki Sentaku",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba \u6094\u3044\u306a\u304d\u9078\u629e"
+          },
+          "subtype": "OVA",
+          "startDate": "2014-12-09",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "11315",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: Junior High",
+          "titles": {
+            "en": "Attack on Titan: Junior High",
+            "en_jp": "Shingeki! Kyojin Chuugakkou",
+            "en_us": "Attack on Titan: Junior High",
+            "ja_jp": "\u9032\u6483\uff01\u5de8\u4eba\u4e2d\u5b66\u6821"
+          },
+          "subtype": "TV",
+          "startDate": "2015-10-04",
+          "ageRating": "PG",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "7694",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan OVA",
+          "titles": {
+            "en": "Attack on Titan OVA",
+            "en_jp": "Shingeki no Kyojin OVA",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba\uff2f\uff21\uff24"
+          },
+          "subtype": "OVA",
+          "startDate": "2013-12-09",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "8671",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Season 2",
+          "titles": {
+            "en": "Attack on Titan Season 2",
+            "en_jp": "Shingeki no Kyojin Season 2",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba Season 2"
+          },
+          "subtype": "TV",
+          "startDate": "2017-04-01",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "7838",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: Since That Day",
+          "titles": {
+            "en": "Attack on Titan: Since That Day",
+            "en_jp": "Shingeki no Kyojin: Ano Hi Kara",
+            "en_us": "Attack on Titan: Since That Day",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba \u7dcf\u96c6\u7de8\u300c\u3042\u306e\u65e5\u304b\u3089\u300d"
+          },
+          "subtype": "special",
+          "startDate": "2013-07-07",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "13718",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: Lost Girls",
+          "titles": {
+            "en": "Attack on Titan: Lost Girls",
+            "en_jp": "Shingeki no Kyojin: Lost Girls",
+            "en_us": "Attack on Titan: Lost Girls",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba LOST GIRLS"
+          },
+          "subtype": "OVA",
+          "startDate": "2017-12-08",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "42250",
+        "attributes": {
+          "canonicalTitle": "Shingeki no Kyojin in the Dome: Heishi-tachi no Hoshizora",
+          "titles": {
+            "en_jp": "Shingeki no Kyojin in the Dome: Heishi-tachi no Hoshizora",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba IN THE DOME -\u5175\u58eb\u305f\u3061\u306e\u661f\u7a7a-"
+          },
+          "subtype": "movie",
+          "startDate": "2017-05-20",
+          "ageRating": "PG",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "46202",
+        "attributes": {
+          "canonicalTitle": "Snickers x Shingeki no Kyojin",
+          "titles": {
+            "en_jp": "Snickers x Shingeki no Kyojin",
+            "ja_jp": "\u30b9\u30cb\u30c3\u30ab\u30fc\u30ba\u00d7\u9032\u6483\u306e\u5de8\u4eba"
+          },
+          "subtype": "special",
+          "startDate": "2019-10-01",
+          "ageRating": "PG",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47129",
+        "attributes": {
+          "canonicalTitle": "10-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 10 Minutes",
+            "en_jp": "10-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "10\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300c\u9032\u6483\u306e\u5de8\u4eba\u300d"
+          },
+          "subtype": "ONA",
+          "startDate": "2018-07-02",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47130",
+        "attributes": {
+          "canonicalTitle": "15-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 15 Minutes",
+            "en_jp": "15-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "15\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2020-12-02",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47131",
+        "attributes": {
+          "canonicalTitle": "20-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 20 Minutes",
+            "en_jp": "20-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "20\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2021-12-27",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47259",
+        "attributes": {
+          "canonicalTitle": "25-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 25 Minutes",
+            "en_jp": "25-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "25\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2023-02-18",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "8671": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "2740",
+        "attributes": {
+          "role": "prequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "7442"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "2741",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "18376",
+        "attributes": {
+          "role": "sequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "13569"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "21114",
+        "attributes": {
+          "role": "alternative_version"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "41487"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33268",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47129"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33274",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47130"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33282",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47131"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33535",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47259"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "7442",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan",
+          "titles": {
+            "en": "Attack on Titan",
+            "en_jp": "Shingeki no Kyojin",
+            "en_us": "Attack on Titan",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba"
+          },
+          "subtype": "TV",
+          "startDate": "2013-04-07",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "13569",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Season 3",
+          "titles": {
+            "en": "Attack on Titan Season 3",
+            "en_jp": "Shingeki no Kyojin Season 3",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba Season 3"
+          },
+          "subtype": "TV",
+          "startDate": "2018-07-23",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "41487",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: Roar of Awakening",
+          "titles": {
+            "en": "Attack on Titan: Roar of Awakening",
+            "en_jp": "Shingeki no Kyojin Movie 3: Kakusei no Houkou",
+            "ja_jp": "\u5287\u5834\u7248 \u9032\u6483\u306e\u5de8\u4eba \u899a\u9192\u306e\u5486\u54ee"
+          },
+          "subtype": "movie",
+          "startDate": "2018-01-13",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47129",
+        "attributes": {
+          "canonicalTitle": "10-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 10 Minutes",
+            "en_jp": "10-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "10\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300c\u9032\u6483\u306e\u5de8\u4eba\u300d"
+          },
+          "subtype": "ONA",
+          "startDate": "2018-07-02",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47130",
+        "attributes": {
+          "canonicalTitle": "15-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 15 Minutes",
+            "en_jp": "15-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "15\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2020-12-02",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47131",
+        "attributes": {
+          "canonicalTitle": "20-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 20 Minutes",
+            "en_jp": "20-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "20\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2021-12-27",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47259",
+        "attributes": {
+          "canonicalTitle": "25-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 25 Minutes",
+            "en_jp": "25-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "25\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2023-02-18",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "13569": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "18374",
+        "attributes": {
+          "role": "prequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "8671"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "18375",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "21363",
+        "attributes": {
+          "role": "sequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "41982"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "22045",
+        "attributes": {
+          "role": "side_story"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "42247"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33273",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47130"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33281",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47131"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33536",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47259"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "34427",
+        "attributes": {
+          "role": "other"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47661"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "8671",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Season 2",
+          "titles": {
+            "en": "Attack on Titan Season 2",
+            "en_jp": "Shingeki no Kyojin Season 2",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba Season 2"
+          },
+          "subtype": "TV",
+          "startDate": "2017-04-01",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "41982",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Season 3 Part 2",
+          "titles": {
+            "en": "Attack on Titan Season 3 Part 2",
+            "en_jp": "Shingeki no Kyojin Season 3 Part 2",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba Season 3 Part 2"
+          },
+          "subtype": "TV",
+          "startDate": "2019-04-29",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "42247",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Season 3 Specials",
+          "titles": {
+            "en": "Attack on Titan Season 3 Specials",
+            "en_jp": "Shingeki no Kyojin Season 3 Specials",
+            "ja_jp": "\uff62\u9032\u6483\u306e\u5de8\u4eba\uff63\u3061\u307f\u30ad\u30e3\u30e9\u5287\u5834\u201d\u3068\u3093\u3067\u3051\uff01\u65b0\u751f\u30ea\u30f4\u30a1\u30a4\u73ed\u201d"
+          },
+          "subtype": "special",
+          "startDate": "2018-10-17",
+          "ageRating": "PG",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47130",
+        "attributes": {
+          "canonicalTitle": "15-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 15 Minutes",
+            "en_jp": "15-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "15\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2020-12-02",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47131",
+        "attributes": {
+          "canonicalTitle": "20-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 20 Minutes",
+            "en_jp": "20-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "20\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2021-12-27",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47259",
+        "attributes": {
+          "canonicalTitle": "25-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 25 Minutes",
+            "en_jp": "25-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "25\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2023-02-18",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47661",
+        "attributes": {
+          "canonicalTitle": "Akatsuki no Requiem",
+          "titles": {
+            "en_jp": "Akatsuki no Requiem",
+            "ja_jp": "\u6681\u306e\u93ae\u9b42\u6b4c"
+          },
+          "subtype": "music",
+          "startDate": "2018-09-19",
+          "ageRating": null,
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "41982": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "21362",
+        "attributes": {
+          "role": "prequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "13569"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "21885",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "22589",
+        "attributes": {
+          "role": "sequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "42422"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "24284",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "43212"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33537",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47259"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "13569",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Season 3",
+          "titles": {
+            "en": "Attack on Titan Season 3",
+            "en_jp": "Shingeki no Kyojin Season 3",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba Season 3"
+          },
+          "subtype": "TV",
+          "startDate": "2018-07-23",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "42422",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season",
+          "titles": {
+            "en": "Attack on Titan: The Final Season",
+            "en_jp": "Shingeki no Kyojin The Final Season",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season"
+          },
+          "subtype": "TV",
+          "startDate": "2020-12-07",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "43212",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: Chronicle",
+          "titles": {
+            "en": "Attack on Titan: Chronicle",
+            "en_jp": "Shingeki no Kyojin: Chronicle",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba \u301c\u30af\u30ed\u30cb\u30af\u30eb\u301c"
+          },
+          "subtype": "movie",
+          "startDate": "2020-07-17",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47259",
+        "attributes": {
+          "canonicalTitle": "25-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 25 Minutes",
+            "en_jp": "25-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "25\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2023-02-18",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "42422": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "22586",
+        "attributes": {
+          "role": "prequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "41982"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "22587",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "26593",
+        "attributes": {
+          "role": "sequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "44240"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "26937",
+        "attributes": {
+          "role": "other"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "44404"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "30367",
+        "attributes": {
+          "role": "side_story"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "45959"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "31292",
+        "attributes": {
+          "role": "other"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "46301"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33280",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47131"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33538",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47259"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "41982",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan Season 3 Part 2",
+          "titles": {
+            "en": "Attack on Titan Season 3 Part 2",
+            "en_jp": "Shingeki no Kyojin Season 3 Part 2",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba Season 3 Part 2"
+          },
+          "subtype": "TV",
+          "startDate": "2019-04-29",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "44240",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season Part 2",
+          "titles": {
+            "en": "Attack on Titan: The Final Season Part 2",
+            "en_jp": "Shingeki no Kyojin The Final Season Part 2",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season Part 2"
+          },
+          "subtype": "TV",
+          "startDate": "2022-01-09",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "44404",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season PV",
+          "titles": {
+            "en": "Attack on Titan: The Final Season PV",
+            "en_jp": "Shingeki no Kyojin: The Final Season PV",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season PV"
+          },
+          "subtype": "ONA",
+          "startDate": "2020-05-29",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "45959",
+        "attributes": {
+          "canonicalTitle": "Shingeki no Kyojin: The Final Season Specials",
+          "titles": {
+            "en": "Attack on Titan Final Season Specials",
+            "en_jp": "Shingeki no Kyojin: The Final Season Specials",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season Specials"
+          },
+          "subtype": "special",
+          "startDate": "2021-07-07",
+          "ageRating": "G",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "46301",
+        "attributes": {
+          "canonicalTitle": "Boku no Sensou",
+          "titles": {
+            "en": "My War",
+            "en_jp": "Boku no Sensou",
+            "ja_jp": "\u50d5\u306e\u6226\u4e89"
+          },
+          "subtype": "music",
+          "startDate": "2022-04-03",
+          "ageRating": "PG",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47131",
+        "attributes": {
+          "canonicalTitle": "20-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 20 Minutes",
+            "en_jp": "20-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "20\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2021-12-27",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47259",
+        "attributes": {
+          "canonicalTitle": "25-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 25 Minutes",
+            "en_jp": "25-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "25\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2023-02-18",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "44240": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "26591",
+        "attributes": {
+          "role": "prequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "42422"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "26592",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "30565",
+        "attributes": {
+          "role": "sequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "46038"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33539",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47259"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "42422",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season",
+          "titles": {
+            "en": "Attack on Titan: The Final Season",
+            "en_jp": "Shingeki no Kyojin The Final Season",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season"
+          },
+          "subtype": "TV",
+          "startDate": "2020-12-07",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "46038",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season - Final Chapters Part 1",
+          "titles": {
+            "en": "Attack on Titan: The Final Season - Final Chapters Part 1",
+            "en_jp": "Shingeki no Kyojin: The Final Season Kanketsu-Hen (Zenpen)",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season \u5b8c\u7d50\u7de8 (\u524d\u7de8)"
+          },
+          "subtype": "special",
+          "startDate": "2023-03-03",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47259",
+        "attributes": {
+          "canonicalTitle": "25-pun de Oitsukeru: Shingeki no Kyojin",
+          "titles": {
+            "en": "Attack on Titan in 25 Minutes",
+            "en_jp": "25-pun de Oitsukeru: Shingeki no Kyojin",
+            "ja_jp": "25\u5206\u3067\u8ffd\u3044\u3064\u3051\u308b\uff01\u30a2\u30cb\u30e1\u300e\u9032\u6483\u306e\u5de8\u4eba\u300f"
+          },
+          "subtype": "ONA",
+          "startDate": "2023-02-18",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "46038": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "30564",
+        "attributes": {
+          "role": "prequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "44240"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "30566",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33285",
+        "attributes": {
+          "role": "sequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "47132"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "39023",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "49129"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "44240",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season Part 2",
+          "titles": {
+            "en": "Attack on Titan: The Final Season Part 2",
+            "en_jp": "Shingeki no Kyojin The Final Season Part 2",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season Part 2"
+          },
+          "subtype": "TV",
+          "startDate": "2022-01-09",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "47132",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season - Final Chapters Part 2",
+          "titles": {
+            "en": "Attack on Titan: The Final Season - Final Chapters Part 2",
+            "en_jp": "Shingeki no Kyojin: The Final Season Kanketsu-Hen (Kouhen)",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season \u5b8c\u7d50\u7de8 (\u5f8c\u7de8\uff09"
+          },
+          "subtype": "special",
+          "startDate": "2023-11-04",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "49129",
+        "attributes": {
+          "canonicalTitle": "Shingeki no Kyojin Movie: Kanketsu-hen - The Last Attack",
+          "titles": {
+            "en": "Attack on Titan: The Last Attack",
+            "en_jp": "Shingeki no Kyojin Movie: Kanketsu-hen - The Last Attack",
+            "ja_jp": "\u5287\u5834\u7248 \u9032\u6483\u306e\u5de8\u4eba \u5b8c\u7d50\u7de8 THE LAST ATTACK"
+          },
+          "subtype": "movie",
+          "startDate": "2024-11-08",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "47132": {
+    "data": [
+      {
+        "type": "mediaRelationships",
+        "id": "33284",
+        "attributes": {
+          "role": "prequel"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "46038"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "33286",
+        "attributes": {
+          "role": "adaptation"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "manga",
+              "id": "14916"
+            }
+          }
+        }
+      },
+      {
+        "type": "mediaRelationships",
+        "id": "39020",
+        "attributes": {
+          "role": "summary"
+        },
+        "relationships": {
+          "destination": {
+            "data": {
+              "type": "anime",
+              "id": "49129"
+            }
+          }
+        }
+      }
+    ],
+    "included": [
+      {
+        "type": "anime",
+        "id": "46038",
+        "attributes": {
+          "canonicalTitle": "Attack on Titan: The Final Season - Final Chapters Part 1",
+          "titles": {
+            "en": "Attack on Titan: The Final Season - Final Chapters Part 1",
+            "en_jp": "Shingeki no Kyojin: The Final Season Kanketsu-Hen (Zenpen)",
+            "ja_jp": "\u9032\u6483\u306e\u5de8\u4eba The Final Season \u5b8c\u7d50\u7de8 (\u524d\u7de8)"
+          },
+          "subtype": "special",
+          "startDate": "2023-03-03",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      },
+      {
+        "type": "anime",
+        "id": "49129",
+        "attributes": {
+          "canonicalTitle": "Shingeki no Kyojin Movie: Kanketsu-hen - The Last Attack",
+          "titles": {
+            "en": "Attack on Titan: The Last Attack",
+            "en_jp": "Shingeki no Kyojin Movie: Kanketsu-hen - The Last Attack",
+            "ja_jp": "\u5287\u5834\u7248 \u9032\u6483\u306e\u5de8\u4eba \u5b8c\u7d50\u7de8 THE LAST ATTACK"
+          },
+          "subtype": "movie",
+          "startDate": "2024-11-08",
+          "ageRating": "R",
+          "nsfw": false
+        }
+      }
+    ],
+    "links": {
+      "next": null
+    }
+  },
+  "verifiedDate": "2026-10-22"
+}

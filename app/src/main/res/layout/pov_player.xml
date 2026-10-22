@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/pov_player" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:tag="pov_fullscreen_player" android:background="#000000"
+    android:focusable="true" android:focusableInTouchMode="true"
+    app:controller_layout_id="@layout/pov_player_controls"
+    app:animation_enabled="false" app:show_buffering="never" app:show_timeout="4000"
+    app:show_previous_button="false" app:show_next_button="false" app:show_subtitle_button="false" />
+
