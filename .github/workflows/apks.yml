@@ -33,6 +33,7 @@ jobs:
         with:
           gradle-version: '8.14.3'
           cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
       - name: Install Android platform and build tools
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Validate tag matches application version
