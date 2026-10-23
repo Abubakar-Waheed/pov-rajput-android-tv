@@ -1,6 +1,6 @@
-POV Standalone - independent Android TV port preview
+POV Offcloud - Android TV fork by Rajpoot
 
-Standalone app made by Mark Mateo. Based on the original POV Kodi add-on by kodifitzwell.
+POV Offcloud fork by Rajpoot. Original standalone Android TV app by Mark Mateo. Based on the original POV Kodi add-on by kodifitzwell.
 
 POV visual identity and original fanart: kodifitzwell, sourced from POV 6.10.06 at https://github.com/kodifitzwell/repo (revision 2ea2eb7f330988ade16d388d3832b8e4b60c6b24). The selected launcher icon is generated design concept 3, created using the original POV icon as its reference. The upstream add-on manifest declares GNU GPL version 3. The original author is not affiliated with this Android port.
 
@@ -17,3 +17,5 @@ TorBox, Trakt, Kodi and other names belong to their respective owners. This app 
 
 Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
 GNU GPL version 3: https://www.gnu.org/licenses/gpl-3.0.txt
+
+Offcloud API integration added 2026-10-23 to the MM-482 Android TV port. This modified build is independent of Offcloud and the original authors. Offcloud is a trademark of its respective owner. API reference: https://github.com/Offcloud/offcloud-api

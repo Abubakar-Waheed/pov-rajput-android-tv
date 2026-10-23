@@ -1,0 +1,151 @@
+name: Android APKs
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    name: Test, lint, and build APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6.4.0
+        with:
+          gradle-version: '8.14.3'
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Install Android platform and build tools
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Validate tag matches application version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          version = re.search(r'versionName\s*=\s*"([^"]+)"', Path('app/build.gradle.kts').read_text()).group(1)
+          if os.environ['RELEASE_TAG'] != 'v' + version:
+              raise SystemExit('Release tag must match versionName: v' + version)
+          PY
+      - name: Configure private release signing
+        id: signing
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ '${{ github.event_name }}' != 'pull_request' && -n "$RELEASE_KEYSTORE_BASE64" && -n "$RELEASE_STORE_PASSWORD" && -n "$RELEASE_KEY_ALIAS" && -n "$RELEASE_KEY_PASSWORD" ]]; then
+            umask 077
+            printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            {
+              echo "POV_RELEASE_STORE_FILE=$RUNNER_TEMP/release.keystore"
+              echo "POV_RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+              echo "POV_RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+              echo "POV_RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+            echo 'signed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'signed=false' >> "$GITHUB_OUTPUT"
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              echo '::notice::Release signing secrets are absent. Saving unsigned build artifacts; automatic release publication is skipped.'
+            fi
+          fi
+      - name: Unit tests and lint
+        run: gradle testDebugUnitTest lintDebug lintRelease --no-daemon --console=plain
+      - name: Build debug and release APKs
+        run: gradle assembleDebug assembleRelease --no-daemon --console=plain
+      - name: Package APKs, license, and checksums
+        env:
+          SIGNED_RELEASE: ${{ steps.signing.outputs.signed }}
+        run: |
+          mkdir -p dist/debug dist/release
+          cp app/build/outputs/apk/debug/app-debug.apk dist/debug/POV-Offcloud-debug.apk
+          if [[ "$SIGNED_RELEASE" == 'true' ]]; then
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+            cp app/build/outputs/apk/release/app-release.apk dist/release/POV-Offcloud-release.apk
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk dist/release/POV-Offcloud-release-UNSIGNED.apk
+          fi
+          cp LICENSE dist/release/LICENSE.txt
+          (cd dist/release && sha256sum *.apk > SHA256SUMS.txt)
+      - name: Save debug APK
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pov-offcloud-debug-${{ github.run_number }}
+          path: dist/debug/
+          retention-days: 14
+          if-no-files-found: error
+          compression-level: 0
+      - name: Save release APK
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pov-offcloud-release-${{ github.run_number }}
+          path: dist/release/
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0
+      - name: Save test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pov-offcloud-checks-${{ github.run_number }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Remove temporary signing file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+  release:
+    name: Publish signed APK to GitHub Releases
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') && needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: pov-offcloud-release-${{ github.run_number }}
+          path: release-assets
+      - name: Create release with signed APK and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          cp docs/RELEASE_NOTES.md release-notes.md
+          printf '\n\nSource and GPL-3.0 license: https://github.com/%s/tree/%s\n' "$GH_REPO" "$RELEASE_TAG" >> release-notes.md
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" release-assets/* --verify-tag --title "POV Offcloud $RELEASE_TAG" --notes-file release-notes.md
+          fi

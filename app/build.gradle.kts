@@ -7,19 +7,37 @@ android {
     namespace = "dev.pov.tv"
     compileSdk = 35
     defaultConfig {
-        applicationId = "dev.pov.tv"
+        applicationId = "dev.pov.tv.offcloud"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.2.2-preview"
-        testInstrumentationRunner = "dev.pov.tv.PlaybackAuditInstrumentation"
+        versionCode = 9
+        versionName = "0.2.4-offcloud"
+        testInstrumentationRunner = providers.gradleProperty("povTestRunner")
+            .orElse("dev.pov.tv.PlaybackAuditInstrumentation").get()
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    val releaseStore = providers.environmentVariable("POV_RELEASE_STORE_FILE").orNull
+    if (!releaseStore.isNullOrBlank()) {
+        signingConfigs.create("distribution") {
+            storeFile = file(releaseStore)
+            storePassword = providers.environmentVariable("POV_RELEASE_STORE_PASSWORD").get()
+            keyAlias = providers.environmentVariable("POV_RELEASE_KEY_ALIAS").get()
+            keyPassword = providers.environmentVariable("POV_RELEASE_KEY_PASSWORD").get()
+        }
+    }
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            // Opt-in local sideload release: retain the installed preview certificate and data.
+            // Normal release builds remain unsigned for signing with the distributor's own key.
+            if (providers.gradleProperty("povPreviewRelease").orNull == "true") {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+            if (!releaseStore.isNullOrBlank()) signingConfig = signingConfigs.getByName("distribution")
+        }
     }
     testOptions { unitTests.isIncludeAndroidResources = true }
     packaging { resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*") }

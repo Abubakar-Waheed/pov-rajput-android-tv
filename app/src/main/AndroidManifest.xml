@@ -8,7 +8,7 @@
         android:fullBackupContent="@xml/backup_exclusions"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/pov_icon"
-        android:label="POV" android:banner="@drawable/pov_banner"
+        android:label="POV Offcloud" android:banner="@drawable/pov_banner"
         android:theme="@style/AppTheme" android:usesCleartextTraffic="false"
         android:supportsRtl="true">
         <activity android:name=".PlayerActivity" android:exported="false" android:screenOrientation="landscape"

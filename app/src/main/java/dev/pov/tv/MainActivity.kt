@@ -166,7 +166,7 @@ class MainActivity : Activity() {
     private fun destinations() = listOf(
         Destination("home", "Home") { home() }, Destination("movie", "Movies") { catalogPage("movie") },
         Destination("series", "Shows") { catalogPage("series") }, Destination("anime", "Anime") { animePage() },
-        Destination("library", "Library") { cloud("torrents") }, Destination("search", "Search") { search() },
+        Destination("library", "Library") { selectedCloud() }, Destination("search", "Search") { search() },
         Destination("trakt", "My Trakt") { traktPage() }, Destination("settings", "Settings") { settings() }) +
         if (!publicPreview && InAppPlaybackSession.hasActive()) listOf(Destination("nowplaying", "Now playing") { returnToVideo() }) else emptyList()
 
@@ -206,7 +206,7 @@ class MainActivity : Activity() {
             rail.addView(logo(), margin(61, 58, bottom = 24).apply { leftMargin = dp(10) })
             destinations().forEach { target -> rail.addView(navigation(target, false), margin(-1, 35, bottom = 4)) }
             rail.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-            rail.addView(text("Made by\nMark Mateo", 9, muted), margin(-1, -2, top = 8))
+            rail.addView(text("Made by\nRajpoot", 9, muted), margin(-1, -2, top = 8))
         } else {
             val header = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL; setPadding(dp(layout.contentInsetDp), dp(5), dp(16), dp(5))
@@ -273,14 +273,15 @@ class MainActivity : Activity() {
     }
 
     private fun updateBadge() {
-        val box = !publicPreview && try { store.has("torbox.token") } catch (_: Exception) { false }
+        val service = try { if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox" } catch (_: Exception) { "TorBox" }
+        val box = !publicPreview && try { store.has(if (service == "Offcloud") "offcloud.key" else "torbox.token") } catch (_: Exception) { false }
         val tracked = !publicPreview && try { trakt.connected() } catch (_: Exception) { false }
-        val value = android.text.SpannableString("●  TorBox    ●  Trakt")
+        val value = android.text.SpannableString("●  $service    ●  Trakt")
         value.setSpan(android.text.style.ForegroundColorSpan(if (box) theme.palette.success else muted), 0, 1, 0)
         val secondDot = value.toString().indexOf('●', 1)
         value.setSpan(android.text.style.ForegroundColorSpan(if (tracked) theme.palette.success else muted), secondDot, secondDot + 1, 0)
         badge.text = value
-        badge.contentDescription = "TorBox ${if (box) "linked" else "not linked"}. Trakt ${if (tracked) "linked" else "not linked"}."
+        badge.contentDescription = "$service ${if (box) "linked" else "not linked"}. Trakt ${if (tracked) "linked" else "not linked"}."
     }
     private fun navigate(screen: () -> Unit) {
         backStack.addLast(NavigationSnapshot(current, focusController.capture(), destination))
@@ -471,9 +472,11 @@ class MainActivity : Activity() {
         library.addView(text("My Library", 22, ink, true), margin(-1, -2, top = 12, bottom = 9))
         library.addView(button("▤   Movies    ›") { navigate { catalogPage("movie") } }, margin(-1, 44, bottom = 6))
         library.addView(button("▣   Shows     ›") { navigate { catalogPage("series") } }, margin(-1, 44, bottom = 6))
-        library.addView(button("☁   TorBox Cloud  ›") { navigate { cloud("torrents") } }, margin(-1, 44))
+        library.addView(button("☁   Cloud library  ›") { navigate { selectedCloud() } }, margin(-1, 44))
         lower.addView(library, margin(247, -2)); body.addView(lower)
-        body.addView(text("TorBox ${if (!publicPreview && store.has("torbox.token")) "connected" else "not linked"}     ·     Trakt ${if (!publicPreview && trakt.connected()) "connected" else "not linked"}", 12, muted).apply {
+        val cloudService = if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox"
+        val cloudKey = if (cloudService == "Offcloud") "offcloud.key" else "torbox.token"
+        body.addView(text("$cloudService ${if (!publicPreview && store.has(cloudKey)) "connected" else "not linked"}     ·     Trakt ${if (!publicPreview && trakt.connected()) "connected" else "not linked"}", 12, muted).apply {
             background = rounded(panel, 9); setPadding(dp(20), dp(12), dp(20), dp(12))
         }, margin(-1, -2, top = 14))
     }
@@ -488,7 +491,7 @@ class MainActivity : Activity() {
                 return
             }
         }
-        saved.identity?.let { identity -> navigate { showSources(identity) } } ?: navigate { cloud("torrents") }
+        saved.identity?.let { identity -> navigate { showSources(identity) } } ?: navigate { selectedCloud() }
     }
 
     private fun returnToVideo() {
@@ -589,7 +592,7 @@ class MainActivity : Activity() {
     private fun contentBottomPadding() = dp(if (!publicPreview && InAppPlaybackSession.hasActive()) 184 else 24)
 
     private fun homeCredit() {
-        body.addView(text("Standalone app made by Mark Mateo  ·  Based on POV by kodifitzwell", 10, muted), margin(-1, -2, top = 20, bottom = 6))
+        body.addView(text("POV Offcloud by Rajpoot  ·  Android TV port: Mark Mateo  ·  Original POV: kodifitzwell", 10, muted), margin(-1, -2, top = 20, bottom = 6))
     }
 
     private fun animePage(type: String = "series", query: String = "", skip: Int = 0) {
@@ -857,16 +860,19 @@ class MainActivity : Activity() {
     private fun showSources(identity: PlaybackIdentity) {
         current = { showSources(identity) }
         val suffix = if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""
-        val id = page(identity.title + suffix, "Choose a source to play through TorBox.")
-        if (!store.has("torbox.token")) { body.addView(button("Connect TorBox") { startTorBox() }, margin(200, 44)); return }
+        val service = if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox"
+        val id = page(identity.title + suffix, "Choose a source to play through $service.")
+        if (!store.has(if (service == "Offcloud") "offcloud.key" else "torbox.token")) {
+            body.addView(button("Connect $service in Settings") { navigate { settings() } }, margin(250, 44)); return
+        }
         read(id, { resolver.sources(identity) }) { sources ->
-            if (sources.isEmpty()) body.addView(text("No sources were returned. Try again later or browse My TorBox.", 15, muted))
+            if (sources.isEmpty()) body.addView(text("No sources were returned. Try again later or check the source provider in Settings.", 15, muted))
             val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
             sources.distinctBy(TvChoiceKeys::source).take(70).forEach { source ->
-                val status = if (source.cached) "READY IN TORBOX" else if (source.directUrl.isNotEmpty()) "DIRECT STREAM" else "TRANSFER MAY BE NEEDED"
+                val status = if (source.cached) "READY IN ${service.uppercase()}" else if (source.directUrl.isNotEmpty()) "DIRECT STREAM" else "TRANSFER MAY BE NEEDED"
                 choices.addChoice(TvChoiceRow(this, TvChoiceKeys.source(source), source.title, source.detail,
                     "$status   ·   ${source.provider}", theme.palette) {
-                    if (!source.cached && source.directUrl.isEmpty()) confirm("Add this source to your TorBox account? A transfer may need time to finish.") { resolve(source, identity) }
+                    if (!source.cached && source.directUrl.isEmpty()) confirm("Add this source to your $service account? A transfer may need time to finish.") { resolve(source, identity) }
                     else resolve(source, identity)
                 })
             }
@@ -886,6 +892,10 @@ class MainActivity : Activity() {
                         when (prepared) {
                             is PreparedSource.Direct -> play(prepared.url, prepared.identity.title, prepared.identity,
                                 "media:${prepared.identity.imdbId}:${prepared.identity.season}:${prepared.identity.episode}")
+                            is PreparedSource.OffcloudFiles -> {
+                                if (prepared.files.size == 1) playOffcloudFile(prepared, prepared.files.single())
+                                else navigate { offcloudFiles(prepared) }
+                            }
                             is PreparedSource.Files -> {
                                 val only = prepared.automaticFile
                                 if (only != null) playPreparedFile(prepared, only)
@@ -898,6 +908,30 @@ class MainActivity : Activity() {
                 if (request == generation && !isFinishing && !isDestroyed) { resolvingGeneration = null; body.removeView(progress); showError(error); focusAfterRender(request) }
             } }
         }
+    }
+
+    private fun offcloudFiles(prepared: PreparedSource.OffcloudFiles) {
+        current = { offcloudFiles(prepared) }
+        val id = page("Choose an Offcloud video", "Choose the correct file for ${prepared.identity.title}.")
+        val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+        prepared.files.forEach { file ->
+            val focusKey = "offcloud:${prepared.requestId}:${file.id}"
+            choices.addChoice(TvChoiceRow(this, focusKey, file.name,
+                if (file.size > 0) "${file.size / (1024 * 1024)} MB" else "Offcloud video",
+                palette = theme.palette) { playOffcloudFile(prepared, file) })
+        }
+        if (pendingFocus == null) prepared.preferredFileId?.let {
+            pendingFocus = TvFocusSnapshot("offcloud:${prepared.requestId}:$it", 0)
+        }
+        focusAfterRender(id)
+    }
+
+    private fun playOffcloudFile(prepared: PreparedSource.OffcloudFiles, file: OffcloudFile) {
+        if (store.get("playback.service") != "offcloud" || !OffcloudApi(store).owns(prepared)) {
+            toast("Connect Offcloud and select the source again"); return
+        }
+        val identity = prepared.identity
+        play(file.url, identity.title, identity, "media:${identity.imdbId}:${identity.season}:${identity.episode}")
     }
 
     private fun preparedFiles(prepared: PreparedSource.Files) {
@@ -921,6 +955,50 @@ class MainActivity : Activity() {
         val identity = prepared.identity
         streamFile(prepared.folder, file, identity.title, identity,
             "media:${identity.imdbId}:${identity.season}:${identity.episode}")
+    }
+
+    private fun selectedCloud() {
+        if (store.get("playback.service") == "offcloud") offcloudCloud() else cloud("torrents")
+    }
+
+    private fun offcloudCloud() {
+        current = { offcloudCloud() }; destination = "library"; refreshNavigation()
+        val id = page("My Offcloud", "Your Offcloud downloads. Open a completed download to choose a video.")
+        val api = OffcloudApi(store)
+        if (!api.connected()) {
+            body.addView(button("Connect Offcloud in Settings") { navigate { settings() } }, margin(260, 44)); return
+        }
+        body.addView(button("Refresh downloads") { offcloudCloud() }, margin(220, 44, bottom = 10))
+        read(id, { api.cloud() }) { downloads ->
+            val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+            if (downloads.isEmpty()) body.addView(text("No Offcloud downloads yet. Choose a source from a movie or episode.", 15, muted))
+            downloads.forEach { download ->
+                choices.addChoice(TvChoiceRow(this, "offcloud:${download.id}", download.name, download.status,
+                    palette = theme.palette) {
+                    if (download.status == "downloaded") navigate { offcloudCloudFiles(download) }
+                    else toast("This download is ${download.status.ifBlank { "not ready" }}. Refresh after Offcloud finishes processing it.")
+                })
+            }
+            focusAfterRender(id)
+        }
+    }
+
+    private fun offcloudCloudFiles(download: OffcloudDownload) {
+        current = { offcloudCloudFiles(download) }
+        val id = page(download.name, "Choose a video file from Offcloud.")
+        val api = OffcloudApi(store)
+        read(id, { api.cloudFiles(download) }) { files ->
+            val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+            if (files.isEmpty()) body.addView(text("No playable video files in this download.", 15, muted))
+            files.forEach { file ->
+                choices.addChoice(TvChoiceRow(this, "offcloud:${download.id}:${file.id}", file.name,
+                    if (file.size > 0) "${file.size / (1024 * 1024)} MB" else "Offcloud video", palette = theme.palette) {
+                    if (api.ownsTag(download.accountTag)) play(file.url, file.name, null, "offcloud:${download.id}:${file.id}")
+                    else toast("The Offcloud account changed. Refresh your library.")
+                })
+            }
+            focusAfterRender(id)
+        }
     }
 
     private fun cloud(kind: String) {
@@ -1116,6 +1194,24 @@ class MainActivity : Activity() {
         body.addView(button("Themes · ${theme.displayName}  ›") { navigate { appearance() } }, margin(-1, 46, bottom = 9))
         section("Accounts")
         body.addView(button(if (store.has("torbox.token")) "TorBox · connected · reconnect" else "Connect TorBox") { startTorBox() }, margin(-1, 44, bottom = 8))
+        val offcloud = OffcloudApi(store)
+        body.addView(button(if (offcloud.connected()) "Offcloud · connected · replace API key" else "Connect Offcloud with API key") {
+            connectOffcloud()
+        }, margin(-1, 44, bottom = 8))
+        if (offcloud.connected()) body.addView(button("Disconnect Offcloud") {
+            confirm("Disconnect Offcloud on this device?") {
+                offcloud.disconnect()
+                if (store.get("playback.service") == "offcloud") store.put("playback.service", "torbox")
+                settings(); updateBadge()
+            }
+        }, margin(-1, 44, bottom = 8))
+        val playbackService = if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox"
+        body.addView(button("Playback service · $playbackService · change") {
+            AlertDialog.Builder(this).setTitle("Playback service")
+                .setItems(arrayOf("TorBox", "Offcloud")) { _, choice ->
+                    store.put("playback.service", if (choice == 1) "offcloud" else "torbox"); settings(); updateBadge()
+                }.setNegativeButton("Cancel", null).show()
+        }, margin(-1, 44, bottom = 8))
         body.addView(button("Use TorBox API key") { inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { updateBadge(); toast("TorBox connected"); settings() } } }, margin(-1, 44, bottom = 8))
         if (store.has("torbox.token")) body.addView(button("Disconnect TorBox") { confirm("Disconnect TorBox on this device?") { torbox.disconnect(); settings(); updateBadge() } }, margin(-1, 44, bottom = 8))
         body.addView(button(if (trakt.connected()) "Trakt · connected · reconnect" else "Connect Trakt") { startTrakt() }, margin(-1, 44, bottom = 8))
@@ -1130,8 +1226,45 @@ class MainActivity : Activity() {
             val uri = Uri.parse(value.trim()); if (uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { store.put("sources.endpoint", value.trim()); toast("Source provider saved") } else toast("Enter a valid HTTPS address")
         } }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Standalone · 0.2.2 preview\nStandalone app made by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Offcloud · 0.2.4\nPOV Offcloud fork by Rajpoot.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
+    }
+
+    private fun connectOffcloud() {
+        val content = column().apply { setPadding(dp(18), dp(8), dp(18), dp(8)) }
+        val input = EditText(this).apply {
+            hint = "Paste your own Offcloud API key"; setSingleLine()
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+        val status = text("", 14, muted)
+        content.addView(input, margin(-1, -2)); content.addView(status, margin(-1, -2, top = 8))
+        val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
+        val dialog = AlertDialog.Builder(this).setTitle("Offcloud API key").setView(content)
+            .setPositiveButton("Connect", null).setNegativeButton("Cancel", null).create()
+        dialog.setOnDismissListener { cancelled.set(true); input.setText("") }
+        dialog.show()
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+            val key = input.text.toString().trim()
+            if (key.isBlank()) { input.error = "Enter your Offcloud API key"; return@setOnClickListener }
+            val request = generation
+            val connect = dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+            connect.isEnabled = false; status.text = "Checking your Offcloud account…"
+            worker.execute {
+                try {
+                    OffcloudApi(store).setApiKey(key) { cancelled.get() }
+                    runOnUiThread {
+                        if (dialog.isShowing && request == generation && !isFinishing && !isDestroyed) {
+                            store.put("playback.service", "offcloud"); dialog.dismiss()
+                            updateBadge(); toast("Offcloud connected"); settings()
+                        }
+                    }
+                } catch (error: Exception) {
+                    runOnUiThread { if (dialog.isShowing) {
+                        connect.isEnabled = true; status.text = uiErrorMessage(error)
+                    } }
+                }
+            }
+        }
     }
 
     private fun startTorBox() { authorize("TorBox", { torbox.startDeviceAuth() }, { torbox.pollDeviceAuth(it) }, cancel = { torbox.cancelDeviceAuth(it) }) }

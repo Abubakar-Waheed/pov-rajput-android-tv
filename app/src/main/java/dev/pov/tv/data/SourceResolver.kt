@@ -4,21 +4,22 @@ import java.net.URI
 import java.util.Locale
 import org.json.JSONObject
 
-/** Stremio stream protocol adapter; torrent transfers are performed by TorBox, never on-device. */
+/** Stremio stream adapter; torrent transfers run in the selected cloud service, never on-device. */
 class SourceResolver internal constructor(
     private val sourceEndpoint: () -> String,
     private val torbox: SourceTorBox,
     private val publicJson: (String) -> JSONObject = { Net.json(it) },
     private val monotonicNanos: () -> Long = System::nanoTime,
-    private val pause: (Long) -> Unit = Thread::sleep
+    private val pause: (Long) -> Unit = Thread::sleep,
+    private val offcloud: () -> OffcloudApi? = { null }
 ) {
     constructor(store: SecureStore, torbox: TorBoxApi) : this({ store.get("sources.endpoint") }, object : SourceTorBox {
         override fun cached(hashes: List<String>) = torbox.cached(hashes)
         override fun addMagnet(hash: String) = torbox.addMagnet(hash)
         override fun folder(kind: String, id: Long) = torbox.folder(kind, id)
         override fun streamUrl(kind: String, folderId: Long, fileId: Long) = torbox.streamUrl(kind, folderId, fileId)
-    })
-    /** Fetching choices is read-only: checking the TorBox cache does not create a transfer. */
+    }, offcloud = { if (store.get("playback.service") == "offcloud") OffcloudApi(store) else null })
+    /** Fetching choices is read-only: checking the selected service cache never creates a transfer. */
     fun sources(identity: PlaybackIdentity): List<SourceItem> {
         validateIdentity(identity)
         val endpoint = endpoint(sourceEndpoint())
@@ -63,7 +64,7 @@ class SourceResolver internal constructor(
         var cacheAvailable = true
         try {
             choices.map { it.infoHash }.filter { it.isNotBlank() }.distinct().chunked(40).forEach {
-                cached += torbox.cached(it).map { hash -> hash.lowercase(Locale.ROOT) }
+                cached += (offcloud()?.cached(it) ?: torbox.cached(it)).map { hash -> hash.lowercase(Locale.ROOT) }
             }
         } catch (_: Exception) {
             cacheAvailable = false
@@ -78,7 +79,7 @@ class SourceResolver internal constructor(
         }.sortedByDescending { it.cached }
     }
 
-    /** Called only after the user selects a source. May add that source to the user's TorBox library. */
+    /** Called after a source is selected. May add it to the selected cloud service. */
     fun prepare(source: SourceItem, identity: PlaybackIdentity): PreparedSource {
         validateIdentity(identity)
         require(identity.type != "series" || !EpisodeFilename.isExplicitMismatch(source.title, identity.season, identity.episode)) {
@@ -88,6 +89,7 @@ class SourceResolver internal constructor(
             require(isHttps(source.directUrl)) { "Only HTTPS video sources are supported." }
             return PreparedSource.Direct(source.directUrl, identity)
         }
+        offcloud()?.let { return it.prepare(source, identity) }
         val hash = source.infoHash.lowercase(Locale.ROOT)
         require(HASH.matches(hash)) { "The selected source has no valid torrent hash." }
         val transfer = torbox.addMagnet(hash)
@@ -120,6 +122,8 @@ class SourceResolver internal constructor(
     /** Compatibility for callers that can handle only a single, unambiguous stream. */
     fun resolve(source: SourceItem, identity: PlaybackIdentity): String = when (val prepared = prepare(source, identity)) {
         is PreparedSource.Direct -> prepared.url
+        is PreparedSource.OffcloudFiles -> prepared.files.singleOrNull()?.url
+            ?: throw IllegalStateException("Choose a video file before playing.")
         is PreparedSource.Files -> {
             val file = prepared.automaticFile ?: throw IllegalStateException("This source contains multiple video versions. Choose a video file before playing.")
             val url = torbox.streamUrl(prepared.folder.kind, prepared.folder.id, file.id)

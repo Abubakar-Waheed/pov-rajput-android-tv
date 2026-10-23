@@ -66,6 +66,14 @@ sealed interface PreparedSource {
 
     data class Direct(val url: String, override val identity: PlaybackIdentity) : PreparedSource
 
+    data class OffcloudFiles(
+        val requestId: String,
+        val files: List<OffcloudFile>,
+        override val identity: PlaybackIdentity,
+        val preferredFileId: Long?,
+        val accountTag: String
+    ) : PreparedSource
+
     data class Files(
         val folder: CloudFolder,
         val files: List<CloudFile>,
