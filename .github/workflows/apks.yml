@@ -49,6 +49,7 @@ jobs:
           PY
       - name: Configure private release signing
         id: signing
+        if: github.event_name != 'pull_request'
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}

@@ -14,7 +14,7 @@ Debug APK: `app/build/outputs/apk/debug/`. Release APK: `app/build/outputs/apk/r
 
 ## Automated builds
 
-The `Android APKs` workflow runs on pushes to `main`, pull requests, manual dispatch, and version tags. It tests and lints before building, saves separate debug/release artifacts, and retains the check reports. Pull requests receive no release signing credentials. When credentials are absent, ordinary builds save a clearly marked unsigned release artifact; tagged builds skip automatic release publication rather than publish an unsigned APK. The first release is signed locally and uploaded manually; its key remains local.
+The `Android APKs` workflow runs on pushes to `main`, pull requests, manual dispatch, and version tags. It tests and lints before building, saves separate debug/release artifacts, and retains the check reports. Pull requests receive no release signing credentials. When credentials are absent, ordinary builds save a clearly marked unsigned release artifact; tagged builds skip automatic release publication rather than publish an unsigned APK. Release signing is configured using private repository Actions secrets; the key is never included in the source or downloadable assets.
 
 ## Private signing configuration
 

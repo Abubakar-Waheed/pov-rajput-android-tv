@@ -64,7 +64,7 @@ Use **Settings → Playback service** to switch to TorBox. No Offcloud key, TorB
 
 ## Builds and releases
 
-Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.4-offcloud` publish the signed release APK, checksums, license, and release notes automatically. The first release is signed locally; its signing key has not been uploaded. Until signing secrets are configured, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
+Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.4-offcloud` publish the signed release APK, checksums, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
 
 ## Validation and limits
 
