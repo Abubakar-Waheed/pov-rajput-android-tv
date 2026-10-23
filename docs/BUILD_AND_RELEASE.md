@@ -10,7 +10,7 @@ gradle assembleDebug
 gradle assembleRelease
 ```
 
-Debug APK: `app/build/outputs/apk/debug/`. Release APK: `app/build/outputs/apk/release/`. A normal release build is unsigned unless the signing environment below is configured. `-PpovPreviewRelease=true` explicitly signs a local release using the local preview/debug certificate, allowing upgrades from that preview without clearing data; debugging stays disabled in the release build.
+Debug APK: `app/build/outputs/apk/debug/`. Release APK: `app/build/outputs/apk/release/`. A normal release build is unsigned unless the signing environment below is configured.
 
 ## Automated builds
 
@@ -41,13 +41,3 @@ git push origin v0.2.4-offcloud
 ```
 
 The tagged workflow validates the version, builds and verifies the signed APK, then creates a GitHub Release containing the release APK, SHA-256 checksums, license, release notes, and GitHub's automatic source archives. Only the publish job receives repository-contents write permission. No upstream repository is changed.
-
-## Optional read-only TV diagnostic
-
-```sh
-gradle assembleDebugAndroidTest -PpovTestRunner=dev.pov.tv.OffcloudConnectionInstrumentation
-adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument -w dev.pov.tv.offcloud.test/dev.pov.tv.OffcloudConnectionInstrumentation
-```
-
-The test APK must share the installed app's signing certificate. It reports only connection booleans and a cloud-download count. It never prints keys, filenames, or playback URLs, and never creates transfers.

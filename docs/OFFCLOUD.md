@@ -1,6 +1,6 @@
 # POV Offcloud by Rajpoot
 
-This modified build is based on MM-482/pov-android-tv, revision c5a64e92232fa90889507114721e736c37450f2d. Original credits and GPL-3.0 licensing are preserved. Offcloud integration was added on 2026-10-23; connection protocol corrected 2026-10-23.
+POV Offcloud is based on the [Android TV application by Mark Mateo / MM-482](https://github.com/MM-482/pov-android-tv), with Offcloud integration by Rajpoot.
 
 ## Install and connect
 
@@ -27,7 +27,7 @@ Historical API reference: https://github.com/Offcloud/offcloud-api . Its proxy e
 
 Implemented: API-key validation through `GET /api/account/info`, Bearer authorization headers, JSON cache checks through `/api/cache/info`, cloud submission, status polling, archive/file exploration, and cloud history. Simple URL arrays and detailed file responses are supported. Playback uses the existing Media3 player. No torrent client runs on the TV. Offcloud Instant and Remote destination uploads are outside this build's scope.
 
-The delivered APK uses the release build type with debugging disabled. It retains the existing local preview signing certificate for upgrades. CI release signing is configured separately through private repository Actions secrets. Automated fixture tests exercise protocol handling and integration paths. Live account authentication, cloud-history access, and cache requests passed on a physical Android TV. These checks do not establish every authenticated playback or codec/device combination.
+Release APKs are signed and built with debugging disabled. Automated tests and lint reports are available in GitHub Actions.
 
 ## Build from source
 

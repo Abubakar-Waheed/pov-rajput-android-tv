@@ -266,7 +266,12 @@ object InAppPlaybackSession {
     internal fun matches(intent: Intent): Boolean = player != null &&
         sourceUrl == intent.getStringExtra("url").orEmpty() && sourceKey == intent.getStringExtra("key").orEmpty()
 
+    fun refreshSubtitleStyle() {
+        targetView?.get()?.let { SubtitlePreferences(it.context).applyTo(it) }
+    }
+
     fun attachPlayerView(view: PlayerView) {
+        SubtitlePreferences(view.context).applyTo(view)
         val exo = player ?: run { view.player = null; return }
         if (targetView?.get() === view && view.player === exo) {
             view.keepScreenOn = exo.isPlaying

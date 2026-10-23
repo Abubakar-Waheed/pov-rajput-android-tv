@@ -19,12 +19,12 @@ This is **Rajpoot's Offcloud edition**, forked from [MM-482/pov-android-tv](http
 - Added Offcloud/TorBox service selection, safe episode matching, duplicate-transfer prevention, and retry reuse for pending downloads.
 - Improved the connection dialog with visible progress/errors and retained input when validation fails.
 - Added account-change/cancellation guards and read-only ADB diagnostics that do not expose keys or playback links.
-- Added the Rajpoot app footer and About attribution, while crediting Mark Mateo and kodifitzwell.
+- Added saved transparent subtitle background and bold text options for fullscreen and mini-player playback.
 - Added automated debug/release APK builds, tests, lint reports, checksums, and signed APK publication to tagged GitHub Releases.
 
 ## Screenshots
 
-Actual screenshots from the branded app running on a physical Android TV. The home capture uses a temporary guest presentation to hide personal viewing history; saved accounts and history are not changed. Account keys, emails, personal cloud filenames, and private playback links are excluded.
+Screenshots of POV Offcloud for Android TV.
 
 ### Home
 
@@ -45,7 +45,7 @@ Actual screenshots from the branded app running on a physical Android TV. The ho
 | Offcloud | Bring-your-own API key, cache checks, cloud downloads, library, status, file selection |
 | TorBox | Original account connection, cloud libraries, cache and playback-link support |
 | Catalog | Movie/show discovery, search, details, seasons, episodes, and anime browsing |
-| Player | Native Media3, fullscreen/mini player, audio/subtitle choices, resume, compatibility guard |
+| Player | Native Media3, fullscreen/mini player, audio/subtitle choices, transparent subtitle backgrounds, bold subtitles, resume, compatibility guard |
 | Trakt | Original device linking, watchlists, progress and watched tracking; own Trakt Client ID required |
 | Appearance | Cinematic, Editorial, Neon, Cinema, and Dashboard |
 | TV | Android TV launcher, D-pad navigation, Android 8.0/API 26 or later |
@@ -60,15 +60,25 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 4. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
 5. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 
-Use **Settings → Playback service** to switch to TorBox. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package. Keep the same signing certificate for upgrades to preserve local settings.
+Use **Settings → Playback service** to switch to TorBox. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package.
+
+## Subtitle style
+
+Open **Settings → Subtitle style** or **Subtitles → Subtitle style** during playback. Enable **Transparent background** and/or **Bold text**. Choices are saved on-device and work with text subtitles in fullscreen and the mini player. Both options default to off. Image-based and burned-in subtitles retain their original appearance.
+
+Text subtitle appearance using a sample caption:
+
+| Original style | Transparent background + bold |
+| --- | --- |
+| ![Original subtitle style](docs/screenshots/subtitles-original.png) | ![Transparent bold subtitles](docs/screenshots/subtitles-transparent-bold.png) |
 
 ## Builds and releases
 
-Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.4-offcloud` publish the signed release APK, checksums, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
+Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.5-offcloud` publish the signed release APK, checksums, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
 
 ## Validation and limits
 
-The Offcloud integration passed 248 unit tests, including the branded build. Live ADB checks on a physical Android TV verified saved-key authentication, cloud-history access, and cache API requests, including after an update to a non-debuggable release build. See the [final verification record](docs/VERIFICATION.md) for the packaged version and checks.
+Automated tests and Android lint run before every release. Build results and reports are available in [GitHub Actions](https://github.com/husnainahmedrana/pov-offcloud-android-tv/actions).
 
 The screenshots and connection checks do not establish every TV, codec, HDR/audio path, or authenticated playback combination. This is an independent community fork.
 

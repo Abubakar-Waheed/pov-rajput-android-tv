@@ -10,8 +10,8 @@ android {
         applicationId = "dev.pov.tv.offcloud"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.2.4-offcloud"
+        versionCode = 10
+        versionName = "0.2.5-offcloud"
         testInstrumentationRunner = providers.gradleProperty("povTestRunner")
             .orElse("dev.pov.tv.PlaybackAuditInstrumentation").get()
     }

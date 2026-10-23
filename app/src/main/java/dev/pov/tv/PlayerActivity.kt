@@ -170,10 +170,25 @@ class PlayerActivity : Activity() {
                     listOf(PlayerSheetChoice("Close") {}))
             }
         } }
-        showSheet(title, detail, rows)
+        val menuRows = if (type == C.TRACK_TYPE_TEXT) rows + PlayerSheetChoice("Subtitle style") { showSubtitleStyle() } else rows
+        showSheet(title, detail, menuRows)
         activeTrackType = type
         activeTrackChoices = choices
         activeTracksLoading = loading
+    }
+
+    private fun showSubtitleStyle() {
+        val preferences = SubtitlePreferences(this)
+        showSheet("Subtitle style", "Applies to text subtitles. Image subtitles keep their original appearance.", listOf(
+            PlayerSheetChoice("Transparent background", preferences.transparentBackground) {
+                preferences.transparentBackground = !preferences.transparentBackground
+                preferences.applyTo(view); InAppPlaybackSession.refreshSubtitleStyle(); showSubtitleStyle()
+            },
+            PlayerSheetChoice("Bold text", preferences.boldText) {
+                preferences.boldText = !preferences.boldText
+                preferences.applyTo(view); InAppPlaybackSession.refreshSubtitleStyle(); showSubtitleStyle()
+            }
+        ))
     }
 
     private fun showBoost() {
@@ -201,6 +216,7 @@ class PlayerActivity : Activity() {
             listOf(
                 PlayerSheetChoice("Audio") { showTracks(C.TRACK_TYPE_AUDIO) },
                 PlayerSheetChoice("Subtitles") { showTracks(C.TRACK_TYPE_TEXT) },
+                PlayerSheetChoice("Subtitle style") { showSubtitleStyle() },
                 PlayerSheetChoice("Volume boost") { showBoost() },
                 PlayerSheetChoice("Browse while playing") { finish() },
                 PlayerSheetChoice("Stop playback") { InAppPlaybackSession.stop(); finish() }

@@ -1192,6 +1192,15 @@ class MainActivity : Activity() {
         page("Settings", "Make POV yours.")
         section("Appearance")
         body.addView(button("Themes · ${theme.displayName}  ›") { navigate { appearance() } }, margin(-1, 46, bottom = 9))
+        body.addView(button("Subtitle style · background and bold text  ›") {
+            val preferences = SubtitlePreferences(this)
+            AlertDialog.Builder(this).setTitle("Subtitle style")
+                .setMultiChoiceItems(arrayOf("Transparent background", "Bold text"),
+                    booleanArrayOf(preferences.transparentBackground, preferences.boldText)) { _, which, checked ->
+                    if (which == 0) preferences.transparentBackground = checked else preferences.boldText = checked
+                    InAppPlaybackSession.refreshSubtitleStyle()
+                }.setPositiveButton("Done", null).show()
+        }, margin(-1, 46, bottom = 9))
         section("Accounts")
         body.addView(button(if (store.has("torbox.token")) "TorBox · connected · reconnect" else "Connect TorBox") { startTorBox() }, margin(-1, 44, bottom = 8))
         val offcloud = OffcloudApi(store)
@@ -1226,7 +1235,7 @@ class MainActivity : Activity() {
             val uri = Uri.parse(value.trim()); if (uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { store.put("sources.endpoint", value.trim()); toast("Source provider saved") } else toast("Enter a valid HTTPS address")
         } }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Offcloud · 0.2.4\nPOV Offcloud fork by Rajpoot.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Offcloud · 0.2.5\nPOV Offcloud fork by Rajpoot.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 
