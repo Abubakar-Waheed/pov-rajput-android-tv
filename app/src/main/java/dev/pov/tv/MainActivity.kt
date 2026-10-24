@@ -1233,6 +1233,23 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun debridPriority() {
+        val order = DebridServices.priority(store)
+        AlertDialog.Builder(this).setTitle("Debrid priority · 1 plays first")
+            .setItems(order.mapIndexed { index, id -> "${index + 1}. ${DebridServices.name(id)}" }.toTypedArray()) { _, index ->
+                val offsets = buildList {
+                    if (index > 0) add(-1)
+                    if (index < order.lastIndex) add(1)
+                }
+                AlertDialog.Builder(this).setTitle("${index + 1}. ${DebridServices.name(order[index])}")
+                    .setItems(offsets.map { if (it < 0) "Move up" else "Move down" }.toTypedArray()) { _, choice ->
+                        DebridServices.move(store, index, offsets[choice])
+                        settings(); updateBadge(); debridPriority()
+                    }.setNegativeButton("Back") { _, _ -> debridPriority() }
+                    .setOnCancelListener { debridPriority() }.show()
+            }.setPositiveButton("Done", null).show()
+    }
+
     private fun settings() {
         current = { settings() }
         destination = "settings"; refreshNavigation()
@@ -1266,16 +1283,11 @@ class MainActivity : Activity() {
                 settings(); updateBadge()
             }
         }, margin(-1, 44, bottom = 8))
-        val priority = DebridServices.priority(store)
-        body.addView(button("Debrid priority · ${priority.joinToString(" → ") { DebridServices.name(it) }}") {
-            AlertDialog.Builder(this).setTitle("Debrid priority")
-                .setSingleChoiceItems(arrayOf("Offcloud first, TorBox second", "TorBox first, Offcloud second"),
-                    if (priority.first() == "offcloud") 0 else 1) { dialog, choice ->
-                    DebridServices.prefer(store, if (choice == 0) "offcloud" else "torbox")
-                    dialog.dismiss(); settings(); updateBadge()
-                }.setNegativeButton("Cancel", null).show()
-        }, margin(-1, 44, bottom = 8))
-        body.addView(text("Both connected accounts are checked. Cached copies use the first available service in your priority order.", 12, muted), margin(-1, -2, bottom = 10))
+        body.addView(button("Debrid priority ›") { debridPriority() }, margin(-1, 44, bottom = 8))
+        body.addView(text(DebridServices.priority(store).mapIndexed { index, id ->
+            "${index + 1}. ${DebridServices.name(id)}"
+        }.joinToString("\n"), 14, muted), margin(-1, -2, bottom = 8))
+        body.addView(text("All connected accounts are checked. Cached copies use the first available service in your priority order. Select a service to move it up or down.", 12, muted), margin(-1, -2, bottom = 10))
         body.addView(button("Use TorBox API key") { inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { updateBadge(); toast("TorBox connected"); settings() } } }, margin(-1, 44, bottom = 8))
         if (store.has("torbox.token")) body.addView(button("Disconnect TorBox") { confirm("Disconnect TorBox on this device?") { torbox.disconnect(); settings(); updateBadge() } }, margin(-1, 44, bottom = 8))
         body.addView(button(if (trakt.connected()) "Trakt · connected · reconnect" else "Connect Trakt") { startTrakt() }, margin(-1, 44, bottom = 8))

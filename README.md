@@ -61,7 +61,7 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 4. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
 5. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 
-Connect TorBox as well to search both caches together. Set **Settings → Debrid priority** to choose **Offcloud first** or **TorBox first**. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package.
+Connect TorBox as well to search both caches together. Open **Settings → Debrid priority** to see the numbered order. Select a service, then use **Move up** or **Move down**; number **1** is preferred. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package.
 
 From version 0.2.6, the app is named **POV Rajpoot**, with package ID `dev.pov.tv.rajpoot`. It installs separately from POV Offcloud. Reconnect your accounts in the new app; account settings remain with the old package.
 

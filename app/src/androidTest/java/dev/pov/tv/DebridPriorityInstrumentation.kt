@@ -75,6 +75,7 @@ class DebridPriorityInstrumentation : Instrumentation() {
         } catch (error: Exception) {
             report.putString("safe_error", uiErrorMessage(error))
             report.putString("error_type", error.javaClass.simpleName)
+            report.putString("diagnostic_location", error.stackTrace.filter { it.className.startsWith("dev.pov.tv.DebridPriorityInstrumentation") }.joinToString { "${it.methodName}:${it.lineNumber}" })
         } finally {
             previous?.let { store.putAll(it) }
         }
@@ -88,6 +89,15 @@ class DebridPriorityInstrumentation : Instrumentation() {
             MainActivity::class.java.getDeclaredMethod("settings").apply { isAccessible = true }.invoke(activity)
         }
         waitForIdleSync(); Thread.sleep(350)
+        fun activeRoot(): AccessibilityNodeInfo {
+            repeat(30) {
+                uiAutomation.rootInActiveWindow?.let { root ->
+                    if (root.packageName?.toString() == targetContext.packageName) return root
+                }
+                Thread.sleep(100)
+            }
+            error("POV settings window did not become accessible.")
+        }
         fun nodes(root: AccessibilityNodeInfo): List<AccessibilityNodeInfo> = buildList {
             add(root)
             for (index in 0 until root.childCount) root.getChild(index)?.let { addAll(nodes(it)) }
@@ -112,22 +122,44 @@ class DebridPriorityInstrumentation : Instrumentation() {
             }
             checkNotNull(find(activity.window.decorView)).performClick()
         }
-        clickButton("Debrid priority ·")
+        val store = SecureStore(targetContext)
+        DebridServices.prefer(store, "offcloud")
+        clickButton("Debrid priority")
+        fun select(label: String) {
+            waitForIdleSync(); Thread.sleep(350)
+            click(nodes(activeRoot()).firstOrNull {
+                it.text?.toString()?.equals(label, ignoreCase = true) == true
+            } ?: error("Missing priority control: $label"))
+        }
+        select("2. TorBox")
+        select("Move up")
+        check(DebridServices.priority(store) == listOf("torbox", "offcloud"))
+        select("2. Offcloud")
+        select("Move up")
+        check(DebridServices.priority(store) == listOf("offcloud", "torbox"))
+        select("1. Offcloud")
+        select("Move down")
+        check(DebridServices.priority(store) == listOf("torbox", "offcloud"))
+        select("1. TorBox")
+        select("Move down")
+        check(DebridServices.priority(store) == listOf("offcloud", "torbox"))
         waitForIdleSync(); Thread.sleep(350)
-        val priority = nodes(checkNotNull(uiAutomation.rootInActiveWindow)).firstOrNull {
-            it.text?.toString()?.contains("Offcloud first", ignoreCase = true) == true
-        } ?: error("Offcloud-first priority choice is unavailable.")
-        click(priority)
-        waitForIdleSync(); Thread.sleep(350)
-        check(DebridServices.priority(SecureStore(targetContext)).first() == "offcloud") { "Priority selection did not persist." }
+        val priorityLabels = nodes(activeRoot()).mapNotNull { it.text?.toString() }
+        check(priorityLabels.containsAll(listOf("1. Offcloud", "2. TorBox")))
+        val priorityBitmap = checkNotNull(uiAutomation.takeScreenshot())
+        java.io.File(checkNotNull(targetContext.externalCacheDir), "debrid-priority.png").outputStream().use {
+            check(priorityBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+        }
+        priorityBitmap.recycle()
+        select("Done")
         clickButton("Subtitle style ·")
         waitForIdleSync(); Thread.sleep(350)
-        val style = checkNotNull(uiAutomation.rootInActiveWindow)
+        val style = activeRoot()
         val size = nodes(style).firstOrNull { it.text?.toString()?.startsWith("Size ·", ignoreCase = true) == true }
             ?: error("Subtitle size button is unavailable.")
         click(size)
         waitForIdleSync(); Thread.sleep(350)
-        val labels = nodes(checkNotNull(uiAutomation.rootInActiveWindow)).mapNotNull { it.text?.toString() }
+        val labels = nodes(activeRoot()).mapNotNull { it.text?.toString() }
         check(labels.containsAll(listOf("Small", "Medium", "Large"))) { "Subtitle size labels are missing." }
         check(labels.none { '%' in it }) { "Subtitle size dialog still contains percentages." }
         val bitmap = checkNotNull(uiAutomation.takeScreenshot())

@@ -16,4 +16,19 @@ class DebridPriorityTest {
         assertEquals(listOf("torbox", "offcloud"), DebridServices.parsePriority("unknown,torbox,torbox", "offcloud"))
         assertEquals(listOf("offcloud", "torbox"), DebridServices.parsePriority("unknown", "offcloud"))
     }
+    @Test fun `five providers retain saved ranks and append new integrations`() {
+        val providers = listOf("offcloud", "torbox", "debridlink", "realdebrid", "alldebrid")
+        assertEquals(listOf("torbox", "offcloud", "debridlink", "realdebrid", "alldebrid"),
+            DebridServices.parsePriority("torbox,offcloud", "offcloud", providers))
+        assertEquals(listOf("alldebrid", "torbox", "offcloud", "debridlink", "realdebrid"),
+            DebridServices.parsePriority("alldebrid,torbox,unknown,torbox", "offcloud", providers))
+    }
+    @Test fun `moving among five providers preserves all other ranks`() {
+        val order = listOf("offcloud", "torbox", "debridlink", "realdebrid", "alldebrid")
+        val moved = DebridServices.moved(order, 3, -1)
+        assertEquals(listOf("offcloud", "torbox", "realdebrid", "debridlink", "alldebrid"), moved)
+        assertEquals(order, DebridServices.moved(moved, 2, 1))
+        assertEquals(order, DebridServices.moved(order, 0, -1))
+        assertEquals(order, DebridServices.moved(order, 4, 1))
+    }
 }
