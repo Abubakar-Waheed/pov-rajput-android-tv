@@ -34,13 +34,9 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 
 Screenshots of POV Rajput for Android TV.
 
-### Home
+### Settings
 
-![POV Rajput home with Made by Rajput branding](docs/screenshots/home.png)
-
-### Offcloud settings
-
-![Offcloud connection and playback-service settings](docs/screenshots/settings.png)
+![Playback language, subtitle and account settings](docs/screenshots/settings.png)
 
 ### Appearance
 
@@ -128,7 +124,7 @@ Hold **OK/Select** on a Continue watching card, then choose **Remove from Contin
 
 ## Builds and releases
 
-Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.6-rajput` publish the signed release APK, checksums, update metadata, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
+Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.7-rajput` publish the signed release APK, checksums, update metadata, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
 
 ## Validation and limits
 
