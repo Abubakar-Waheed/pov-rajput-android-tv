@@ -8,9 +8,11 @@ Checks cover Offcloud protocol handling, player controls and track selection, su
 
 ## POV Rajput 0.2.7
 
-309 unit tests pass, including subtitle preference persistence, text-only track overrides, and one-second seek state, cancellation, boundaries, and long-video timing. Subtitle position checks cover authored text regions, persistence, restoring default placement, and retaining image subtitles. Debug and release lint pass.
+313 unit tests pass, including subtitle preference persistence, text-only track overrides, and one-second seek state, cancellation, boundaries, and long-video timing. Subtitle position checks cover authored text regions, persistence, restoring default placement, and retaining image subtitles. Audio preference tests preserve subtitle/video settings and overrides; accelerated seeking tests cover all speed thresholds, reversals, new holds, and end bounds. Debug and release lint pass.
 
 On an onn 4K running Android 14, public multilingual DASH playback selects the saved French preference automatically. Switching to Off and English also changes the selected text tracks. D-pad repeat events stage one-second positions without seeking during the hold; release commits once and preserves the previous playing/paused state. Hidden controls, Back cancellation, and native D-pad action-row navigation are verified. The seek overlay contains only times and seconds moved. Native D-pad input adjusts the subtitle-position slider in Settings and during playback, the rendered text moves immediately, and Cancel restores the saved position. The test restores the original language and position preferences and confirms personal playback history is unchanged.
+
+Preferred French audio is selected automatically on fresh playback. Switching to German preserves the subtitle language; unavailable-language fallback and Automatic are exercised. A longer public video verifies five-second and ten-second held-seek increments, commit on release, and restoration of one-second precision. Settings is visible and opens using the native remote keys in all five themes.
 
 ## POV Rajput 0.2.6
 

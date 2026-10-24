@@ -39,7 +39,6 @@ class MainActivity : Activity() {
     private val catalog = CatalogApi()
     private lateinit var history: PlaybackStore
     private lateinit var body: LinearLayout
-    private lateinit var badge: TextView
     private lateinit var themePreferences: ThemePreferences
     private var theme = ThemeSpec.CINEMATIC
     private lateinit var shellRoot: FrameLayout
@@ -106,7 +105,6 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume(); resumed = true; launchingPlayer = false
-        if (::badge.isInitialized) updateBadge()
         if (::shellRoot.isInitialized) updateMiniPlayer()
     }
     override fun onPause() {
@@ -206,7 +204,6 @@ class MainActivity : Activity() {
             rail.addView(logo(), margin(61, 58, bottom = 24).apply { leftMargin = dp(10) })
             destinations().forEach { target -> rail.addView(navigation(target, false), margin(-1, 35, bottom = 4)) }
             rail.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-            rail.addView(text("Made by\nRajput", 9, muted), margin(-1, -2, top = 8))
         } else {
             val header = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL; setPadding(dp(layout.contentInsetDp), dp(5), dp(16), dp(5))
@@ -214,16 +211,9 @@ class MainActivity : Activity() {
             shellRoot.addView(header, FrameLayout.LayoutParams(-1, dp(layout.headerHeightDp)))
             header.addView(logo(), margin(45, 45, right = 22))
             destinations().forEach { target -> header.addView(navigation(target, true), LinearLayout.LayoutParams(0, dp(38), 1f)) }
-            header.addView(View(this), margin(145, 1))
         }
-        badge = text("", 12, ink).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(6), dp(12), dp(6)) }
-        if (theme == ThemeSpec.EDITORIAL || theme == ThemeSpec.DASHBOARD) badge.background = rounded(panel, 22)
-        shellRoot.addView(badge, FrameLayout.LayoutParams(-2, dp(31), Gravity.TOP or Gravity.END).apply {
-            topMargin = dp(if (layout.navigation == NavigationPlacement.LEFT_RAIL) 15 else (layout.headerHeightDp - 31) / 2)
-            rightMargin = dp(layout.contentInsetDp.coerceAtLeast(19))
-        })
         setContentView(shellRoot)
-        updateBadge(); refreshNavigation()
+        refreshNavigation()
         if (resumed) updateMiniPlayer()
     }
 
@@ -272,22 +262,6 @@ class MainActivity : Activity() {
         navigationViews.values.forEach { view -> view.onFocusChangeListener?.onFocusChange(view, view.hasFocus()) }
     }
 
-    private fun updateBadge() {
-        val states = DebridServices.IDS.map { service ->
-            DebridServices.name(service) to (!publicPreview && try {
-                store.has(if (service == "offcloud") "offcloud.key" else "torbox.token")
-            } catch (_: Exception) { false })
-        } + ("Trakt" to (!publicPreview && try { trakt.connected() } catch (_: Exception) { false }))
-        val value = android.text.SpannableString(states.joinToString("    ") { "●  ${it.first}" })
-        var position = 0
-        states.forEach { (name, connected) ->
-            val dot = value.toString().indexOf('●', position)
-            value.setSpan(android.text.style.ForegroundColorSpan(if (connected) theme.palette.success else muted), dot, dot + 1, 0)
-            position = dot + name.length + 3
-        }
-        badge.text = value
-        badge.contentDescription = states.joinToString(". ") { "${it.first} ${if (it.second) "linked" else "not linked"}" }
-    }
     private fun navigate(screen: () -> Unit) {
         backStack.addLast(NavigationSnapshot(current, focusController.capture(), destination))
         pendingFocus = null; current = screen; screen()
@@ -509,13 +483,7 @@ class MainActivity : Activity() {
         library.addView(button("▣   Shows     ›") { navigate { catalogPage("series") } }, margin(-1, 44, bottom = 6))
         library.addView(button("☁   Cloud library  ›") { navigate { selectedCloud() } }, margin(-1, 44))
         lower.addView(library, margin(247, -2)); body.addView(lower)
-        val connectionStatus = DebridServices.IDS.joinToString("     ·     ") { service ->
-            val connected = !publicPreview && store.has(if (service == "offcloud") "offcloud.key" else "torbox.token")
-            "${DebridServices.name(service)} ${if (connected) "connected" else "not linked"}"
-        }
-        body.addView(text("$connectionStatus     ·     Trakt ${if (!publicPreview && trakt.connected()) "connected" else "not linked"}", 12, muted).apply {
-            background = rounded(panel, 9); setPadding(dp(20), dp(12), dp(20), dp(12))
-        }, margin(-1, -2, top = 14))
+
     }
 
     private fun resumeSaved(saved: PlaybackStore.Recent) {
@@ -1275,7 +1243,7 @@ class MainActivity : Activity() {
                 AlertDialog.Builder(this).setTitle("${index + 1}. ${DebridServices.name(order[index])}")
                     .setItems(offsets.map { if (it < 0) "Move up" else "Move down" }.toTypedArray()) { _, choice ->
                         DebridServices.move(store, index, offsets[choice])
-                        settings(); updateBadge(); debridPriority()
+                        settings(); debridPriority()
                     }.setNegativeButton("Back") { _, _ -> debridPriority() }
                     .setOnCancelListener { debridPriority() }.show()
             }.setPositiveButton("Done", null).show()
@@ -1292,6 +1260,22 @@ class MainActivity : Activity() {
                 if (index == languages.size) subtitleLanguage(true) else {
                     preferences.language = languages[index].first
                     InAppPlaybackSession.refreshSubtitleLanguage()
+                    settings()
+                }
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun audioLanguage(allLanguages: Boolean = false) {
+        val preferences = AudioPreferences(this)
+        val languages = if (allLanguages) AudioPreferences.LANGUAGES else
+            AudioPreferences.COMMON_LANGUAGES.map { code -> AudioPreferences.LANGUAGES.first { it.first == code } }
+        val labels = languages.map { it.second } + if (allLanguages) emptyList() else listOf("More languages…")
+        AlertDialog.Builder(this).setTitle("Preferred audio language")
+            .setSingleChoiceItems(labels.toTypedArray(), languages.indexOfFirst { it.first == preferences.language }) { dialog, index ->
+                dialog.dismiss()
+                if (index == languages.size) audioLanguage(true) else {
+                    preferences.language = languages[index].first
+                    InAppPlaybackSession.refreshAudioLanguage()
                     settings()
                 }
             }.setNegativeButton("Cancel", null).show()
@@ -1325,6 +1309,9 @@ class MainActivity : Activity() {
         }, margin(-1, 46, bottom = 9))
         body.addView(button("Subtitle language · ${subtitlePreferences.languageLabel}  ›") { subtitleLanguage() }, margin(-1, 46, bottom = 9))
         body.addView(text("Selects your preferred subtitle language when available. You can choose another track in the player.", 12, muted), margin(-1, -2, bottom = 10))
+        val audioPreferences = AudioPreferences(this)
+        body.addView(button("Audio language · ${audioPreferences.languageLabel}  ›") { audioLanguage() }, margin(-1, 46, bottom = 9))
+        body.addView(text("Selects your preferred audio language when available. You can choose another audio track in the player.", 12, muted), margin(-1, -2, bottom = 10))
         section("Accounts")
         body.addView(button(if (store.has("torbox.token")) "TorBox · connected · reconnect" else "Connect TorBox") { startTorBox() }, margin(-1, 44, bottom = 8))
         val offcloud = OffcloudApi(store)
@@ -1334,7 +1321,7 @@ class MainActivity : Activity() {
         if (offcloud.connected()) body.addView(button("Disconnect Offcloud") {
             confirm("Disconnect Offcloud on this device?") {
                 offcloud.disconnect()
-                settings(); updateBadge()
+                settings()
             }
         }, margin(-1, 44, bottom = 8))
         body.addView(button("Debrid priority ›") { debridPriority() }, margin(-1, 44, bottom = 8))
@@ -1342,10 +1329,10 @@ class MainActivity : Activity() {
             "${index + 1}. ${DebridServices.name(id)}"
         }.joinToString("\n"), 14, muted), margin(-1, -2, bottom = 8))
         body.addView(text("All connected accounts are checked. Cached copies use the first available service in your priority order. Select a service to move it up or down.", 12, muted), margin(-1, -2, bottom = 10))
-        body.addView(button("Use TorBox API key") { inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { updateBadge(); toast("TorBox connected"); settings() } } }, margin(-1, 44, bottom = 8))
-        if (store.has("torbox.token")) body.addView(button("Disconnect TorBox") { confirm("Disconnect TorBox on this device?") { torbox.disconnect(); settings(); updateBadge() } }, margin(-1, 44, bottom = 8))
+        body.addView(button("Use TorBox API key") { inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { toast("TorBox connected"); settings() } } }, margin(-1, 44, bottom = 8))
+        if (store.has("torbox.token")) body.addView(button("Disconnect TorBox") { confirm("Disconnect TorBox on this device?") { torbox.disconnect(); settings() } }, margin(-1, 44, bottom = 8))
         body.addView(button(if (trakt.connected()) "Trakt · connected · reconnect" else "Connect Trakt") { startTrakt() }, margin(-1, 44, bottom = 8))
-        if (trakt.connected()) body.addView(button("Disconnect Trakt") { confirm("Disconnect Trakt on this device?") { trakt.disconnect(); history.clearPending(); remoteProgress.clear(); settings(); updateBadge() } }, margin(-1, 44, bottom = 8))
+        if (trakt.connected()) body.addView(button("Disconnect Trakt") { confirm("Disconnect Trakt on this device?") { trakt.disconnect(); history.clearPending(); remoteProgress.clear(); settings() } }, margin(-1, 44, bottom = 8))
         section("App connections")
         body.addView(text("This preview uses your own Trakt app Client ID. Create an app at developer.trakt.tv, then enter its Client ID here before linking your account.", 13, muted), margin(-1, -2, bottom = 9))
         body.addView(button("Trakt app Client ID") { configureTraktClientId() }, margin(-1, 44, bottom = 8))
@@ -1391,7 +1378,7 @@ class MainActivity : Activity() {
                         if (dialog.isShowing && request == generation && !isFinishing && !isDestroyed) {
                             if (store.get("playback.priority").isBlank() && !store.has("torbox.token")) store.put("playback.service", "offcloud")
                             dialog.dismiss()
-                            updateBadge(); toast("Offcloud connected"); settings()
+                            toast("Offcloud connected"); settings()
                         }
                     }
                 } catch (error: Exception) {
@@ -1414,7 +1401,7 @@ class MainActivity : Activity() {
         if (authorization?.isShowing == true) return
         authorization = DeviceAuthorizationDialog(this, name, authWorker, start, poll, onConnected = {
             if (name == "Trakt") { history.clearPending(); remoteProgress.clear() }
-            updateBadge(); toast("$name connected"); current()
+            toast("$name connected"); current()
         }, onCancel = cancel, configure = configure).also { it.show() }
     }
 
@@ -1441,7 +1428,7 @@ class MainActivity : Activity() {
             try {
                 val changed = trakt.setClientId(value)
                 if (changed) { history.clearPending(); remoteProgress.clear() }
-                dialog.dismiss(); updateBadge(); startTrakt()
+                dialog.dismiss(); startTrakt()
             } catch (_: Exception) {
                 errorText.text = "Trakt setup could not be saved on this device. Check available storage and try again."
             }

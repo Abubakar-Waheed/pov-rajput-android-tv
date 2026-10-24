@@ -196,6 +196,7 @@ object InAppPlaybackSession {
             .setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000).build()
         player = exo
         exo.trackSelectionParameters = SubtitlePreferences(application!!).trackParameters(exo.trackSelectionParameters)
+        exo.trackSelectionParameters = AudioPreferences(application!!).trackParameters(exo.trackSelectionParameters)
         parameters?.let { exo.trackSelectionParameters = it }
         val openApp = PendingIntent.getActivity(application, 0, Intent(application, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -276,6 +277,11 @@ object InAppPlaybackSession {
 
     internal fun matches(intent: Intent): Boolean = player != null &&
         sourceUrl == intent.getStringExtra("url").orEmpty() && sourceKey == intent.getStringExtra("key").orEmpty()
+
+    fun refreshAudioLanguage() {
+        val context = application ?: return
+        player?.let { it.trackSelectionParameters = AudioPreferences(context).trackParameters(it.trackSelectionParameters) }
+    }
 
     fun refreshSubtitleLanguage() {
         val context = application ?: return

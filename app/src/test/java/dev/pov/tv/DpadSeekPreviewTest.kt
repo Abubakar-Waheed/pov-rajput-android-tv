@@ -36,6 +36,33 @@ class DpadSeekPreviewTest {
         seek.finish(); seek.begin(Long.MAX_VALUE - 500, Long.MAX_VALUE)
         assertEquals(Long.MAX_VALUE, seek.step(1))
     }
+    @Test fun `continuous seeks accelerate after one five and fifteen minutes and remain bounded`() {
+        val seek = DpadSeekPreview()
+        seek.begin(0, 7_200_000)
+        repeat(60) { seek.step(1) }
+        assertEquals(60_000, seek.position)
+        assertEquals(65_000, seek.step(1))
+        repeat(47) { seek.step(1) }
+        assertEquals(300_000, seek.position)
+        assertEquals(310_000, seek.step(1))
+        repeat(59) { seek.step(1) }
+        assertEquals(900_000, seek.position)
+        assertEquals(930_000, seek.step(1))
+        repeat(1000) { seek.step(1) }
+        assertEquals(7_200_000, seek.position)
+        assertEquals(7_200_000L, seek.finish())
+    }
+    @Test fun `reversing or starting a new hold restores precise one second steps`() {
+        val seek = DpadSeekPreview()
+        seek.begin(2_000_000, 7_200_000)
+        repeat(60) { seek.step(-1) }
+        assertEquals(1_935_000, seek.step(-1))
+        assertEquals(1_936_000, seek.step(1))
+        seek.finish()
+        seek.begin(1_936_000, 7_200_000)
+        assertEquals(1_937_000, seek.step(1))
+    }
+
     @Test fun `timer always includes seconds and a long movie includes hours`() {
         assertEquals("00:00", DpadSeekPreview.time(0))
         assertEquals("01:01", DpadSeekPreview.time(61_999))

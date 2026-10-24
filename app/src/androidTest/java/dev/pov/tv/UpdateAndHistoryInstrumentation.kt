@@ -125,7 +125,7 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
         val previewField = MainActivity::class.java.getDeclaredField("publicPreview").apply { isAccessible = true }
         fun mainCall(name: String) = MainActivity::class.java.getDeclaredMethod(name).apply { isAccessible = true }.invoke(main)
         try {
-            runOnMainSync { previewField.setBoolean(main, true); mainCall("updateBadge"); mainCall("home") }
+            runOnMainSync { previewField.setBoolean(main, true); mainCall("home") }
             val end = SystemClock.uptimeMillis() + 30000
             var rendered = false
             while (!rendered && SystemClock.uptimeMillis() < end) {
@@ -146,7 +146,7 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
             }
             waitForIdleSync(); Thread.sleep(350); capture("appearance-public.png")
             sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        } finally { runOnMainSync { previewField.setBoolean(main, false); mainCall("updateBadge") } }
+        } finally { runOnMainSync { previewField.setBoolean(main, false) } }
         val updates = GitHubUpdates(targetContext)
         val fixture = File(checkNotNull(targetContext.externalCacheDir), "release-candidate.apk")
         if (fixture.exists()) {
@@ -184,7 +184,7 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
             return null
         }
         try {
-            runOnMainSync { preview.setBoolean(main, true); call("updateBadge"); call("home") }
+            runOnMainSync { preview.setBoolean(main, true); call("home") }
             var rendered = false
             repeat(120) {
                 if (!rendered) { runOnMainSync { rendered = findView(body) { it.tag == "featured-hero" } != null }; Thread.sleep(250) }
@@ -197,7 +197,7 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
             waitForIdleSync(); Thread.sleep(350); capture("appearance-public.png")
             sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             report.putBoolean("public_screenshots_captured", true)
-        } finally { runOnMainSync { preview.setBoolean(main, false); call("updateBadge"); call("home") } }
+        } finally { runOnMainSync { preview.setBoolean(main, false); call("home") } }
     }
     private fun verifyInstaller() {
         val activity = startActivitySync(Intent(targetContext, UpdateActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as UpdateActivity

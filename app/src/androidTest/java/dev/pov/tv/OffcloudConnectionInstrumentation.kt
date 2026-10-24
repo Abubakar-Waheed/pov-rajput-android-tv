@@ -82,7 +82,6 @@ class OffcloudConnectionInstrumentation : Instrumentation() {
         fun show(method: String) = runOnMainSync {
             report.putString("capture_stage", "show_$method")
             MainActivity::class.java.getDeclaredField("publicPreview").apply { isAccessible = true }.setBoolean(activity, true)
-            MainActivity::class.java.getDeclaredMethod("updateBadge").apply { isAccessible = true }.invoke(activity)
             MainActivity::class.java.getDeclaredMethod(method).apply { isAccessible = true }.invoke(activity)
         }
         fun capture(name: String) {

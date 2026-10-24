@@ -1,0 +1,28 @@
+package dev.pov.tv
+
+import android.content.Context
+import androidx.media3.common.C
+import androidx.media3.common.TrackSelectionParameters
+
+/** Preferred audio language for fresh playback; manual track choices remain session-local. */
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
+internal class AudioPreferences(context: Context) {
+    private val preferences = context.applicationContext.getSharedPreferences("pov_audio", Context.MODE_PRIVATE)
+    var language: String
+        get() = preferences.getString("language", "").orEmpty().takeIf { value -> LANGUAGES.any { it.first == value } }.orEmpty()
+        set(value) { require(LANGUAGES.any { it.first == value }); preferences.edit().putString("language", value).apply() }
+    val languageLabel: String get() = LANGUAGES.first { it.first == language }.second
+
+    fun trackParameters(current: TrackSelectionParameters): TrackSelectionParameters {
+        val builder = current.buildUpon().clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+        return if (language.isEmpty()) builder.setPreferredAudioLanguages().build()
+        else builder.setPreferredAudioLanguage(language).build()
+    }
+
+    companion object {
+        val LANGUAGES = listOf("" to "Automatic (player default)") +
+            SubtitlePreferences.LANGUAGES.filter { it.first.isNotEmpty() && it.first != "off" }
+        val COMMON_LANGUAGES = SubtitlePreferences.COMMON_LANGUAGES.filter { it != "off" }
+    }
+}

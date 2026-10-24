@@ -25,6 +25,7 @@ class SubtitleSeekInstrumentation : Instrumentation() {
     private var stage = "start"
     private var playback: PlayerActivity? = null
     private var originalLanguage: String? = null
+    private var originalAudioLanguage: String? = null
     private var originalPosition: Int? = null
     private var originalRecent: String? = null
     private var player: androidx.media3.exoplayer.ExoPlayer? = null
@@ -92,12 +93,44 @@ class SubtitleSeekInstrumentation : Instrumentation() {
     override fun onStart() {
         var success = false
         val prefs = targetContext.getSharedPreferences("pov_subtitles", 0)
+        val audioPrefs = targetContext.getSharedPreferences("pov_audio", 0)
         try {
             onMain { InAppPlaybackSession.initialize(targetContext); InAppPlaybackSession.stop() }
             originalRecent = targetContext.getSharedPreferences("playback", 0).getString("recent", null)
             originalLanguage = prefs.getString("language", null)
+            originalAudioLanguage = audioPrefs.getString("language", null)
             originalPosition = if (prefs.contains("position_percent")) prefs.getInt("position_percent", -1) else null
             val main = startActivitySync(Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+            val themeField = MainActivity::class.java.getDeclaredField("theme").apply { isAccessible = true }
+            val previewField = MainActivity::class.java.getDeclaredField("publicPreview").apply { isAccessible = true }
+            val originalTheme = onMain { themeField.get(main) }
+            val originalPreview = onMain { previewField.getBoolean(main) }
+            try {
+                for (theme in ThemeSpec.entries) {
+                    onMain {
+                        previewField.setBoolean(main, true); themeField.set(main, theme)
+                        MainActivity::class.java.getDeclaredMethod("shell").apply { isAccessible = true }.invoke(main)
+                        MainActivity::class.java.getDeclaredMethod("home").apply { isAccessible = true }.invoke(main)
+                    }
+                    await("settings_visible_${theme.id}") {
+                        val nav = main.window.decorView.findViewWithTag<View>("nav:settings")
+                        val bounds = android.graphics.Rect()
+                        nav != null && nav.getGlobalVisibleRect(bounds) && bounds.width() == nav.width && bounds.height() == nav.height
+                    }
+                    capture("home-navigation-${theme.id}.png")
+                    onMain { check(main.window.decorView.findViewWithTag<View>("nav:settings").requestFocus()) }
+                    nativeTap(KeyEvent.KEYCODE_DPAD_CENTER)
+                    await("settings_opens_${theme.id}") {
+                        MainActivity::class.java.getDeclaredField("destination").apply { isAccessible = true }.get(main) == "settings"
+                    }
+                }
+                report.putBoolean("settings_visible_and_opens_all_five_themes", true)
+            } finally {
+                onMain {
+                    themeField.set(main, originalTheme); previewField.setBoolean(main, originalPreview)
+                    MainActivity::class.java.getDeclaredMethod("shell").apply { isAccessible = true }.invoke(main)
+                }
+            }
             onMain {
                 MainActivity::class.java.getDeclaredMethod("settings").apply { isAccessible = true }.invoke(main)
                 fun find(view: View): View? {
@@ -112,6 +145,18 @@ class SubtitleSeekInstrumentation : Instrumentation() {
             clickLabel("French")
             await("language_choice_saved") { prefs.getString("language", null) == "fr" }
             report.putBoolean("settings_language_persisted", true)
+            onMain {
+                fun find(view: View): View? {
+                    if (view is TextView && view.text.startsWith("Audio language")) return view
+                    if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
+                    return null
+                }
+                checkNotNull(find(main.window.decorView)).performClick()
+            }
+            waitForIdleSync(); Thread.sleep(300)
+            capture("audio-language-picker.png")
+            clickLabel("French")
+            await("audio_language_saved") { audioPrefs.getString("language", null) == "fr" }
             onMain {
                 fun find(view: View): View? {
                     if (view is TextView && view.text.startsWith("Subtitle position")) return view
@@ -139,6 +184,13 @@ class SubtitleSeekInstrumentation : Instrumentation() {
                 }
             }
             report.putBoolean("preferred_subtitle_selected_on_fresh_playback", true)
+            fun selectedAudio(language: String): Boolean = player!!.currentTracks.groups.any { group ->
+                group.type == C.TRACK_TYPE_AUDIO && (0 until group.length).any {
+                    group.isTrackSelected(it) && group.getTrackFormat(it).language?.startsWith(language) == true
+                }
+            }
+            await("french_audio_selected_automatically") { selectedAudio("fr") }
+            report.putBoolean("preferred_audio_selected_on_fresh_playback", true)
             val view = onMain { playback!!.findViewById<PlayerView>(R.id.pov_player) }
             val model = onMain { PlayerActivity::class.java.getDeclaredField("seekPreview").apply { isAccessible = true }.get(playback) as DpadSeekPreview }
             val label = onMain { view.overlayFrameLayout!!.findViewWithTag<TextView>("pov_seek_preview") }
@@ -220,6 +272,45 @@ class SubtitleSeekInstrumentation : Instrumentation() {
             clickLabel("Cancel")
             await("cancel_restores_position") { prefs.getInt("position_percent", -1) == 2 && displayedCues().any { it.text != null && kotlin.math.abs(it.line - 0.98f) < 0.001f } }
             report.putBoolean("subtitle_position_settings_and_player_verified", true)
+            onMain { AudioPreferences(targetContext).language = "de"; InAppPlaybackSession.refreshAudioLanguage() }
+            await("german_audio_without_subtitle_change") {
+                selectedAudio("de") && player!!.trackSelectionParameters.preferredTextLanguages == listOf("en")
+            }
+            onMain { AudioPreferences(targetContext).language = "ur"; InAppPlaybackSession.refreshAudioLanguage() }
+            await("unavailable_audio_language_falls_back") {
+                player!!.currentTracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected } && player!!.playbackState == Player.STATE_READY
+            }
+            onMain { AudioPreferences(targetContext).language = ""; InAppPlaybackSession.refreshAudioLanguage() }
+            await("automatic_audio_restored") {
+                player!!.trackSelectionParameters.preferredAudioLanguages.isEmpty() &&
+                    player!!.currentTracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+            }
+            report.putBoolean("audio_switch_fallback_and_automatic_verified", true)
+            onMain { InAppPlaybackSession.stop(); playback!!.finish() }
+            playback = startActivitySync(Intent(targetContext, PlayerActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("url", LONG_SAMPLE)
+                .putExtra("key", "").putExtra("title", "Public accelerated seek test").putExtra("playWhenReady", false)) as PlayerActivity
+            player = onMain { checkNotNull(InAppPlaybackSession.playerOrNull).also { it.volume = 0f } }
+            await("long_video_ready", 45000) { check(player!!.playerError == null); player!!.playbackState == Player.STATE_READY && player!!.duration > 600_000 }
+            val longView = onMain { playback!!.findViewById<PlayerView>(R.id.pov_player) }
+            val longModel = onMain { PlayerActivity::class.java.getDeclaredField("seekPreview").apply { isAccessible = true }.get(playback) as DpadSeekPreview }
+            nativeTap(KeyEvent.KEYCODE_DPAD_UP)
+            onMain { longView.showController(); check(longView.findViewById<View>(androidx.media3.ui.R.id.exo_progress).requestFocus()) }
+            repeat(60) { received(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT, it) }
+            onMain { check(longModel.position == 60_000L && player!!.currentPosition == 0L) }
+            received(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT, 60)
+            onMain { check(longModel.position == 65_000L && player!!.currentPosition == 0L) }
+            repeat(47) { received(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT, it + 61) }
+            received(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT, 108)
+            onMain { check(longModel.position == 310_000L && player!!.currentPosition == 0L) }
+            capture("seek-accelerated-preview.png")
+            received(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_RIGHT)
+            await("accelerated_seek_committed") { player!!.currentPosition == 310_000L && !player!!.playWhenReady }
+            received(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT)
+            onMain { check(longModel.position == 309_000L) }
+            received(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT)
+            await("precision_restored_after_release") { player!!.currentPosition == 309_000L && !player!!.playWhenReady }
+            report.putBoolean("accelerated_seek_and_precision_reset_verified", true)
             success = true
         } catch (error: Throwable) {
             report.putString("failed_stage", stage)
@@ -231,6 +322,7 @@ class SubtitleSeekInstrumentation : Instrumentation() {
                 if (InAppPlaybackSession.playerOrNull === player && player != null) InAppPlaybackSession.stop()
                 playback?.finish()
                 if (originalLanguage == null) prefs.edit().remove("language").commit() else prefs.edit().putString("language", originalLanguage).commit()
+                if (originalAudioLanguage == null) audioPrefs.edit().remove("language").commit() else audioPrefs.edit().putString("language", originalAudioLanguage).commit()
                 if (originalPosition == null) prefs.edit().remove("position_percent").commit() else prefs.edit().putInt("position_percent", originalPosition!!).commit()
             }
             val unchanged = targetContext.getSharedPreferences("playback", 0).getString("recent", null) == originalRecent
@@ -239,5 +331,8 @@ class SubtitleSeekInstrumentation : Instrumentation() {
             finish(if (success && unchanged) -1 else 0, report)
         }
     }
-    companion object { private const val SAMPLE = "https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd" }
+    companion object {
+        private const val SAMPLE = "https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd"
+        private const val LONG_SAMPLE = "https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd"
+    }
 }
