@@ -1,10 +1,10 @@
-# POV Rajpoot
+# POV Rajput
 
-POV Rajpoot is based on the [Android TV application by Mark Mateo / MM-482](https://github.com/MM-482/pov-android-tv), with Offcloud integration by Rajpoot.
+POV Rajput is based on the [Android TV application by Mark Mateo / MM-482](https://github.com/MM-482/pov-android-tv), with Offcloud integration by Rajput.
 
 ## Install and connect
 
-1. Sideload the APK on Android TV 8.0 or later. It appears as **POV Rajpoot** and uses application ID `dev.pov.tv.rajpoot`, so it can coexist with the original POV app.
+1. Sideload the APK on Android TV 8.0 or later. It appears as **POV Rajput** and uses application ID `dev.pov.tv.rajput`, so it can coexist with the original POV app.
 2. Open **Settings → Connect Offcloud with API key**.
 3. Enter your own API key from your Offcloud account settings. Offcloud can be used alone or alongside TorBox.
 4. Browse a movie or episode, open its sources, and select a source. For an uncached transfer, confirm adding it to your Offcloud account.

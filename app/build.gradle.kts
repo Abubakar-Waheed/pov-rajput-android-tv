@@ -7,11 +7,11 @@ android {
     namespace = "dev.pov.tv"
     compileSdk = 35
     defaultConfig {
-        applicationId = "dev.pov.tv.rajpoot"
+        applicationId = "dev.pov.tv.rajput"
         minSdk = 26
         targetSdk = 35
         versionCode = 12
-        versionName = "0.2.6-rajpoot"
+        versionName = "0.2.6-rajput"
         testInstrumentationRunner = providers.gradleProperty("povTestRunner")
             .orElse("dev.pov.tv.PlaybackAuditInstrumentation").get()
     }

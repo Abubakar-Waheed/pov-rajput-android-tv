@@ -33,13 +33,13 @@ For local signing, use `POV_RELEASE_STORE_FILE`, `POV_RELEASE_STORE_PASSWORD`, `
 
 1. Update `versionCode`, `versionName`, release notes, and verification details.
 2. Commit to `main` and let the build pass.
-3. Push a tag equal to `v` plus `versionName`, for example `v0.2.6-rajpoot`.
+3. Push a tag equal to `v` plus `versionName`, for example `v0.2.6-rajput`.
 
 ```sh
-git tag v0.2.6-rajpoot
-git push origin v0.2.6-rajpoot
+git tag v0.2.6-rajput
+git push origin v0.2.6-rajput
 ```
 
 The tagged workflow validates the version, builds and verifies the signed APK, then creates a GitHub Release containing the release APK, SHA-256 checksums, `update.json` updater metadata, license, release notes, and GitHub's automatic source archives. Only the publish job receives repository-contents write permission. No upstream repository is changed.
 
-For the updater, every signed release must retain `POV-Rajpoot-release.apk` and `update.json`. Actions generates the manifest from the app version and the final signed APK checksum. Increase `versionCode` for each update and keep the package ID and signing certificate consistent. Drafts, prereleases, debug APKs, and older version codes are not offered by the updater.
+For the updater, every signed release must retain `POV-Rajput-release.apk` and `update.json`. Actions generates the manifest from the app version and the final signed APK checksum. Increase `versionCode` for each update and keep the package ID and signing certificate consistent. Drafts, prereleases, debug APKs, and older version codes are not offered by the updater.

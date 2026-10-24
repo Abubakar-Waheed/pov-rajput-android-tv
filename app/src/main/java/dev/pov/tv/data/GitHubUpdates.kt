@@ -14,7 +14,7 @@ import javax.net.ssl.HttpsURLConnection
 class GitHubUpdates(private val context: Context) {
     data class Candidate(val tag: String, val notes: String, val apkUrl: String, val manifestUrl: String, val size: Long)
     data class Release(val candidate: Candidate, val code: Long, val version: String, val sha256: String)
-    val apkFile get() = File(context.cacheDir, "updates/POV-Rajpoot-update.apk")
+    val apkFile get() = File(context.cacheDir, "updates/POV-Rajput-update.apk")
 
     fun latest(): Release? {
         val json = try { Net.json("https://api.github.com/repos/$REPOSITORY/releases/latest") }
@@ -79,7 +79,7 @@ class GitHubUpdates(private val context: Context) {
     fun installedCode(): Long = code(context.packageManager.getPackageInfo(context.packageName, 0))
 
     companion object {
-        const val REPOSITORY = "husnainahmedrana/pov-rajpoot-android-tv"
+        const val REPOSITORY = "husnainahmedrana/pov-rajput-android-tv"
         private const val MAX_APK = 200L * 1024 * 1024
         @Suppress("DEPRECATION")
         private fun code(info: PackageInfo) = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
@@ -92,7 +92,7 @@ class GitHubUpdates(private val context: Context) {
             val assets = json.optJSONArray("assets") ?: return null
             fun asset(name: String): JSONObject? = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
                 .singleOrNull { it.optString("name") == name && it.optString("state") == "uploaded" }
-            val apk = asset("POV-Rajpoot-release.apk") ?: return null
+            val apk = asset("POV-Rajput-release.apk") ?: return null
             val manifest = asset("update.json") ?: return null
             fun url(asset: JSONObject, name: String): String {
                 val expected = "https://github.com/$REPOSITORY/releases/download/$tag/$name"
@@ -101,10 +101,10 @@ class GitHubUpdates(private val context: Context) {
             }
             val size = apk.optLong("size")
             check(size in 1..MAX_APK) { "Release APK size is invalid." }
-            return Candidate(tag, json.optString("body").take(12_000), url(apk, "POV-Rajpoot-release.apk"), url(manifest, "update.json"), size)
+            return Candidate(tag, json.optString("body").take(12_000), url(apk, "POV-Rajput-release.apk"), url(manifest, "update.json"), size)
         }
         internal fun manifest(json: JSONObject, candidate: Candidate, installed: Long): Release? {
-            check(json.optInt("schema") == 1 && json.optString("packageName") == "dev.pov.tv.rajpoot") { "Incompatible update information." }
+            check(json.optInt("schema") == 1 && json.optString("packageName") == "dev.pov.tv.rajput") { "Incompatible update information." }
             val code = json.getLong("versionCode")
             val version = json.getString("versionName")
             val checksum = json.getString("sha256").lowercase(java.util.Locale.ROOT)
@@ -122,7 +122,7 @@ class GitHubUpdates(private val context: Context) {
                 val connection = target.openConnection() as HttpsURLConnection
                 connection.connectTimeout = 15_000; connection.readTimeout = 25_000
                 connection.instanceFollowRedirects = false
-                connection.setRequestProperty("User-Agent", "POV-Rajpoot-Updater")
+                connection.setRequestProperty("User-Agent", "POV-Rajput-Updater")
                 try {
                     val status = connection.responseCode
                     if (status in setOf(301, 302, 303, 307, 308)) {

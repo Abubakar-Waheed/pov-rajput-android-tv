@@ -206,7 +206,7 @@ class MainActivity : Activity() {
             rail.addView(logo(), margin(61, 58, bottom = 24).apply { leftMargin = dp(10) })
             destinations().forEach { target -> rail.addView(navigation(target, false), margin(-1, 35, bottom = 4)) }
             rail.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-            rail.addView(text("Made by\nRajpoot", 9, muted), margin(-1, -2, top = 8))
+            rail.addView(text("Made by\nRajput", 9, muted), margin(-1, -2, top = 8))
         } else {
             val header = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL; setPadding(dp(layout.contentInsetDp), dp(5), dp(16), dp(5))
@@ -429,7 +429,7 @@ class MainActivity : Activity() {
             if (latest != null) runOnUiThread {
                 if (resumed && !isDestroyed && !isFinishing && !InAppPlaybackSession.hasActive()) {
                     AlertDialog.Builder(this).setTitle("Update available · ${latest.version}")
-                        .setMessage("A new published release of POV Rajpoot is available.")
+                        .setMessage("A new published release of POV Rajput is available.")
                         .setPositiveButton("View update") { _, _ -> startActivity(Intent(this, UpdateActivity::class.java)) }
                         .setNegativeButton("Later", null).show()
                 }
@@ -629,7 +629,7 @@ class MainActivity : Activity() {
     private fun contentBottomPadding() = dp(if (!publicPreview && InAppPlaybackSession.hasActive()) 184 else 24)
 
     private fun homeCredit() {
-        body.addView(text("POV Rajpoot  ·  Android TV port: Mark Mateo  ·  Original POV: kodifitzwell", 10, muted), margin(-1, -2, top = 20, bottom = 6))
+        body.addView(text("POV Rajput  ·  Android TV port: Mark Mateo  ·  Original POV: kodifitzwell", 10, muted), margin(-1, -2, top = 20, bottom = 6))
     }
 
     private fun animePage(type: String = "series", query: String = "", skip: Int = 0) {
@@ -1338,7 +1338,7 @@ class MainActivity : Activity() {
             store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Rajpoot · 0.2.6\nPOV Rajpoot fork by Rajpoot.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajput · 0.2.6\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 

@@ -12,13 +12,13 @@ import java.net.URL
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class GitHubUpdatesTest {
-    private val tag = "v0.2.6-rajpoot"
+    private val tag = "v0.2.6-rajput"
     private fun release() = JSONObject().put("tag_name", tag).put("body", "Release notes")
-        .put("assets", JSONArray().put(asset("POV-Rajpoot-release.apk")).put(asset("update.json")))
+        .put("assets", JSONArray().put(asset("POV-Rajput-release.apk")).put(asset("update.json")))
     private fun asset(name: String) = JSONObject().put("name", name).put("state", "uploaded").put("size", 100)
         .put("browser_download_url", "https://github.com/${GitHubUpdates.REPOSITORY}/releases/download/$tag/$name")
-    private fun manifest() = JSONObject().put("schema", 1).put("packageName", "dev.pov.tv.rajpoot")
-        .put("versionCode", 12).put("versionName", "0.2.6-rajpoot").put("sha256", "a".repeat(64))
+    private fun manifest() = JSONObject().put("schema", 1).put("packageName", "dev.pov.tv.rajput")
+        .put("versionCode", 12).put("versionName", "0.2.6-rajput").put("sha256", "a".repeat(64))
     private fun rejects(action: () -> Unit) { try { action(); fail("Unsafe update accepted") } catch (_: IllegalStateException) {} }
 
     @Test fun `only newer compatible stable release is offered`() {
@@ -34,7 +34,7 @@ class GitHubUpdatesTest {
     @Test fun `manifest must match package version release tag and checksum format`() {
         val candidate = checkNotNull(GitHubUpdates.candidate(release()))
         rejects { GitHubUpdates.manifest(manifest().put("packageName", "dev.pov.tv.offcloud"), candidate, 11) }
-        rejects { GitHubUpdates.manifest(manifest().put("versionName", "0.2.7-rajpoot"), candidate, 11) }
+        rejects { GitHubUpdates.manifest(manifest().put("versionName", "0.2.7-rajput"), candidate, 11) }
         rejects { GitHubUpdates.manifest(manifest().put("sha256", "bad"), candidate, 11) }
         rejects { GitHubUpdates.manifest(manifest().put("schema", 2), candidate, 11) }
     }
@@ -46,7 +46,7 @@ class GitHubUpdatesTest {
         enormous.getJSONArray("assets").getJSONObject(0).put("size", Long.MAX_VALUE)
         rejects { GitHubUpdates.candidate(enormous) }
         val duplicate = release()
-        duplicate.getJSONArray("assets").put(asset("POV-Rajpoot-release.apk"))
+        duplicate.getJSONArray("assets").put(asset("POV-Rajput-release.apk"))
         assertNull(GitHubUpdates.candidate(duplicate))
     }
     @Test fun `download redirects permit only secure GitHub asset hosts`() {

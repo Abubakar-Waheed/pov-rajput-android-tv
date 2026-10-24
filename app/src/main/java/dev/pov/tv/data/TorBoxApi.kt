@@ -26,7 +26,7 @@ class TorBoxApi internal constructor(
     fun startDeviceAuth(): DeviceAuth {
         val (generation, account) = synchronized(authStateLock) { devices.clear(); ++authGeneration to credentialGeneration }
         val started = elapsedRealtime()
-        val value = objectData(call("/user/auth/device/start?app=${Net.encode("POV Rajpoot")}", authenticated = false))
+        val value = objectData(call("/user/auth/device/start?app=${Net.encode("POV Rajput")}", authenticated = false))
         val auth = DeviceAuth(
             required(value, "device_code"), value.optString("code", value.optString("user_code")),
             value.optString("verification_url", value.optString("friendly_verification_url")),

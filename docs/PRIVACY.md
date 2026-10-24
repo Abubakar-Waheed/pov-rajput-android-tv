@@ -1,6 +1,6 @@
-# POV Rajpoot privacy
+# POV Rajput privacy
 
-POV Rajpoot is maintained by Rajpoot, based on Mark Mateo’s Android TV application and the original POV project by kodifitzwell. This policy describes the current source implementation. The app has no developer operated account service, advertising SDK, analytics SDK, or developer telemetry endpoint. It communicates directly with the services below. Those services receive normal connection information, including your public IP address, and apply their own policies.
+POV Rajput is maintained by Rajput, based on Mark Mateo’s Android TV application and the original POV project by kodifitzwell. This policy describes the current source implementation. The app has no developer operated account service, advertising SDK, analytics SDK, or developer telemetry endpoint. It communicates directly with the services below. Those services receive normal connection information, including your public IP address, and apply their own policies.
 
 ## Connections and information sent
 

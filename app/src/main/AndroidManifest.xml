@@ -9,7 +9,7 @@
         android:fullBackupContent="@xml/backup_exclusions"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/pov_icon"
-        android:label="POV Rajpoot" android:banner="@drawable/pov_banner"
+        android:label="POV Rajput" android:banner="@drawable/pov_banner"
         android:theme="@style/AppTheme" android:usesCleartextTraffic="false"
         android:supportsRtl="true">
         <provider android:name="androidx.core.content.FileProvider"

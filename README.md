@@ -1,17 +1,17 @@
-# POV Rajpoot for Android TV
+# POV Rajput for Android TV
 
-### By Rajpoot
+### By Rajput
 
-[![Android APKs](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/actions/workflows/apks.yml/badge.svg)](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/actions/workflows/apks.yml)
+[![Android APKs](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions/workflows/apks.yml/badge.svg)](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions/workflows/apks.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
 **A native Android TV app with Offcloud and TorBox cloud playback, Trakt tracking, five themes, anime browsing, and a Media3 player.** Kodi is not required.
 
-This is **Rajpoot's Android TV edition**, forked from [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv). The original Android TV port was created by **Mark Mateo**, based on the original POV Kodi add-on by **[kodifitzwell](https://github.com/kodifitzwell/repo)**. Their work, attribution, and GPL-3.0 license are preserved.
+This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv). The original Android TV port was created by **Mark Mateo**, based on the original POV Kodi add-on by **[kodifitzwell](https://github.com/kodifitzwell/repo)**. Their work, attribution, and GPL-3.0 license are preserved.
 
-**[Download release APK](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/releases/latest)** · **[Setup guide](docs/OFFCLOUD.md)** · **[Build and release](docs/BUILD_AND_RELEASE.md)** · **[Release notes](docs/RELEASE_NOTES.md)**
+**[Download release APK](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases/latest)** · **[Setup guide](docs/OFFCLOUD.md)** · **[Build and release](docs/BUILD_AND_RELEASE.md)** · **[Release notes](docs/RELEASE_NOTES.md)**
 
-## Rajpoot's contributions
+## Rajput's contributions
 
 - Added Offcloud API-key connection with Android Keystore encryption.
 - Updated account validation to the current account API and Bearer authorization, replacing the retired proxy endpoint.
@@ -28,11 +28,11 @@ This is **Rajpoot's Android TV edition**, forked from [MM-482/pov-android-tv](ht
 
 ## Screenshots
 
-Screenshots of POV Rajpoot for Android TV.
+Screenshots of POV Rajput for Android TV.
 
 ### Home
 
-![POV Rajpoot home with Made by Rajpoot branding](docs/screenshots/home.png)
+![POV Rajput home with Made by Rajput branding](docs/screenshots/home.png)
 
 ### Offcloud settings
 
@@ -40,7 +40,7 @@ Screenshots of POV Rajpoot for Android TV.
 
 ### Appearance
 
-![Five selectable appearances in POV Rajpoot](docs/screenshots/appearance.png)
+![Five selectable appearances in POV Rajput](docs/screenshots/appearance.png)
 
 ## Features
 
@@ -58,15 +58,15 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 
 ## Install and connect
 
-1. Download `POV-Rajpoot-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/releases).
-2. Sideload it on Android TV 8.0 or later. The launcher name is **POV Rajpoot**; package ID: `dev.pov.tv.rajpoot`.
+1. Download `POV-Rajput-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases).
+2. Sideload it on Android TV 8.0 or later. The launcher name is **POV Rajput**; package ID: `dev.pov.tv.rajput`.
 3. Open **Settings → Connect Offcloud with API key**, enter your own key, and select **Connect**.
 4. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
 5. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 
 Connect TorBox as well to search both caches together. Open **Settings → Debrid priority** to see the numbered order. Select a service, then use **Move up** or **Move down**; number **1** is preferred. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package.
 
-From version 0.2.6, the app is named **POV Rajpoot**, with package ID `dev.pov.tv.rajpoot`. It installs separately from POV Offcloud. Reconnect your accounts in the new app; account settings remain with the old package.
+From version 0.2.6, the app is named **POV Rajput**, with package ID `dev.pov.tv.rajput`. It installs separately from earlier POV packages. Connect your accounts once in POV Rajput; earlier installations retain their own settings.
 
 ## Cached playback and cloud downloads
 
@@ -94,9 +94,9 @@ Text subtitle appearance using a sample caption:
 
 ## App updates
 
-Open **Settings → Check for updates** to view the latest compatible release and its notes, then choose **Download and install**. If Android asks, allow POV Rajpoot to install apps; return to the updater and select **Install update**. Android asks you to confirm installation. You can also enable **Check for updates on startup** in Settings; it defaults to off.
+Open **Settings → Check for updates** to view the latest compatible release and its notes, then choose **Download and install**. If Android asks, allow POV Rajput to install apps; return to the updater and select **Install update**. Android asks you to confirm installation. You can also enable **Check for updates on startup** in Settings; it defaults to off.
 
-The updater downloads only published stable releases from this repository and checks the APK checksum, package, newer version code, and matching signing certificate. Existing POV Rajpoot accounts and settings are preserved during a normal update. Older POV Offcloud installations use a different package and need the initial POV Rajpoot installation separately.
+The updater downloads only published stable releases from this repository and checks the APK checksum, package, newer version code, and matching signing certificate. Existing POV Rajput accounts and settings are preserved during a normal update. Earlier POV packages need the initial POV Rajput installation separately; subsequent POV Rajput updates keep the same package.
 
 ![App update screen](docs/screenshots/updates.png)
 
@@ -108,23 +108,23 @@ Hold **OK/Select** on a Continue watching card, then choose **Remove from Contin
 
 ## Builds and releases
 
-Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.6-rajpoot` publish the signed release APK, checksums, update metadata, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
+Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.6-rajput` publish the signed release APK, checksums, update metadata, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
 
 ## Validation and limits
 
-Automated tests and Android lint run before every release. Build results and reports are available in [GitHub Actions](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/actions).
+Automated tests and Android lint run before every release. Build results and reports are available in [GitHub Actions](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions).
 
 The screenshots and connection checks do not establish every TV, codec, HDR/audio path, or authenticated playback combination. This is an independent community fork.
 
 ## Source and acknowledgments
 
-**Thank you to Mark Mateo for creating and sharing the standalone Android TV application that makes this fork possible.** His work provides this edition's core TV interface, remote navigation, themes, catalog and anime browsing, Media3 playback, and original TorBox and Trakt integrations. Rajpoot's edition builds on that foundation; it does not claim authorship of the original Android TV application.
+**Thank you to Mark Mateo for creating and sharing the standalone Android TV application that makes this fork possible.** His work provides this edition's core TV interface, remote navigation, themes, catalog and anime browsing, Media3 playback, and original TorBox and Trakt integrations. Rajput's edition builds on that foundation; it does not claim authorship of the original Android TV application.
 
 - Original Android TV source: **[Mark Mateo / MM-482 — pov-android-tv](https://github.com/MM-482/pov-android-tv)**.
 - Fork base revision: [`c5a64e9`](https://github.com/MM-482/pov-android-tv/commit/c5a64e92232fa90889507114721e736c37450f2d), retaining the upstream Git history.
 - Original POV Kodi add-on: **[kodifitzwell/repo](https://github.com/kodifitzwell/repo)**, including the credited POV visual identity and original fanart.
 
-- **Rajpoot** — this Offcloud edition, integration work, connection fixes, branding, and release automation.
+- **Rajput** — this Offcloud edition, integration work, connection fixes, branding, and release automation.
 - **Mark Mateo / MM-482** — original standalone Android TV application, TV interface, themes, catalog integration, Media3 player, TorBox and Trakt support. [Upstream source](https://github.com/MM-482/pov-android-tv).
 - **kodifitzwell** — original POV Kodi add-on and POV visual identity. [Original project](https://github.com/kodifitzwell/repo).
 - **Android Open Source Project / AndroidX Media3**, **JetBrains / Kotlin**, and the original project's credited metadata and artwork providers.

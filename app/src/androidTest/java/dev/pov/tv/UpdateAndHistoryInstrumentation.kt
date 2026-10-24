@@ -151,7 +151,7 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
         val fixture = File(checkNotNull(targetContext.externalCacheDir), "release-candidate.apk")
         if (fixture.exists()) {
             fun release(file: File, sha: String = checksum(file)) = GitHubUpdates.Release(
-                GitHubUpdates.Candidate("v0.2.6-rajpoot", "", "", "", file.length()), 12, "0.2.6-rajpoot", sha)
+                GitHubUpdates.Candidate("v0.2.6-rajput", "", "", "", file.length()), 12, "0.2.6-rajput", sha)
             updates.validate(fixture, release(fixture))
             fun reject(file: File, release: GitHubUpdates.Release) {
                 try { updates.validate(file, release); error("Unsafe APK accepted") }
@@ -191,6 +191,8 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
             }
             check(rendered); Thread.sleep(5000); capture("home-public.png")
             runOnMainSync { call("settings") }; waitForIdleSync(); Thread.sleep(350); capture("settings-public.png")
+            runOnMainSync { call("debridPriority") }; waitForIdleSync(); Thread.sleep(350); capture("debrid-priority.png")
+            sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             runOnMainSync { checkNotNull(findView(body) { it is TextView && it.text.startsWith("Themes") }).performClick() }
             waitForIdleSync(); Thread.sleep(350); capture("appearance-public.png")
             sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
@@ -204,8 +206,8 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
         val updates = GitHubUpdates(targetContext)
         updates.apkFile.parentFile!!.mkdirs()
         fixture.copyTo(updates.apkFile, overwrite = true)
-        val release = GitHubUpdates.Release(GitHubUpdates.Candidate("v0.2.6-rajpoot", "", "", "", fixture.length()),
-            12, "0.2.6-rajpoot", checksum(fixture))
+        val release = GitHubUpdates.Release(GitHubUpdates.Candidate("v0.2.6-rajput", "", "", "", fixture.length()),
+            12, "0.2.6-rajput", checksum(fixture))
         runOnMainSync {
             UpdateActivity::class.java.getDeclaredField("release").apply { isAccessible = true }.set(activity, release)
             UpdateActivity::class.java.getDeclaredField("ready").apply { isAccessible = true }.setBoolean(activity, true)
