@@ -15,6 +15,7 @@ internal data class VideoCompatibilityIssue(
     val codec: String? = null,
     val width: Int = Format.NO_VALUE,
     val height: Int = Format.NO_VALUE,
+    val dolbyProfile: Int? = null,
 ) {
     val message: String get() {
         val format = listOfNotNull(codec,
@@ -27,7 +28,8 @@ internal data class VideoCompatibilityIssue(
             VideoCompatibilityReason.NO_VIDEO -> "This copy has no video track available for playback."
             VideoCompatibilityReason.NO_SELECTED_VIDEO -> "This copy has no video track selected for playback."
         }
-        return "$explanation Playback was paused to avoid playing only audio. Choose a compatible copy, such as 1080p H.264 (AVC), or another format supported by this TV."
+        val detail = if (dolbyProfile == 5) " Dolby Vision Profile 5 has no HDR10 base picture; this copy requires compatible Dolby Vision decoding." else ""
+        return "$explanation$detail Playback was paused to avoid playing only audio. Choose a compatible copy, such as 1080p H.264 (AVC), or another format supported by this TV."
     }
 }
 
@@ -71,6 +73,7 @@ internal object VideoPlaybackCompatibility {
         if (candidate.support == C.FORMAT_EXCEEDS_CAPABILITIES) VideoCompatibilityReason.EXCEEDS_CAPABILITIES
         else VideoCompatibilityReason.UNSUPPORTED,
         codecLabel(candidate.format.sampleMimeType), candidate.format.width, candidate.format.height,
+        DolbyVisionCompatibility.profile(candidate.format),
     )
 
     private fun codecLabel(mime: String?): String = when (mime) {

@@ -145,6 +145,7 @@ class PlayerActivity : Activity() {
 
     private fun updateControls() {
         view.findViewById<TextView>(R.id.pov_playback_title).text = InAppPlaybackSession.title.ifBlank { "Now playing" }
+        PlaybackDebrid.bind(view, InAppPlaybackSession.debridService)
         boostButton.text = when {
             boost.gainDb == 0 -> "Boost · Off"
             boost.state == VolumeBoostState.UNAVAILABLE -> "Boost · Unavailable"

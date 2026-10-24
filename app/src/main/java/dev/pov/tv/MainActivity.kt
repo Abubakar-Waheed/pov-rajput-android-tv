@@ -492,7 +492,7 @@ class MainActivity : Activity() {
             val folder = parts.getOrNull(2)?.toLongOrNull(); val file = parts.getOrNull(3)?.toLongOrNull()
             val kind = parts.getOrNull(1)
             if (parts.size == 4 && kind in setOf("torrents", "usenet", "webdl") && folder != null && file != null) {
-                read(generation, { torbox.streamUrl(kind!!, folder, file) }) { url -> play(url, saved.title, saved.identity, saved.key) }
+                read(generation, { torbox.streamUrl(kind!!, folder, file) }) { url -> play(url, saved.title, saved.identity, saved.key, "torbox") }
                 return
             }
         }
@@ -973,7 +973,7 @@ class MainActivity : Activity() {
             toast("Connect Offcloud and select the source again"); return
         }
         val identity = prepared.identity
-        play(file.url, identity.title, identity, "media:${identity.imdbId}:${identity.season}:${identity.episode}")
+        play(file.url, identity.title, identity, "media:${identity.imdbId}:${identity.season}:${identity.episode}", "offcloud")
     }
 
     private fun preparedFiles(prepared: PreparedSource.Files) {
@@ -1000,7 +1000,7 @@ class MainActivity : Activity() {
                 toast("Connect TorBox and select the source again"); return
             }
             val key = "media:${identity.imdbId}:${identity.season}:${identity.episode}"
-            prepared.resolvedUrls[file.id]?.let { play(it, identity.title, identity, key); return }
+            prepared.resolvedUrls[file.id]?.let { play(it, identity.title, identity, key, "torbox"); return }
             val hash = prepared.sourceInfoHash ?: run { toast("Select the source again"); return }
             streamFile(prepared.folder, file, identity.title, identity, key) {
                 check(torbox.ownsTag(tag)) { "The TorBox account changed. Select the source again." }
@@ -1062,7 +1062,7 @@ class MainActivity : Activity() {
             files.forEach { file ->
                 choices.addChoice(TvChoiceRow(this, "offcloud:${download.id}:${file.id}", file.name,
                     if (file.size > 0) "${file.size / (1024 * 1024)} MB" else "Offcloud video", palette = theme.palette) {
-                    if (api.ownsTag(download.accountTag)) play(file.url, file.name, null, "offcloud:${download.id}:${file.id}")
+                    if (api.ownsTag(download.accountTag)) play(file.url, file.name, null, "offcloud:${download.id}:${file.id}", "offcloud")
                     else toast("The Offcloud account changed. Refresh your library.")
                 })
             }
@@ -1188,7 +1188,7 @@ class MainActivity : Activity() {
                 val url = resolveUrl?.invoke() ?: torbox.streamUrl(folder.kind, folder.id, file.id)
                 runOnUiThread {
                     if (request == generation && !isFinishing && !isDestroyed) {
-                        resolvingGeneration = null; body.removeView(progress); play(url, title, identity, key)
+                        resolvingGeneration = null; body.removeView(progress); play(url, title, identity, key, "torbox")
                     }
                 }
             } catch (error: Exception) { runOnUiThread {
@@ -1199,14 +1199,15 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun play(url: String, title: String, identity: PlaybackIdentity?, key: String) {
+    private fun play(url: String, title: String, identity: PlaybackIdentity?, key: String, debridService: String? = null) {
         if (launchingPlayer) return
         if (Uri.parse(url).scheme != "https") { toast("This stream did not return a secure playback link."); return }
         launchingPlayer = true
         val remotePercent = identity?.let { remoteProgress[identityKey(it)] } ?: 0.0
         val start = {
             startActivity(Intent(this, PlayerActivity::class.java).putExtra("url", url).putExtra("title", title)
-                .putExtra("identity", identity?.toJson()?.toString()).putExtra("key", key).putExtra("resume", history.resume(key)).putExtra("resume_percent", remotePercent))
+                .putExtra("identity", identity?.toJson()?.toString()).putExtra("key", key).putExtra("resume", history.resume(key)).putExtra("resume_percent", remotePercent)
+                .putExtra("debrid_service", PlaybackDebrid.normalize(debridService)))
             @Suppress("DEPRECATION")
             overridePendingTransition(0, 0)
         }
@@ -1214,7 +1215,8 @@ class MainActivity : Activity() {
             .setMessage(if (history.resume(key) > 0) "Continue from ${history.resume(key) / 60_000} minutes?" else "Continue from ${remotePercent.toInt()}% watched on Trakt?")
             .setPositiveButton("Resume") { _, _ -> start() }
             .setNeutralButton("Start over") { _, _ ->
-                startActivity(Intent(this, PlayerActivity::class.java).putExtra("url", url).putExtra("title", title).putExtra("identity", identity?.toJson()?.toString()).putExtra("key", key))
+                startActivity(Intent(this, PlayerActivity::class.java).putExtra("url", url).putExtra("title", title).putExtra("identity", identity?.toJson()?.toString()).putExtra("key", key)
+                    .putExtra("debrid_service", PlaybackDebrid.normalize(debridService)))
                 @Suppress("DEPRECATION")
                 overridePendingTransition(0, 0)
             }
@@ -1336,6 +1338,15 @@ class MainActivity : Activity() {
         val audioPreferences = AudioPreferences(this)
         body.addView(button("Audio language · ${audioPreferences.languageLabel}  ›") { audioLanguage() }, margin(-1, 46, bottom = 9))
         body.addView(text("Selects your preferred audio language when available. You can choose another audio track in the player.", 12, muted), margin(-1, -2, bottom = 10))
+        section("Video")
+        val videoPreferences = VideoCompatibilityPreferences(this)
+        body.addView(button("Dolby Vision · ${videoPreferences.mode.label}  ›") {
+            AlertDialog.Builder(this).setTitle("Dolby Vision compatibility")
+                .setSingleChoiceItems(DolbyVisionMode.entries.map { it.label }.toTypedArray(), videoPreferences.mode.ordinal) { dialog, index ->
+                    videoPreferences.mode = DolbyVisionMode.entries[index]; dialog.dismiss(); settings()
+                }.setNegativeButton("Cancel", null).show()
+        }, margin(-1, 46, bottom = 9))
+        body.addView(text("Applies to the next video. Uses a verified Profile 7/8 HDR10 or HLG base picture when supported by the TV. Profile 5 requires compatible Dolby Vision decoding.", 12, muted), margin(-1, -2, bottom = 10))
         section("Accounts")
         body.addView(button(if (store.has("torbox.token")) "TorBox · connected · reconnect" else "Connect TorBox") { startTorBox() }, margin(-1, 44, bottom = 8))
         val offcloud = OffcloudApi(store)
@@ -1372,7 +1383,7 @@ class MainActivity : Activity() {
             store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Rajput · 0.2.8\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajput · 0.2.9\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 
