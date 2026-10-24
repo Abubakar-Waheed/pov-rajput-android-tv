@@ -895,29 +895,41 @@ class MainActivity : Activity() {
         if (connected.isEmpty()) {
             body.addView(button("Connect Offcloud or TorBox in Settings") { navigate { settings() } }, margin(310, 44)); return
         }
-        read(id, { resolver.sources(identity) }) { sources ->
-            if (sources.isEmpty()) body.addView(text("No sources were returned. Try again later or check the source provider in Settings.", 15, muted))
-            val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
-            sources.distinctBy(TvChoiceKeys::source).forEach { source ->
-                val cachedOn = source.cachedServices.map(DebridServices::name)
-                val status = when {
-                    source.directUrl.isNotEmpty() -> "DIRECT STREAM"
-                    cachedOn.size > 1 -> "CACHED · ${cachedOn.joinToString(" + ")} · Plays via ${cachedOn.first()}"
-                    cachedOn.isNotEmpty() -> "CACHED · ${cachedOn.first()}"
-                    else -> "TRANSFER MAY BE NEEDED"
-                }
-                choices.addChoice(TvChoiceRow(this, TvChoiceKeys.source(source), source.title, source.detail,
-                    "$status   ·   ${source.provider}", theme.palette) {
-                    if (!source.cached && source.directUrl.isEmpty()) {
-                        val service = connected.first()
-                        confirm("Add this source to your ${DebridServices.name(service)} account? A transfer may need time to finish.") {
-                            resolve(source.copy(downloadService = service), identity)
-                        }
-                    }
-                    else resolve(source, identity)
-                })
+        read(id, { resolver.sources(identity) }) { sources -> sourceResults(identity, sources) }
+    }
+
+    private fun sourceResults(identity: PlaybackIdentity, sources: List<SourceItem>) {
+        current = { sourceResults(identity, sources) }
+        val connected = DebridServices.connected(store)
+        if (connected.isEmpty()) { showSources(identity); return }
+        val suffix = if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""
+        val id = page(identity.title + suffix, "Cached source priority: ${connected.joinToString(" → ") { DebridServices.name(it) }}.")
+        val sorting = SourceSortPreferences(this)
+        body.addView(button("Sort · ${sorting.label}  ›") {
+            SourceSortPreferences.show(this) { sourceResults(identity, sources) }
+        }, margin(-1, 42, bottom = 8))
+        if (sources.isEmpty()) body.addView(text("No sources were returned. Try again later or check the source provider in Settings.", 15, muted))
+        val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+        sorting.order.sorted(sources.distinctBy(TvChoiceKeys::source)).forEach { source ->
+            val cachedOn = source.cachedServices.map(DebridServices::name)
+            val status = when {
+                source.directUrl.isNotEmpty() -> "DIRECT STREAM"
+                cachedOn.size > 1 -> "CACHED · ${cachedOn.joinToString(" + ")} · Plays via ${cachedOn.first()}"
+                cachedOn.isNotEmpty() -> "CACHED · ${cachedOn.first()}"
+                else -> "TRANSFER MAY BE NEEDED"
             }
+            choices.addChoice(TvChoiceRow(this, TvChoiceKeys.source(source), source.title, source.detail,
+                "${SourceMetadata.qualityLabel(source.qualityHeight)} · ${SourceMetadata.sizeLabel(source.sizeBytes)} · $status · ${source.provider}", theme.palette) {
+                if (!source.cached && source.directUrl.isEmpty()) {
+                    val service = connected.first()
+                    confirm("Add this source to your ${DebridServices.name(service)} account? A transfer may need time to finish.") {
+                        resolve(source.copy(downloadService = service), identity)
+                    }
+                }
+                else resolve(source, identity)
+            })
         }
+        focusAfterRender(id)
     }
 
     private fun resolve(source: SourceItem, identity: PlaybackIdentity) {
@@ -1338,6 +1350,11 @@ class MainActivity : Activity() {
         val audioPreferences = AudioPreferences(this)
         body.addView(button("Audio language · ${audioPreferences.languageLabel}  ›") { audioLanguage() }, margin(-1, 46, bottom = 9))
         body.addView(text("Selects your preferred audio language when available. You can choose another audio track in the player.", 12, muted), margin(-1, -2, bottom = 10))
+        section("Source results")
+        body.addView(button("Source sorting · ${SourceSortPreferences(this).label}  ›") {
+            SourceSortPreferences.show(this) { settings() }
+        }, margin(-1, 46, bottom = 9))
+        body.addView(text("Quality is sorted first, then file size within each quality. Sizes and resolutions are reported by the source provider; unavailable values appear last.", 12, muted), margin(-1, -2, bottom = 10))
         section("Video")
         val videoPreferences = VideoCompatibilityPreferences(this)
         body.addView(button("Dolby Vision · ${videoPreferences.mode.label}  ›") {
@@ -1383,7 +1400,7 @@ class MainActivity : Activity() {
             store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Rajput · 0.2.9\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajput · 0.2.10\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 

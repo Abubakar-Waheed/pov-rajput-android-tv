@@ -72,6 +72,8 @@ From version 0.2.6, the app is named **POV Rajput**, with package ID `dev.pov.tv
 
 All connected debrid services are checked together. A source cached on both uses your priority order. A source cached only on the second service plays through that service without switching Settings. A failed resolver can try another confirmed cached service, and cached failures never silently start an uncached download.
 
+Source cards show quality and provider-reported file size. Open **Settings → Source sorting**, or **Sort** above the results, to choose highest/lowest quality first and smallest/largest files within each quality. The default is highest quality first, then smallest files first. Unavailable metadata appears last; changing the order reuses the fetched results.
+
 Offcloud cached sources resolve directly without adding a cloud-dashboard entry. If no connected service can resolve a cached source, the app reports an error instead of silently creating a download. Uncached sources still ask for confirmation before adding a cloud download, which stays in your library. Existing downloads are retained.
 
 TorBox resolves direct links and removes newly created cached entries before playback begins. Cached packs let you choose a video before its playback link is resolved. A temporary entry can appear during resolution. Existing library entries are reused and retained. Uncached downloads remain in your library. If cleanup fails, the app reports an error; a temporary entry may need removal from the dashboard.

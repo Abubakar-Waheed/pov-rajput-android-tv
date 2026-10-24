@@ -59,7 +59,9 @@ data class SourceItem(
     val fileIndex: Int? = null, val directUrl: String = "", val cached: Boolean = false,
     val detail: String = "",
     val cachedServices: List<String> = emptyList(),
-    val downloadService: String? = null
+    val downloadService: String? = null,
+    val sizeBytes: Long? = null,
+    val qualityHeight: Int? = null
 )
 
 /** A selected source either streams directly or offers stable TorBox file identities. */

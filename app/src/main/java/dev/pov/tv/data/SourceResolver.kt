@@ -58,6 +58,8 @@ class SourceResolver internal constructor(
                 infoHash = hash,
                 fileIndex = fileIndex,
                 directUrl = direct,
+                sizeBytes = SourceMetadata.sizeBytes(stream),
+                qualityHeight = SourceMetadata.qualityHeight(stream),
                 detail = listOf(stream.optString("name"), description.lineSequence().drop(1).joinToString(" · "))
                     .filter { it.isNotBlank() }.joinToString(" · ").take(800)
             )
