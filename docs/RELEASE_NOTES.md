@@ -1,20 +1,14 @@
-# POV Rajput 0.2.7
+# POV Rajput 0.2.8
 
-- Added **Settings → Subtitle language**, with common languages and a full language list. Matching subtitles are selected automatically on new playback. Automatic follows Android caption preferences; Off disables subtitles. Manual track choices remain available during playback.
-- Added **Settings → Audio language**, with automatic selection of a matching preferred track, normal fallback if unavailable, and an Automatic option. Manual audio choices remain available during playback.
-- Replaced duration-based D-pad timeline jumps with one-second steps. Hold Left/Right to preview a target time and seconds moved, then release to seek. Playback resumes if it was playing; paused videos stay paused. Back cancels the preview.
-- Left/Right still navigates between player action buttons when those buttons have focus.
-- Long held seeks accelerate after moving a minute: five-second steps, then ten seconds after five minutes, and thirty seconds after fifteen minutes. Releasing or reversing restores one-second steps for precise adjustments.
-- Removed home-screen account-status strips and reserved header space, keeping Settings and the other navigation tabs clear in every theme. Account controls remain in Settings.
-- Removed the decorative author label from the navigation footer.
-- Added a live text subtitle-position slider in Settings and the player's subtitle-style menu, with Reset and Cancel controls. The seek overlay shows only times and seconds moved.
+- Search movies and TV shows together, with type labels and instant All, Movies, and TV shows filters. If one catalog is unavailable, results from the other remain available with a retry option.
+- Updated the Media3/ExoPlayer libraries from 1.8.0 to stable 1.11.1, including upstream playback and Dolby Vision fallback fixes.
+- Enabled decoder initialization fallback and adapted the custom audio sink to the current Media3 API, preserving software volume boost and encoded-audio bypass.
+- Updated the build SDK to 36. Android TV 8.0/API 26 remains the minimum supported version.
 
-## Install
-
-Android TV 8.0 or later. Install the signed `POV-Rajput-release.apk` over an existing POV Rajput installation to retain accounts and settings.
+Playback still depends on the device decoder, connected display, and video profile. Updating the player does not add universal Dolby Vision decoding. Unsupported video remains blocked to avoid audio-only playback or incorrect-format output.
 
 ## Credits and source
 
 Maintained by **Rajput**. Original Android TV application: **Mark Mateo / MM-482** ([source](https://github.com/MM-482/pov-android-tv)). Original POV Kodi add-on: **kodifitzwell** ([source](https://github.com/kodifitzwell/repo)). GPL-3.0; original history, license, and acknowledgments are preserved.
 
-See [0.2.6 release notes](RELEASE_NOTES_0.2.6.md) for earlier changes.
+See [0.2.7 release notes](RELEASE_NOTES_0.2.7.md) for earlier changes.

@@ -780,7 +780,7 @@ class MainActivity : Activity() {
         if (skip == 0 && query.isBlank()) catalogOffsets[type]?.clear()
         val id = page(if (query.isBlank()) if (type == "movie") "Movies" else "TV shows" else "Results for “$query”", "Find something worth your evening.")
         val actions = horizontalRow()
-        actions.addView(button("Search ${if (type == "movie") "movies" else "shows"}") { search(type) }, margin(170, 38, right = 8))
+        actions.addView(button("Search movies & TV") { search() }, margin(190, 38, right = 8))
         if (skip > 0) actions.addView(button("Previous page") { catalogPage(type, query, catalogOffsets[type]?.removeLastOrNull() ?: 0) }, margin(140, 38))
         read(id, { if (query.isBlank()) catalog.popular(type, skip) else catalog.search(query, type) }) { items ->
             mediaGrid(items)
@@ -788,12 +788,36 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun search(type: String = "movie") {
-        val input = EditText(this).apply { hint = "Movie or TV show"; setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT }
-        AlertDialog.Builder(this).setTitle("Search ${if (type == "movie") "movies" else "TV shows"}").setView(input)
-            .setPositiveButton("Search") { _, _ -> val query = input.text.toString().trim(); if (query.isNotEmpty()) navigate { catalogPage(type, query) } }
-            .setNeutralButton(if (type == "movie") "TV shows instead" else "Movies instead") { _, _ -> search(if (type == "movie") "series" else "movie") }
+    private fun search(initialQuery: String = "") {
+        val input = EditText(this).apply { hint = "Movie or TV show"; setText(initialQuery); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT }
+        AlertDialog.Builder(this).setTitle("Search movies & TV shows").setView(input)
+            .setPositiveButton("Search") { _, _ -> val query = input.text.toString().trim().take(200); if (query.isNotEmpty()) navigate { searchResults(query) } }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun searchResults(query: String, filter: String = "all", cached: CatalogApi.SearchResults? = null) {
+        current = { searchResults(query, filter, cached) }
+        destination = "search"; refreshNavigation()
+        val id = page("Results for “$query”", "Movies and TV shows in one search.")
+        val actions = horizontalRow()
+        for ((value, label) in listOf("all" to "All", "movie" to "Movies", "series" to "TV shows")) {
+            actions.addView(button(if (value == filter) "✓ $label" else label) { searchResults(query, value, cached) }, margin(130, 38, right = 8))
+        }
+        actions.addView(button("New search") { search(query) }, margin(150, 38))
+        fun render(result: CatalogApi.SearchResults) {
+            // Rebind filters to these results so switching categories does not repeat network requests.
+            current = { searchResults(query, filter, result) }
+            for (index in 0..2) actions.getChildAt(index).setOnClickListener {
+                searchResults(query, listOf("all", "movie", "series")[index], result)
+            }
+            if (result.unavailableTypes.isNotEmpty()) {
+                val missing = result.unavailableTypes.joinToString(" and ") { if (it == "movie") "Movie" else "TV show" }
+                body.addView(text("$missing results are temporarily unavailable.", 13, muted), margin(-1, -2, top = 12))
+                body.addView(button("Retry search") { searchResults(query, filter) }, margin(150, 38))
+            }
+            mediaGrid(result.items.filter { filter == "all" || it.type == filter }, showType = true)
+        }
+        if (cached == null) read(id, { catalog.searchAll(query) }, ::render) else { render(cached); focusAfterRender(id) }
     }
 
     private fun details(item: MediaItemData) {
@@ -1348,7 +1372,7 @@ class MainActivity : Activity() {
             store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Rajput · 0.2.7\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajput · 0.2.8\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 
@@ -1485,13 +1509,16 @@ class MainActivity : Activity() {
         section(title); val row = horizontalRow()
         items.take(20).forEach { row.addView(card(it).apply { tag = "row:$title:${it.type}:${it.imdbId}" }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp)) }
     }
-    private fun mediaGrid(items: List<MediaItemData>) {
+    private fun mediaGrid(items: List<MediaItemData>, showType: Boolean = false) {
         if (items.isEmpty()) { body.addView(text("No titles found. Try a different search.", 14, muted)); return }
         val width = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2
         val count = (width / (cardWidth() + theme.layout.cardGapDp)).coerceAtLeast(1)
         items.chunked(count).forEach { chunk ->
             val row = LinearLayout(this); body.addView(row, margin(-1, -2, top = 14))
-            chunk.forEach { row.addView(card(it), margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp)) }
+            chunk.forEach { item ->
+                val view = if (showType) tile(item, caption = listOf(if (item.type == "movie") "Movie" else "TV show", item.year).filter { it.isNotBlank() }.joinToString(" · ")) { navigate { details(item) } } else card(item)
+                row.addView(view, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
+            }
         }
     }
     private fun card(item: MediaItemData): View = tile(item) { navigate { details(item) } }
@@ -1513,7 +1540,7 @@ class MainActivity : Activity() {
         val labels = column().apply { setPadding(dp(10), dp(5), dp(9), dp(if (progress != null) 17 else 9)) }
         labels.addView(text(item.title, if (theme == ThemeSpec.DASHBOARD) 14 else 12, Color.WHITE, true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END })
         val secondary = caption.ifBlank { item.year }
-        if (secondary.isNotBlank() && (shape == CardFormat.LANDSCAPE || theme == ThemeSpec.DASHBOARD)) labels.addView(text(secondary, 10, 0xFFCFD8E4.toInt()), margin(-1, -2, top = 2))
+        if (secondary.isNotBlank() && (caption.isNotBlank() || shape == CardFormat.LANDSCAPE || theme == ThemeSpec.DASHBOARD)) labels.addView(text(secondary, 10, 0xFFCFD8E4.toInt()), margin(-1, -2, top = 2))
         artFrame.addView(labels, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         frame.addView(artFrame, FrameLayout.LayoutParams(-1, -1))
         if (progress != null) {

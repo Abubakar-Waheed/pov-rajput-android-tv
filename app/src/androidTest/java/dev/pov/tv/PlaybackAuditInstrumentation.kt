@@ -961,17 +961,24 @@ class PlaybackAuditInstrumentation : Instrumentation() {
 
     private fun samplePublicVideoGrid(activity: Activity, view: PlayerView, mini: Boolean): Pair<Rect, IntArray> {
         val region = onMain { publicVideoRegion(activity, view, mini) }
-        val screenshot = uiAutomation.takeScreenshot() ?: throw AuditFailure()
-        var crop: Bitmap? = null
-        var readable: Bitmap? = null
+        // Sample the owned video surface directly. Some TV firmware returns stale compositor
+        // screenshots after fullscreen-to-mini handoff even while the decoder renders new frames.
+        val pixels = Bitmap.createBitmap(240, 144, Bitmap.Config.ARGB_8888)
         try {
+            val copied = java.util.concurrent.CountDownLatch(1)
+            var copyResult = android.view.PixelCopy.ERROR_UNKNOWN
+            onMain {
+                val surface = view.videoSurfaceView as? android.view.SurfaceView ?: throw AuditFailure()
+                val location = IntArray(2).also(surface::getLocationOnScreen)
+                val local = Rect(region).apply { offset(-location[0], -location[1]) }
+                checkAudit(Rect(0, 0, surface.width, surface.height).contains(local))
+                android.view.PixelCopy.request(surface, local, pixels, { result ->
+                    copyResult = result; copied.countDown()
+                }, android.os.Handler(android.os.Looper.getMainLooper()))
+            }
+            checkAudit(copied.await(5, java.util.concurrent.TimeUnit.SECONDS) && copyResult == android.view.PixelCopy.SUCCESS)
             // Revalidate after capture as well: user navigation cannot make an unrelated window a sample.
             checkAudit(onMain { publicVideoRegion(activity, view, mini) == region })
-            checkAudit(Rect(0, 0, screenshot.width, screenshot.height).contains(region))
-            val cropped = Bitmap.createBitmap(screenshot, region.left, region.top, region.width(), region.height())
-            crop = cropped
-            val pixels = cropped.copy(Bitmap.Config.ARGB_8888, false) ?: throw AuditFailure()
-            readable = pixels
             val grid = IntArray(20 * 12) { index ->
                 val x = ((index % 20 + 0.5) * pixels.width / 20).toInt().coerceIn(1, pixels.width - 2)
                 val y = ((index / 20 + 0.5) * pixels.height / 12).toInt().coerceIn(1, pixels.height - 2)
@@ -984,9 +991,7 @@ class PlaybackAuditInstrumentation : Instrumentation() {
             }
             return region to grid
         } finally {
-            readable?.takeUnless { it === crop || it === screenshot }?.recycle()
-            crop?.takeUnless { it === screenshot }?.recycle()
-            screenshot.recycle()
+            pixels.recycle()
         }
     }
 

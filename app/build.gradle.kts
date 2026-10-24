@@ -5,13 +5,15 @@ providers.gradleProperty("povBuildRoot").orNull?.let { layout.buildDirectory.set
 
 android {
     namespace = "dev.pov.tv"
-    compileSdk = 35
+    compileSdk = 36
+    // Match Kotlin internal symbols when auditing a locally signed release on a TV.
+    testBuildType = providers.gradleProperty("povTestBuildType").orElse("debug").get()
     defaultConfig {
         applicationId = "dev.pov.tv.rajput"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.2.7-rajput"
+        versionCode = 14
+        versionName = "0.2.8-rajput"
         testInstrumentationRunner = providers.gradleProperty("povTestRunner")
             .orElse("dev.pov.tv.PlaybackAuditInstrumentation").get()
     }
@@ -47,11 +49,11 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 
 dependencies {
     implementation("androidx.core:core:1.16.0")
-    implementation("androidx.media3:media3-exoplayer:1.8.0")
-    implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
-    implementation("androidx.media3:media3-exoplayer-dash:1.8.0")
-    implementation("androidx.media3:media3-ui:1.8.0")
-    implementation("androidx.media3:media3-session:1.8.0")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
+    implementation("androidx.media3:media3-session:1.11.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16")
 }

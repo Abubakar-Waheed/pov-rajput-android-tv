@@ -164,6 +164,7 @@ object InAppPlaybackSession {
         lastSyncAt = 0L
         val gainProcessor = volumeBoost.createAudioProcessor()
         val renderers = object : DefaultRenderersFactory(application!!) {
+            init { setEnableDecoderFallback(true) }
             override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean): AudioSink {
                 val sink = DefaultAudioSink.Builder(context)
@@ -174,10 +175,10 @@ object InAppPlaybackSession {
                     .build()
                 return object : ForwardingAudioSink(sink) {
                     private var encodedRoute = false
-                    override fun configure(inputFormat: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
-                        super.configure(inputFormat, specifiedBufferSize, outputChannels)
+                    override fun configure(audioSinkConfig: AudioSink.AudioSinkConfig) {
+                        super.configure(audioSinkConfig)
                         // Keep device-supported encoded passthrough playable; it bypasses PCM DSP.
-                        encodedRoute = inputFormat.sampleMimeType != MimeTypes.AUDIO_RAW
+                        encodedRoute = audioSinkConfig.format.sampleMimeType != MimeTypes.AUDIO_RAW
                         if (encodedRoute) gainProcessor.onEncodedPassthrough()
                     }
                     override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {

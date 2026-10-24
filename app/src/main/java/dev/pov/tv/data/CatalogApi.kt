@@ -2,10 +2,30 @@ package dev.pov.tv.data
 
 import org.json.JSONObject
 import java.net.URI
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 /** Public Cinemeta metadata, with no embedded third-party account credentials. Call on a worker. */
 class CatalogApi internal constructor(private val publicJson: (String) -> JSONObject) {
     constructor() : this(Net::publicJson)
+    data class SearchResults(val items: List<MediaItemData>, val unavailableTypes: List<String>)
+
+    /** Search both catalogs concurrently and retain useful results if one catalog is unavailable. */
+    fun searchAll(query: String): SearchResults {
+        if (query.isBlank()) return SearchResults(emptyList(), emptyList())
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val types = listOf("movie", "series")
+            val futures = types.map { type -> executor.submit(Callable { runCatching { search(query, type) } }) }
+            val results = futures.map { it.get() }
+            if (results.all { it.isFailure }) throw IllegalStateException("Search is temporarily unavailable. Please try again.")
+            val lists = results.map { it.getOrDefault(emptyList()) }
+            val merged = (0 until lists.maxOf { it.size }).flatMap { index -> lists.mapNotNull { it.getOrNull(index) } }
+            return SearchResults(merged.distinctBy { it.type to it.imdbId }, types.filterIndexed { index, _ -> results[index].isFailure })
+        } finally {
+            executor.shutdownNow()
+        }
+    }
     fun popular(type: String, skip: Int = 0): List<MediaItemData> {
         requireType(type)
         require(skip >= 0) { "The catalog offset cannot be negative." }

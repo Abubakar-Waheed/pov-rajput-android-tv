@@ -1,6 +1,6 @@
 # Build and release
 
-Use Java 17, Gradle 8.14.3, and Android SDK platform/build-tools 35. The original Windows bootstrap scripts remain available. GitHub Actions provisions these tools on Ubuntu.
+Use Java 17, Gradle 8.14.3, and Android SDK platform 36 and build-tools 35. The original Windows bootstrap scripts remain available. GitHub Actions provisions these tools on Ubuntu.
 
 ## Local builds
 
@@ -11,6 +11,8 @@ gradle assembleRelease
 ```
 
 Debug APK: `app/build/outputs/apk/debug/`. Release APK: `app/build/outputs/apk/release/`. A normal release build is unsigned unless the signing environment below is configured.
+
+For device audits against a signed release, build `assembleReleaseAndroidTest` with `-PpovTestBuildType=release` and matching local signing configuration. This compiles the tests against release Kotlin internal symbols. Select an audit runner using `-PpovTestRunner=dev.pov.tv.PlaybackAuditInstrumentation`; the default debug test build remains available for debug app installs.
 
 ## Automated builds
 

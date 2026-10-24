@@ -31,7 +31,7 @@ Release APKs are signed and built with debugging disabled. Automated tests and l
 
 ## Build from source
 
-The original `scripts/bootstrap.ps1` and `scripts/build.ps1` provision and use Java 17, Gradle 8.14.3, and Android SDK 35. Alternatively, use installed Java 17 or 21, Gradle 8.14, and SDK platform/build-tools 35:
+The original `scripts/bootstrap.ps1` and `scripts/build.ps1` provision and use Java 17, Gradle 8.14.3, and Android SDK platform 36 and build-tools 35. Alternatively, use installed Java 17 or 21, Gradle 8.14, and SDK platform 36 and build-tools 35:
 
 ```powershell
 gradle assembleDebug testDebugUnitTest lintDebug --console=plain --no-daemon
