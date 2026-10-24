@@ -93,6 +93,9 @@ jobs:
           else
             cp app/build/outputs/apk/release/app-release-unsigned.apk dist/release/POV-Rajpoot-release-UNSIGNED.apk
           fi
+          if [[ "$SIGNED_RELEASE" == 'true' ]]; then
+            python3 scripts/create-update-manifest.py dist/release/POV-Rajpoot-release.apk
+          fi
           cp LICENSE dist/release/LICENSE.txt
           (cd dist/release && sha256sum *.apk > SHA256SUMS.txt)
       - name: Save debug APK

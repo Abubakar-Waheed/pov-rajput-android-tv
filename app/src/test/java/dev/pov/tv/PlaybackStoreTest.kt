@@ -25,6 +25,38 @@ class PlaybackStoreTest {
         check(context.getSharedPreferences("playback", Context.MODE_PRIVATE).edit().clear().commit())
     }
 
+    @Test fun `removing continue watching persists without losing resume or pending Trakt events`() {
+        val store = PlaybackStore(context)
+        store.save("source-a", "A Movie", movie, 60_000, 600_000)
+        val revision = store.queue(movie, 10.0, "pause")
+        store.hide("source-a", movie)
+        val reopened = PlaybackStore(context)
+        assertTrue(reopened.continueWatching().isEmpty())
+        assertEquals(60_000, reopened.resume("source-a"))
+        assertEquals(revision, reopened.pending().single().revision)
+        // A periodic save from the current player must not immediately resurrect the item.
+        reopened.save("source-a", "A Movie", movie, 70_000, 600_000)
+        assertTrue(reopened.continueWatching().isEmpty())
+        assertTrue(reopened.isHidden(identity = movie.copy(title = "Renamed")))
+        reopened.show("source-b", movie)
+        assertEquals(1, reopened.continueWatching().size)
+    }
+
+    @Test fun `hide is episode specific and cloud files without identities remain independent`() {
+        val store = PlaybackStore(context)
+        val one = movie.copy(type = "series", season = 1, episode = 1)
+        val two = one.copy(episode = 2)
+        store.save("one", "Episode 1", one, 60_000, 600_000)
+        store.save("two", "Episode 2", two, 60_000, 600_000)
+        store.save("cloud:a", "Cloud A", null, 60_000, 600_000)
+        store.save("cloud:b", "Cloud B", null, 60_000, 600_000)
+        store.hide("one", one); store.hide("cloud:a", null)
+        assertEquals(setOf("two", "cloud:b"), store.continueWatching().map { it.key }.toSet())
+        assertFalse(store.isHidden(identity = two))
+        store.show("cloud:a", null)
+        assertEquals(3, store.continueWatching().size)
+    }
+
     @Test fun `successful older pause never acknowledges a newer completed event`() {
         val history = PlaybackStore(context)
         val pauseRevision = history.queue(movie, 25.0, "pause")

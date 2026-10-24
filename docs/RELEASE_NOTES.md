@@ -6,6 +6,9 @@
 - Cached TorBox packs show file/version choices first, then resolve only the selected video.
 - Uncached downloads remain in the cloud library.
 - Added **Small**, **Medium**, and **Large** text subtitle sizes, with simple labels. Medium preserves the original size.
+- Added numbered debrid priorities with **Move up** and **Move down** controls. Number **1** is preferred.
+- Added **Settings → Check for updates** with release notes, download progress, APK integrity and signing checks, and Android install confirmation. Optional startup checks default to off.
+- Added long-press **Remove from Continue watching** in all five themes and My Trakt. Hiding an item preserves local resume data and Trakt history; replaying it makes it visible again.
 - Connected Offcloud and TorBox accounts are searched together. Choose the order in **Settings → Debrid priority**. Shared cached sources use your preferred service; sources cached only on the other service use that service automatically.
 - Both cloud libraries are available from Library. Cached results list every service that has the source.
 - Transparent subtitle backgrounds and bold text remain available in Settings and the player subtitle menu.

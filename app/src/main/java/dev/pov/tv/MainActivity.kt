@@ -100,7 +100,7 @@ class MainActivity : Activity() {
         anime = AnimeCatalogApi(trakt)
         InAppPlaybackSession.initialize(this)
         InAppPlaybackSession.addListener(playbackChanged)
-        shell(); if (sourcePreview) sourceChoiceAudit() else home(); if (!publicPreview) retrySync()
+        shell(); if (sourcePreview) sourceChoiceAudit() else home(); if (!publicPreview) { retrySync(); checkStartupUpdate() }
         window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener(contentFocusChanged)
     }
 
@@ -317,7 +317,7 @@ class MainActivity : Activity() {
         current = { home() }
         destination = "home"; refreshNavigation()
         val id = page(""); isHome = true; body.setPadding(0, 0, 0, contentBottomPadding())
-        val recent = if (publicPreview) emptyList() else history.recent().filter { it.position < it.duration * 0.95 }
+        val recent = if (publicPreview) emptyList() else history.continueWatching()
         read(id, { catalog.popular("movie") to catalog.popular("series") }) { (movies, series) ->
             if (theme == ThemeSpec.DASHBOARD) {
                 dashboard(recent, movies, series)
@@ -391,7 +391,7 @@ class MainActivity : Activity() {
         frame.addView(copy, FrameLayout.LayoutParams(dp(copyWidth), -2).apply { leftMargin = dp(left); topMargin = dp(copyTop) })
         if (showAction) {
             val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            val saved = if (publicPreview) null else history.recent().firstOrNull { it.identity?.imdbId == item.imdbId && it.position < it.duration * 0.95 }
+            val saved = if (publicPreview) null else history.continueWatching().firstOrNull { it.identity?.imdbId == item.imdbId }
             actions.addView(primaryButton(if (saved != null) "▶  Resume" else "▶  Explore") {
                 if (saved?.identity != null) navigate { showSources(saved.identity) } else navigate { details(item) }
             }, margin(160, 38, right = 17))
@@ -410,6 +410,33 @@ class MainActivity : Activity() {
         in 5..11 -> "Good morning."; in 12..17 -> "Good afternoon."; else -> "Good evening."
     }
 
+    private fun continueOptions(view: View, key: String, identity: PlaybackIdentity?, title: String) {
+        view.setOnLongClickListener {
+            AlertDialog.Builder(this).setTitle(title)
+                .setItems(arrayOf("Remove from Continue watching")) { _, _ ->
+                    history.hide(key, identity)
+                    toast("Removed from Continue watching")
+                    current()
+                }.setNegativeButton("Cancel", null).show()
+            true
+        }
+    }
+
+    private fun checkStartupUpdate() {
+        if (store.get("updates.startup") != "true") return
+        worker.execute {
+            val latest = try { GitHubUpdates(this).latest() } catch (_: Exception) { null }
+            if (latest != null) runOnUiThread {
+                if (resumed && !isDestroyed && !isFinishing && !InAppPlaybackSession.hasActive()) {
+                    AlertDialog.Builder(this).setTitle("Update available · ${latest.version}")
+                        .setMessage("A new published release of POV Rajpoot is available.")
+                        .setPositiveButton("View update") { _, _ -> startActivity(Intent(this, UpdateActivity::class.java)) }
+                        .setNegativeButton("Later", null).show()
+                }
+            }
+        }
+    }
+
     private fun resumeRow(recent: List<PlaybackStore.Recent>) {
         section("Continue Watching")
         val row = horizontalRow()
@@ -423,10 +450,10 @@ class MainActivity : Activity() {
             }
             if (theme == ThemeSpec.CINEMATIC) {
                 val group = column()
-                group.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), action = action).apply { tag = "resume:${saved.key}" }, margin(-1, theme.layout.cardHeightDp))
+                group.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), action = action).apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, margin(-1, theme.layout.cardHeightDp))
                 group.addView(text(remaining, 10, muted), margin(-1, -2, top = 4))
                 row.addView(group, margin(cardWidth(), theme.layout.cardHeightDp + 20, right = theme.layout.cardGapDp))
-            } else row.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), remaining, action).apply { tag = "resume:${saved.key}" }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
+            } else row.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), remaining, action).apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
         }
     }
 
@@ -448,7 +475,10 @@ class MainActivity : Activity() {
             val caption = saved?.let { "${((it.duration - it.position).coerceAtLeast(0) / 60000)}m left" } ?: listOf(item.year, item.genres.firstOrNull().orEmpty()).filter(String::isNotBlank).joinToString(" · ")
             val frame = tile(item, progress, caption, action) as FrameLayout
             frame.tag = "dashboard:${saved?.key ?: item.imdbId}"
-            if (index == 0) frame.addView(primaryButton(if (saved != null) "▶ Resume" else "▶ Explore", action),
+            if (saved != null) continueOptions(frame, saved.key, saved.identity, saved.title)
+            if (index == 0) frame.addView(primaryButton(if (saved != null) "▶ Resume" else "▶ Explore", action).apply {
+                if (saved != null) continueOptions(this, saved.key, saved.identity, saved.title)
+            },
                 FrameLayout.LayoutParams(dp(104), dp(31), Gravity.BOTTOM or Gravity.END).apply { rightMargin = dp(12); bottomMargin = dp(33) })
             rowTop.addView(frame, margin(if (index == 0) firstWidth else otherWidth, 185, right = theme.layout.cardGapDp))
         }
@@ -1206,9 +1236,10 @@ class MainActivity : Activity() {
         val id = page("My Trakt", "Your watchlist. Your progress. Your next episode.")
         if (!trakt.connected()) { body.addView(button("Connect Trakt") { startTrakt() }, margin(190, 44)); return }
         read(id, { Triple(trakt.continueWatching(), trakt.watchlist("movie"), trakt.watchlist("series")) }) { (progress, movies, series) ->
-            if (progress.isNotEmpty()) { section("Continue watching"); progress.forEach { (identity, percent) ->
+            val visibleProgress = progress.filterNot { history.isHidden(identity = it.first) }
+            if (visibleProgress.isNotEmpty()) { section("Continue watching"); visibleProgress.forEach { (identity, percent) ->
                 remoteProgress[identityKey(identity)] = percent
-                body.addView(button("${identity.title}${if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""}   ·   ${percent.toInt()}%") { navigate { showSources(identity) } }, margin(-1, 44, bottom = 7))
+                body.addView(button("${identity.title}${if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""}   ·   ${percent.toInt()}%") { navigate { showSources(identity) } }.apply { continueOptions(this, "", identity, identity.title) }, margin(-1, 44, bottom = 7))
             } }
             val nextGroup = column(); body.addView(nextGroup, margin(-1, -2, top = 16))
             read(id, { trakt.nextEpisodes() }) { next ->
@@ -1301,6 +1332,11 @@ class MainActivity : Activity() {
         body.addView(button("Source provider address") { inputSetting("Source provider", "HTTPS Stremio-compatible add-on address", store.get("sources.endpoint", "https://torrentio.strem.fun")) { value ->
             val uri = Uri.parse(value.trim()); if (uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { store.put("sources.endpoint", value.trim()); toast("Source provider saved") } else toast("Enter a valid HTTPS address")
         } }, margin(-1, 44, bottom = 8))
+        section("Updates")
+        body.addView(button("Check for updates ›") { startActivity(Intent(this, UpdateActivity::class.java)) }, margin(-1, 44, bottom = 8))
+        body.addView(button("Check for updates on startup · ${if (store.get("updates.startup") == "true") "On" else "Off"}") {
+            store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
+        }, margin(-1, 44, bottom = 8))
         section("About")
         body.addView(text("POV Rajpoot · 0.2.6\nPOV Rajpoot fork by Rajpoot.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))

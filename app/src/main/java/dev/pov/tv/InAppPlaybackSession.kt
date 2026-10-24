@@ -151,6 +151,7 @@ object InAppPlaybackSession {
         sourceKey = intent.getStringExtra("key").orEmpty()
         title = intent.getStringExtra("title").orEmpty()
         identity = try { intent.getStringExtra("identity")?.let { PlaybackIdentity.fromJson(JSONObject(it)) } } catch (_: Exception) { null }
+        if (saved == null) history.show(sourceKey, identity)
         val position = (saved?.getLong("position") ?: intent.getLongExtra("resume", 0L)).coerceAtLeast(0)
         remotePercent = saved?.getDouble("remotePercent") ?: if (position == 0L) intent.getDoubleExtra("resume_percent", 0.0) else 0.0
         if (!remotePercent.isFinite() || remotePercent !in 0.0..100.0) remotePercent = 0.0

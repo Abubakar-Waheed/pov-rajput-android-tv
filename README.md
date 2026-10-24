@@ -2,14 +2,14 @@
 
 ### By Rajpoot
 
-[![Android APKs](https://github.com/husnainahmedrana/pov-offcloud-android-tv/actions/workflows/apks.yml/badge.svg)](https://github.com/husnainahmedrana/pov-offcloud-android-tv/actions/workflows/apks.yml)
+[![Android APKs](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/actions/workflows/apks.yml/badge.svg)](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/actions/workflows/apks.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
 **A native Android TV app with Offcloud and TorBox cloud playback, Trakt tracking, five themes, anime browsing, and a Media3 player.** Kodi is not required.
 
 This is **Rajpoot's Android TV edition**, forked from [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv). The original Android TV port was created by **Mark Mateo**, based on the original POV Kodi add-on by **[kodifitzwell](https://github.com/kodifitzwell/repo)**. Their work, attribution, and GPL-3.0 license are preserved.
 
-**[Download release APK](https://github.com/husnainahmedrana/pov-offcloud-android-tv/releases/latest)** · **[Setup guide](docs/OFFCLOUD.md)** · **[Build and release](docs/BUILD_AND_RELEASE.md)** · **[Release notes](docs/RELEASE_NOTES.md)**
+**[Download release APK](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/releases/latest)** · **[Setup guide](docs/OFFCLOUD.md)** · **[Build and release](docs/BUILD_AND_RELEASE.md)** · **[Release notes](docs/RELEASE_NOTES.md)**
 
 ## Rajpoot's contributions
 
@@ -21,6 +21,9 @@ This is **Rajpoot's Android TV edition**, forked from [MM-482/pov-android-tv](ht
 - Added account-change/cancellation guards and read-only ADB diagnostics that do not expose keys or playback links.
 - Added transparent backgrounds, bold text, and Small/Medium/Large subtitle sizes for fullscreen and mini-player playback.
 - Added direct cached playback: Offcloud avoids cloud transfers; TorBox resolves direct links and removes newly created cached entries before playback. Uncached downloads remain in the library.
+- Added numbered debrid priorities with Move up / Move down controls.
+- Added verified in-app updates from published GitHub releases and optional startup checks.
+- Added long-press removal from Continue watching across all five themes and the Trakt page.
 - Added automated debug/release APK builds, tests, lint reports, checksums, and signed APK publication to tagged GitHub Releases.
 
 ## Screenshots
@@ -55,7 +58,7 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 
 ## Install and connect
 
-1. Download `POV-Rajpoot-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-offcloud-android-tv/releases).
+1. Download `POV-Rajpoot-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/releases).
 2. Sideload it on Android TV 8.0 or later. The launcher name is **POV Rajpoot**; package ID: `dev.pov.tv.rajpoot`.
 3. Open **Settings → Connect Offcloud with API key**, enter your own key, and select **Connect**.
 4. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
@@ -73,6 +76,8 @@ Offcloud cached sources resolve directly without adding a cloud-dashboard entry.
 
 TorBox resolves direct links and removes newly created cached entries before playback begins. Cached packs let you choose a video before its playback link is resolved. A temporary entry can appear during resolution. Existing library entries are reused and retained. Uncached downloads remain in your library. If cleanup fails, the app reports an error; a temporary entry may need removal from the dashboard.
 
+![Numbered debrid priority](docs/screenshots/debrid-priority.png)
+
 ## Subtitle style
 
 Open **Settings → Subtitle style** or **Subtitles → Subtitle style** during playback. Enable **Transparent background** and/or **Bold text**. Choices are saved on-device and work with text subtitles in fullscreen and the mini player. Background transparency and bold text default to off. Size defaults to **Medium**, with **Small** and **Large** available. Image-based and burned-in subtitles retain their original appearance.
@@ -87,13 +92,27 @@ Text subtitle appearance using a sample caption:
 | --- | --- | --- |
 | ![Small subtitles](docs/screenshots/subtitles-small.png) | ![Medium subtitles](docs/screenshots/subtitles-medium.png) | ![Large subtitles](docs/screenshots/subtitles-large.png) |
 
+## App updates
+
+Open **Settings → Check for updates** to view the latest compatible release and its notes, then choose **Download and install**. If Android asks, allow POV Rajpoot to install apps; return to the updater and select **Install update**. Android asks you to confirm installation. You can also enable **Check for updates on startup** in Settings; it defaults to off.
+
+The updater downloads only published stable releases from this repository and checks the APK checksum, package, newer version code, and matching signing certificate. Existing POV Rajpoot accounts and settings are preserved during a normal update. Older POV Offcloud installations use a different package and need the initial POV Rajpoot installation separately.
+
+![App update screen](docs/screenshots/updates.png)
+
+## Continue watching
+
+Hold **OK/Select** on a Continue watching card, then choose **Remove from Continue watching**. This works in all five themes and on the My Trakt page. Removal is local to this app and preserves resume positions and Trakt history. Playing the same movie or episode again makes it visible again.
+
+![Long-press Continue watching menu](docs/screenshots/continue-watching.png)
+
 ## Builds and releases
 
-Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.6-rajpoot` publish the signed release APK, checksums, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
+Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.6-rajpoot` publish the signed release APK, checksums, update metadata, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
 
 ## Validation and limits
 
-Automated tests and Android lint run before every release. Build results and reports are available in [GitHub Actions](https://github.com/husnainahmedrana/pov-offcloud-android-tv/actions).
+Automated tests and Android lint run before every release. Build results and reports are available in [GitHub Actions](https://github.com/husnainahmedrana/pov-rajpoot-android-tv/actions).
 
 The screenshots and connection checks do not establish every TV, codec, HDR/audio path, or authenticated playback combination. This is an independent community fork.
 

@@ -40,4 +40,6 @@ git tag v0.2.6-rajpoot
 git push origin v0.2.6-rajpoot
 ```
 
-The tagged workflow validates the version, builds and verifies the signed APK, then creates a GitHub Release containing the release APK, SHA-256 checksums, license, release notes, and GitHub's automatic source archives. Only the publish job receives repository-contents write permission. No upstream repository is changed.
+The tagged workflow validates the version, builds and verifies the signed APK, then creates a GitHub Release containing the release APK, SHA-256 checksums, `update.json` updater metadata, license, release notes, and GitHub's automatic source archives. Only the publish job receives repository-contents write permission. No upstream repository is changed.
+
+For the updater, every signed release must retain `POV-Rajpoot-release.apk` and `update.json`. Actions generates the manifest from the app version and the final signed APK checksum. Increase `versionCode` for each update and keep the package ID and signing certificate consistent. Drafts, prereleases, debug APKs, and older version codes are not offered by the updater.

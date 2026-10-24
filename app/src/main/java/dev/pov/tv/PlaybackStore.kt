@@ -34,6 +34,27 @@ class PlaybackStore(context: Context) {
         } catch (_: Exception) { emptyList() }
     }
 
+    private fun hiddenToken(key: String, identity: PlaybackIdentity?): String = if (identity == null || identity.imdbId.isBlank()) "key:$key"
+        else "media:${identity.type}:${identity.imdbId}:${identity.season}:${identity.episode}"
+
+    fun isHidden(key: String = "", identity: PlaybackIdentity?): Boolean = synchronized(lock) {
+        hiddenToken(key, identity) in preferences.getStringSet("hiddenContinue", emptySet()).orEmpty()
+    }
+    fun continueWatching(): List<Recent> = recent().filter { it.position < it.duration * 0.95 && !isHidden(it.key, it.identity) }
+
+    /** Hides a local row and the same episode's Trakt row, preserving resume/history data. */
+    fun hide(key: String = "", identity: PlaybackIdentity?) = synchronized(lock) {
+        val hidden = preferences.getStringSet("hiddenContinue", emptySet()).orEmpty().toMutableSet()
+        hidden.add(hiddenToken(key, identity))
+        check(preferences.edit().putStringSet("hiddenContinue", hidden).commit())
+    }
+    /** A deliberate new playback session makes a hidden item visible again. Periodic saves do not. */
+    fun show(key: String, identity: PlaybackIdentity?) = synchronized(lock) {
+        val hidden = preferences.getStringSet("hiddenContinue", emptySet()).orEmpty().toMutableSet()
+        if (hidden.remove(hiddenToken(key, identity))) check(preferences.edit().putStringSet("hiddenContinue", hidden).commit())
+        Unit
+    }
+
     fun resume(key: String): Long = recent().find { it.key == key }?.let {
         if (it.position > 30_000 && it.duration > 0 && it.position < it.duration * 0.95) it.position else 0
     } ?: 0

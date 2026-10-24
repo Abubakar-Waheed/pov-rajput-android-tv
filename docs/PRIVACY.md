@@ -1,11 +1,12 @@
-# POV Standalone preview privacy
+# POV Rajpoot privacy
 
-POV Standalone is an Android TV app made by Mark Mateo, based on the original POV project by kodifitzwell. This policy describes the current source implementation. The app has no developer operated account service, advertising SDK, analytics SDK, or developer telemetry endpoint. It communicates directly with the services below. Those services receive normal connection information, including your public IP address, and apply their own policies.
+POV Rajpoot is maintained by Rajpoot, based on Mark Mateo’s Android TV application and the original POV project by kodifitzwell. This policy describes the current source implementation. The app has no developer operated account service, advertising SDK, analytics SDK, or developer telemetry endpoint. It communicates directly with the services below. Those services receive normal connection information, including your public IP address, and apply their own policies.
 
 ## Connections and information sent
 
 | Service | Information used and sent | Purpose |
 | --- | --- | --- |
+| Offcloud (`offcloud.com`) | Your API key, selected torrent hashes/magnets, cloud request IDs and file choices. | Validate your account, check cached sources, obtain direct cached links, and manage transfers explicitly requested in the app. Cached direct playback does not create a cloud transfer. |
 | TorBox (`api.torbox.app`) | Device authorization codes or the API key you enter; an account token; cloud folder and file identifiers; torrent hashes; the source you explicitly select. The download link endpoint requires your TorBox token in its HTTPS query. | Link your own account, display its cloud library, check cached sources, add a selected transfer, and obtain playback links. Browsing source results does not add transfers. |
 | Trakt (`auth.trakt.tv`, `api.trakt.tv`) | Your registered application Client ID; device codes; OAuth access and refresh tokens; matched movie/show identifiers and episode numbers; watchlist changes and watched status you request; playback start, pause, stop, and progress for identified titles when connected. | Link your account, display lists and progress, maintain the watchlist, and synchronize identified playback. Public external-ID lookups send the application Client ID without an OAuth bearer token. |
 | Cinemeta (`v3-cinemeta.strem.io`, `cinemeta-catalogs.strem.io`) | Catalog/search requests, search text, and IMDb movie/show identifiers. | Discover titles and obtain descriptions, artwork links, and episode lists. These requests do not include your TorBox or Trakt account tokens. |
@@ -27,9 +28,15 @@ The manifest sets `android:allowBackup="false"`. It also supplies explicit exclu
 
 These settings do not control a manufacturer's nonstandard migration tools, debugging access, a compromised or rooted device, operating system behavior outside the standard backup rules, or separately captured screenshots/logs. The preview build is intended for sideloading and may be debug signed; do not treat a development device as a vault.
 
+## App updates
+
+Manual update checks, and optional startup checks when enabled, contact GitHub for this repository’s published releases. Downloading an update contacts GitHub’s release asset servers. Requests contain no Offcloud, TorBox, or Trakt credentials or viewing history. GitHub receives normal network information such as your IP address. Update APKs are held in the app’s private cache and shared with Android’s installer through a temporary read grant.
+
+Continue watching removals are stored locally. They hide the selected movie or episode without deleting its resume position or remote Trakt history. New playback restores that item’s visibility.
+
 ## Removing information
 
-Settings can disconnect TorBox and Trakt. Disconnecting invalidates in-flight connection attempts; disconnecting Trakt or changing its Client ID also discards unsent Trakt updates through the app UI. Disconnecting does not erase your local recent playback list, delete transfers from TorBox, erase remote Trakt history, or revoke every authorization held by a remote service. Manage remote access and account history in those services.
+Settings can disconnect Offcloud, TorBox, and Trakt. Disconnecting invalidates in-flight connection attempts; disconnecting Trakt or changing its Client ID also discards unsent Trakt updates through the app UI. Disconnecting does not erase your local recent playback list, delete transfers from TorBox, erase remote Trakt history, or revoke every authorization held by a remote service. Manage remote access and account history in those services.
 
 Android's app storage controls can clear POV's local app data, and uninstalling normally removes its local preferences. Reinstalling, restoring, and manufacturer behavior can vary. Never share account tokens, activation codes, private cloud/download URLs, or screenshots of personal viewing history in public bug reports.
 
