@@ -1281,6 +1281,22 @@ class MainActivity : Activity() {
             }.setPositiveButton("Done", null).show()
     }
 
+    private fun subtitleLanguage(allLanguages: Boolean = false) {
+        val preferences = SubtitlePreferences(this)
+        val languages = if (allLanguages) SubtitlePreferences.LANGUAGES else
+            SubtitlePreferences.COMMON_LANGUAGES.map { code -> SubtitlePreferences.LANGUAGES.first { it.first == code } }
+        val labels = languages.map { it.second } + if (allLanguages) emptyList() else listOf("More languages…")
+        AlertDialog.Builder(this).setTitle("Preferred subtitle language")
+            .setSingleChoiceItems(labels.toTypedArray(), languages.indexOfFirst { it.first == preferences.language }) { dialog, index ->
+                dialog.dismiss()
+                if (index == languages.size) subtitleLanguage(true) else {
+                    preferences.language = languages[index].first
+                    InAppPlaybackSession.refreshSubtitleLanguage()
+                    settings()
+                }
+            }.setNegativeButton("Cancel", null).show()
+    }
+
     private fun settings() {
         current = { settings() }
         destination = "settings"; refreshNavigation()
@@ -1302,6 +1318,13 @@ class MainActivity : Activity() {
                         }.setPositiveButton("Done", null).show()
                 }.setPositiveButton("Done", null).show()
         }, margin(-1, 46, bottom = 9))
+        val subtitlePreferences = SubtitlePreferences(this)
+        body.addView(button("Subtitle position · ${subtitlePreferences.positionLabel}  ›") {
+            SubtitlePositionPicker.show(this, liveVideo = false,
+                changed = { InAppPlaybackSession.refreshSubtitleStyle() }, dismissed = { settings() })
+        }, margin(-1, 46, bottom = 9))
+        body.addView(button("Subtitle language · ${subtitlePreferences.languageLabel}  ›") { subtitleLanguage() }, margin(-1, 46, bottom = 9))
+        body.addView(text("Selects your preferred subtitle language when available. You can choose another track in the player.", 12, muted), margin(-1, -2, bottom = 10))
         section("Accounts")
         body.addView(button(if (store.has("torbox.token")) "TorBox · connected · reconnect" else "Connect TorBox") { startTorBox() }, margin(-1, 44, bottom = 8))
         val offcloud = OffcloudApi(store)
@@ -1338,7 +1361,7 @@ class MainActivity : Activity() {
             store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Rajput · 0.2.6\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajput · 0.2.7\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 

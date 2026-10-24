@@ -12,6 +12,8 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -37,6 +39,11 @@ class PlayerActivity : Activity() {
     private val boost get() = InAppPlaybackSession.volumeBoost
     private val accent by lazy { ThemePreferences(this).selected().palette.accent }
     private var stopped = false
+    private val seekPreview = DpadSeekPreview()
+    private var seekKey = KeyEvent.KEYCODE_UNKNOWN
+    private var resumeAfterSeek = false
+    private lateinit var seekLabel: TextView
+    private val timeline get() = view.findViewById<PreviewTimeBar>(androidx.media3.ui.R.id.exo_progress)
     private var revealKey = KeyEvent.KEYCODE_UNKNOWN
     private var observedError: PlaybackException? = null
     private val rowIds = listOf(androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_play_pause,
@@ -69,6 +76,13 @@ class PlayerActivity : Activity() {
         setContentView(view)
         controls = PlayerControlVisibility.bind(view)
         configureButtons()
+        seekLabel = TextView(this).apply {
+            tag = "pov_seek_preview"; textSize = 26f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            setPadding(dp(22), dp(14), dp(22), dp(14)); visibility = View.GONE
+            background = GradientDrawable().apply { setColor(0xDD08121F.toInt()); cornerRadius = dp(10).toFloat() }
+        }
+        requireNotNull(view.overlayFrameLayout).addView(seekLabel,
+            FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         val reuse = InAppPlaybackSession.hasActive() &&
             (intent.getBooleanExtra("reuse_session", false) || (savedInstanceState != null && InAppPlaybackSession.matches(intent)))
         if (!reuse && !InAppPlaybackSession.start(this, intent, savedInstanceState)) {
@@ -111,6 +125,7 @@ class PlayerActivity : Activity() {
         view.findViewById<View>(R.id.pov_browse).setOnClickListener { finish() }
         view.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress).apply {
             setPlayedColor(accent)
+            setKeyTimeIncrement(1000)
             nextFocusDownId = androidx.media3.ui.R.id.exo_play_pause
             nextFocusUpId = id
         }
@@ -188,8 +203,20 @@ class PlayerActivity : Activity() {
                 preferences.boldText = !preferences.boldText
                 preferences.applyTo(view); InAppPlaybackSession.refreshSubtitleStyle(); showSubtitleStyle()
             },
-            PlayerSheetChoice("Subtitle size · ${preferences.sizeLabel}") { showSubtitleSize() }
+            PlayerSheetChoice("Subtitle size · ${preferences.sizeLabel}") { showSubtitleSize() },
+            PlayerSheetChoice("Subtitle position · ${preferences.positionLabel}") { showSubtitlePosition() }
         ))
+    }
+
+    private fun showSubtitlePosition() {
+        finishSeek(cancelled = true)
+        activeDialog?.dismiss()
+        activeTrackType = null
+        activeTrackChoices = emptyList()
+        activeTracksLoading = false
+        activeDialog = SubtitlePositionPicker.show(this, liveVideo = true,
+            changed = { SubtitlePreferences(this).applyTo(view); InAppPlaybackSession.refreshSubtitleStyle() },
+            dismissed = { activeDialog = null; if (!stopped) controls.show() })
     }
 
     private fun showSubtitleSize() {
@@ -235,6 +262,7 @@ class PlayerActivity : Activity() {
     }
 
     private fun showSheet(title: String, detail: String, choices: List<PlayerSheetChoice>) {
+        finishSeek(cancelled = true)
         activeDialog?.dismiss()
         activeTrackType = null
         activeTrackChoices = emptyList()
@@ -255,7 +283,58 @@ class PlayerActivity : Activity() {
         dialog.show()
     }
 
+    private fun beginOrMoveSeek(keyCode: Int): Boolean {
+        val exo = player ?: return false
+        if (!exo.isCurrentMediaItemSeekable || exo.duration <= 0) return false
+        if (!seekPreview.active) {
+            if (!seekPreview.begin(exo.currentPosition, exo.duration)) return false
+            resumeAfterSeek = exo.playWhenReady
+            exo.pause()
+        }
+        seekKey = keyCode
+        seekPreview.step(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+        controls.show(); timeline.requestFocus()
+        timeline.previewPosition = seekPreview.position
+        val offset = seekPreview.offsetSeconds
+        seekLabel.text = "${DpadSeekPreview.time(seekPreview.position)} / ${DpadSeekPreview.time(exo.duration)}\n${if (offset >= 0) "+" else ""}${offset}s"
+        seekLabel.visibility = View.VISIBLE
+        return true
+    }
+
+    private fun finishSeek(cancelled: Boolean = false, restorePlayback: Boolean = true) {
+        if (!seekPreview.active) return
+        val target = seekPreview.finish(cancelled)
+        timeline.previewPosition = null
+        seekLabel.visibility = View.GONE
+        seekKey = KeyEvent.KEYCODE_UNKNOWN
+        player?.let { exo ->
+            if (target != null) { timeline.setPosition(target); exo.seekTo(target) }
+            if (restorePlayback && resumeAfterSeek) exo.play()
+        }
+        controls.show()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) finishSeek(cancelled = true, restorePlayback = false)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val horizontal = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        if (event.action == KeyEvent.ACTION_UP && horizontal && seekPreview.active) {
+            if (event.keyCode == seekKey) finishSeek(cancelled = event.isCanceled)
+            return true
+        }
+        if (event.action == KeyEvent.ACTION_DOWN && seekPreview.active && !horizontal) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                finishSeek(cancelled = true); revealKey = KeyEvent.KEYCODE_BACK; return true
+            }
+            finishSeek()
+        }
+        if (event.action == KeyEvent.ACTION_DOWN && horizontal && activeDialog?.isShowing != true &&
+            (seekPreview.active || !view.isControllerFullyVisible || currentFocus?.id == androidx.media3.ui.R.id.exo_progress || currentFocus === view)) {
+            if (beginOrMoveSeek(event.keyCode)) return true
+        }
         if (event.action == KeyEvent.ACTION_UP && event.keyCode == revealKey) {
             revealKey = KeyEvent.KEYCODE_UNKNOWN
             return true
@@ -294,7 +373,7 @@ class PlayerActivity : Activity() {
     }
 
     @Suppress("DEPRECATION")
-    override fun onBackPressed() { finish() }
+    override fun onBackPressed() { if (seekPreview.active) finishSeek(cancelled = true) else finish() }
 
     @Suppress("DEPRECATION")
     override fun finish() {
@@ -310,6 +389,7 @@ class PlayerActivity : Activity() {
     }
 
     override fun onStop() {
+        finishSeek(cancelled = true, restorePlayback = false)
         stopped = true
         controls.stop()
         activeDialog?.dismiss(); activeDialog = null

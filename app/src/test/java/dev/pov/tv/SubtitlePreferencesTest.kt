@@ -63,4 +63,61 @@ class SubtitlePreferencesTest {
         first.sizePercent = 80
         assertEquals("Small", SubtitlePreferences(context).sizeLabel)
     }
+    @Test fun `subtitle position overrides text regions and default restores the authored cue`() {
+        val preferences = SubtitlePreferences(context)
+        val text = androidx.media3.common.text.Cue.Builder().setText("Position check")
+            .setLine(0.7f, androidx.media3.common.text.Cue.LINE_TYPE_FRACTION).build()
+        val image = androidx.media3.common.text.Cue.Builder()
+            .setBitmap(android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)).build()
+        assertSame(text, preferences.positionedCues(listOf(text)).single())
+        preferences.positionPercent = 2
+        val lower = SubtitlePreferences(context).positionedCues(listOf(text, image))
+        assertEquals(0.98f, lower.first().line, 0.001f)
+        assertEquals(androidx.media3.common.text.Cue.ANCHOR_TYPE_END, lower.first().lineAnchor)
+        assertSame(image, lower.last())
+        preferences.positionPercent = 16
+        assertEquals(0.84f, preferences.positionedCues(listOf(text)).single().line, 0.001f)
+        preferences.positionPercent = -1
+        assertSame(text, preferences.positionedCues(listOf(text)).single())
+    }
+
+    @Test fun `preferred language persists enables subtitles and preserves audio video settings`() {
+        val first = SubtitlePreferences(context)
+        assertEquals("", first.language)
+        first.language = "ur"
+        val preferences = SubtitlePreferences(context)
+        assertEquals("ur", preferences.language)
+        assertEquals("Urdu", preferences.languageLabel)
+        val before = androidx.media3.common.TrackSelectionParameters.Builder(context)
+            .setPreferredAudioLanguage("de").setMaxVideoBitrate(1234567)
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true).build()
+        val changed = preferences.trackParameters(before)
+        assertEquals(listOf("ur"), changed.preferredTextLanguages)
+        assertFalse(androidx.media3.common.C.TRACK_TYPE_TEXT in changed.disabledTrackTypes)
+        assertEquals(before.preferredAudioLanguages, changed.preferredAudioLanguages)
+        assertEquals(before.maxVideoBitrate, changed.maxVideoBitrate)
+    }
+    @Test fun `off automatic and explicit language replace only text overrides`() {
+        val text = androidx.media3.common.TrackGroup(androidx.media3.common.Format.Builder()
+            .setSampleMimeType(androidx.media3.common.MimeTypes.TEXT_VTT).setLanguage("es").build())
+        val audio = androidx.media3.common.TrackGroup(androidx.media3.common.Format.Builder()
+            .setSampleMimeType(androidx.media3.common.MimeTypes.AUDIO_AAC).setLanguage("de").build())
+        val before = androidx.media3.common.TrackSelectionParameters.Builder(context)
+            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(text, 0))
+            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(audio, 0)).build()
+        val preferences = SubtitlePreferences(context)
+        preferences.language = "off"
+        val off = preferences.trackParameters(before)
+        assertTrue(androidx.media3.common.C.TRACK_TYPE_TEXT in off.disabledTrackTypes)
+        assertEquals(setOf(audio), off.overrides.keys)
+        preferences.language = "en"
+        val english = preferences.trackParameters(off)
+        assertEquals(listOf("en"), english.preferredTextLanguages)
+        assertFalse(androidx.media3.common.C.TRACK_TYPE_TEXT in english.disabledTrackTypes)
+        preferences.language = ""
+        val automatic = preferences.trackParameters(english)
+        assertEquals(androidx.media3.common.TrackSelectionParameters.Builder(context).build().preferredTextLanguages,
+            automatic.preferredTextLanguages)
+        assertEquals(setOf(audio), automatic.overrides.keys)
+    }
 }

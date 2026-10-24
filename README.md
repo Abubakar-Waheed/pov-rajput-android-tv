@@ -20,6 +20,9 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 - Improved the connection dialog with visible progress/errors and retained input when validation fails.
 - Added account-change/cancellation guards and read-only ADB diagnostics that do not expose keys or playback links.
 - Added transparent backgrounds, bold text, and Small/Medium/Large subtitle sizes for fullscreen and mini-player playback.
+- Added a saved subtitle language preference, selected automatically when a matching track is available.
+- Added a live subtitle-position slider in Settings and the player subtitle-style menu.
+- Added one-second D-pad seeking with a target-time preview and seek on button release.
 - Added direct cached playback: Offcloud avoids cloud transfers; TorBox resolves direct links and removes newly created cached entries before playback. Uncached downloads remain in the library.
 - Added numbered debrid priorities with Move up / Move down controls.
 - Added verified in-app updates from published GitHub releases and optional startup checks.
@@ -91,6 +94,20 @@ Text subtitle appearance using a sample caption:
 | Small | Medium | Large |
 | --- | --- | --- |
 | ![Small subtitles](docs/screenshots/subtitles-small.png) | ![Medium subtitles](docs/screenshots/subtitles-medium.png) | ![Large subtitles](docs/screenshots/subtitles-large.png) |
+
+## Subtitle language and seeking
+
+Open **Settings → Subtitle language** to choose a preferred language. New playback selects a matching subtitle track when available. **Automatic (device preference)** follows Android's caption preferences; **Off** disables subtitles. You can still choose a different track for the current video from the player's subtitle menu.
+
+Choose **Settings → Subtitle position** or **Subtitles → Subtitle style → Subtitle position** during playback. Move the slider left to lower the text or right to raise it. Changes preview immediately on the video, or on a sample in Settings. Choose **Done** to keep the position, **Cancel** to restore the previous choice, or **Reset** to restore the original placement. Image-based and burned-in subtitles retain their original position.
+
+While watching, press **Left/Right** to preview a one-second seek. Hold the button to move further; the overlay shows the target time and seconds moved. Release to seek and resume if the video was playing. A paused video stays paused. **Back** cancels the preview. With the controls visible, focus the timeline to seek; Left/Right on the action buttons still navigates between them.
+
+| Preferred subtitle language | Seek preview |
+| --- | --- |
+| ![Subtitle language preference](docs/screenshots/subtitle-language.png) | ![Seek target and seconds moved](docs/screenshots/seek-preview.png) |
+
+![Live subtitle position adjustment](docs/screenshots/subtitle-position.png)
 
 ## App updates
 

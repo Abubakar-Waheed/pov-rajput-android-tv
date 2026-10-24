@@ -6,10 +6,14 @@ import android.graphics.Typeface
 import android.view.accessibility.CaptioningManager
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.common.C
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.text.Cue
+import java.util.Locale
 
 /** Device-local text subtitle preferences, shared by fullscreen and mini-player views. */
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
-internal class SubtitlePreferences(context: Context) {
+internal class SubtitlePreferences(private val context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("pov_subtitles", Context.MODE_PRIVATE)
     var transparentBackground: Boolean
         get() = preferences.getBoolean("transparent_background", false)
@@ -23,6 +27,43 @@ internal class SubtitlePreferences(context: Context) {
         set(value) { require(value in SIZES); preferences.edit().putInt("size_percent", value).apply() }
     val sizeLabel: String get() = SIZE_LABELS[SIZES.indexOf(sizePercent)]
 
+    var positionPercent: Int
+        get() = preferences.getInt("position_percent", -1).takeIf { it == -1 || it in 1..30 } ?: -1
+        set(value) { require(value == -1 || value in 1..30); preferences.edit().putInt("position_percent", value).apply() }
+    val positionLabel: String get() = if (positionPercent < 0) "Default" else "$positionPercent% from bottom"
+
+    fun positionedCues(cues: List<Cue>): List<Cue> {
+        val selected = positionPercent
+        if (selected < 0) return cues
+        return cues.map { cue ->
+            if (cue.text == null || cue.verticalType != Cue.TYPE_UNSET) cue else cue.buildUpon()
+                .setLine(1f - selected / 100f, Cue.LINE_TYPE_FRACTION)
+                .setLineAnchor(Cue.ANCHOR_TYPE_END).build()
+        }
+    }
+
+    var language: String
+        get() = preferences.getString("language", "").orEmpty().takeIf { value -> LANGUAGES.any { it.first == value } }.orEmpty()
+        set(value) { require(LANGUAGES.any { it.first == value }); preferences.edit().putString("language", value).apply() }
+    val languageLabel: String get() = LANGUAGES.first { it.first == language }.second
+
+    fun trackParameters(current: TrackSelectionParameters): TrackSelectionParameters {
+        val builder = current.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        return when (val selected = language) {
+            "off" -> builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+            "" -> {
+                val defaults = TrackSelectionParameters.Builder(context).build()
+                builder.setPreferredTextLanguages(*defaults.preferredTextLanguages.toTypedArray())
+                    .setPreferredTextRoleFlags(defaults.preferredTextRoleFlags)
+                    .setIgnoredTextSelectionFlags(defaults.ignoredTextSelectionFlags)
+                    .setSelectUndeterminedTextLanguage(defaults.selectUndeterminedTextLanguage)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, C.TRACK_TYPE_TEXT in defaults.disabledTrackTypes).build()
+            }
+            else -> builder.setPreferredTextLanguage(selected).setPreferredTextRoleFlags(0)
+                .setSelectUndeterminedTextLanguage(false).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
+        }
+    }
+
     internal fun style(base: CaptionStyleCompat): CaptionStyleCompat = CaptionStyleCompat(
         base.foregroundColor,
         if (transparentBackground) Color.TRANSPARENT else base.backgroundColor,
@@ -35,6 +76,7 @@ internal class SubtitlePreferences(context: Context) {
 
     fun applyTo(view: PlayerView) {
         val subtitles = view.subtitleView ?: return
+        view.player?.let { subtitles.setCues(positionedCues(it.currentCues.cues)) }
         val override = transparentBackground || boldText
         // Embedded cue spans/windows can override background and font weight. Restore them
         // when both options are off, keeping the original rendering as the default.
@@ -52,6 +94,10 @@ internal class SubtitlePreferences(context: Context) {
     }
 
     companion object {
+        val LANGUAGES: List<Pair<String, String>> = listOf("" to "Automatic (device preference)", "off" to "Off") +
+            Locale.getISOLanguages().map { it to Locale.forLanguageTag(it).getDisplayLanguage(Locale.ENGLISH) }
+                .distinctBy { it.first }.sortedBy { it.second }
+        val COMMON_LANGUAGES = listOf("", "off", "en", "ur", "hi", "ar", "es", "fr", "de", "pt", "zh", "ja", "ko")
         val SIZES = listOf(80, 100, 130)
         val SIZE_LABELS = listOf("Small", "Medium", "Large")
     }

@@ -1,0 +1,34 @@
+package dev.pov.tv
+
+/** A pending seek never changes playback until the remote key is released. */
+internal class DpadSeekPreview {
+    var active = false
+        private set
+    var position = 0L
+        private set
+    private var origin = 0L
+    private var duration = 0L
+    val offsetSeconds get() = (position - origin) / 1000
+    fun begin(current: Long, length: Long): Boolean {
+        if (length <= 0) return false
+        duration = length; origin = current.coerceIn(0, length); position = origin; active = true
+        return true
+    }
+    fun step(direction: Int): Long {
+        require(active && direction in listOf(-1, 1))
+        position = if (direction > 0) position + minOf(1000, duration - position) else position - minOf(1000, position)
+        return position
+    }
+    fun finish(cancelled: Boolean = false): Long? {
+        val result = if (active && !cancelled) position else null
+        active = false
+        return result
+    }
+    companion object {
+        fun time(position: Long): String {
+            val seconds = position.coerceAtLeast(0) / 1000
+            return if (seconds >= 3600) "%d:%02d:%02d".format(java.util.Locale.ROOT, seconds / 3600, seconds / 60 % 60, seconds % 60)
+            else "%02d:%02d".format(java.util.Locale.ROOT, seconds / 60, seconds % 60)
+        }
+    }
+}

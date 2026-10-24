@@ -86,6 +86,7 @@ object InAppPlaybackSession {
             } else PlayerView.switchTargetView(exo, previous, view)
             previous?.keepScreenOn = false
             targetView = WeakReference(view)
+            SubtitlePreferences(view.context).applyTo(view)
             view.keepScreenOn = exo.isPlaying
             // Pending attachment can finish after Activity.onStart. Refresh controller scheduling
             // only after ownership is committed; same-target reentry below does not notify again.
@@ -194,11 +195,20 @@ object InAppPlaybackSession {
             .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000).build()
         player = exo
+        exo.trackSelectionParameters = SubtitlePreferences(application!!).trackParameters(exo.trackSelectionParameters)
         parameters?.let { exo.trackSelectionParameters = it }
         val openApp = PendingIntent.getActivity(application, 0, Intent(application, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         mediaSession = MediaSession.Builder(application!!, exo).setSessionActivity(openApp).build()
         exo.addListener(object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                // PlayerView has received onCues before this batched callback. Apply custom
+                // text positions last so embedded cue regions cannot restore the old location.
+                if (isCurrent(exo) && events.contains(Player.EVENT_CUES)) {
+                    targetView?.get()?.let { target -> target.subtitleView?.setCues(
+                        SubtitlePreferences(target.context).positionedCues(player.currentCues.cues)) }
+                }
+            }
             override fun onTracksChanged(tracks: Tracks) {
                 if (!isCurrent(exo) || enforceVideoCompatibility(exo, tracks)) return
                 notifyChanged()
@@ -266,6 +276,11 @@ object InAppPlaybackSession {
 
     internal fun matches(intent: Intent): Boolean = player != null &&
         sourceUrl == intent.getStringExtra("url").orEmpty() && sourceKey == intent.getStringExtra("key").orEmpty()
+
+    fun refreshSubtitleLanguage() {
+        val context = application ?: return
+        player?.let { it.trackSelectionParameters = SubtitlePreferences(context).trackParameters(it.trackSelectionParameters) }
+    }
 
     fun refreshSubtitleStyle() {
         targetView?.get()?.let { SubtitlePreferences(it.context).applyTo(it) }
