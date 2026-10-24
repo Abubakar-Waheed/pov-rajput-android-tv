@@ -76,6 +76,7 @@ class OffcloudApi internal constructor(
             .put("includeFiles", false)) as? JSONArray
             ?: throw IllegalStateException("Offcloud returned an unreadable cache response.")
         check(response.length() == hashes.size) { "Offcloud cache availability is unknown." }
+        checkCurrent(key)
         return hashes.filterIndexed { index, _ -> response.optJSONObject(index)?.optBoolean("cached", false) == true }.toSet()
     }
 
@@ -83,6 +84,17 @@ class OffcloudApi internal constructor(
         val hash = source.infoHash.lowercase(Locale.ROOT)
         require(Regex("[a-f0-9]{40}").matches(hash)) { "This source has no valid torrent hash." }
         val key = credential()
+        // Resolve cached files directly: this endpoint does not create an account transfer.
+        val available = hash in cached(listOf(hash))
+        checkCurrent(key)
+        if (available) {
+            val files = parseFiles(call("cache/download", key, JSONObject().put("url", "magnet:?xt=urn:btih:$hash")))
+            val eligible = EpisodeFilename.choices(files.map { VideoCandidate(it.id, it.name, it.size) }, source.title, identity)
+            checkCurrent(key)
+            return PreparedSource.OffcloudFiles(null, files.filter { file -> eligible.any { it.id == file.id } }, identity,
+                EpisodeFilename.preferredId(eligible, source.title), tag(key))
+        }
+        check(!source.cached) { "This source is no longer cached. Refresh sources before starting a cloud download." }
         // Navigating away and selecting the same source again can overlap worker requests.
         // Serialize transfer creation separately from the short account lock used by the UI.
         val requestId = synchronized(transferLock) {

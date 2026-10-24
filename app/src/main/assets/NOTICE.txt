@@ -1,6 +1,6 @@
-POV Offcloud - Android TV fork by Rajpoot
+POV Rajpoot - Android TV fork by Rajpoot
 
-POV Offcloud fork by Rajpoot. Original standalone Android TV app by Mark Mateo. Based on the original POV Kodi add-on by kodifitzwell.
+POV Rajpoot fork by Rajpoot. Original standalone Android TV app by Mark Mateo. Based on the original POV Kodi add-on by kodifitzwell.
 
 POV visual identity and original fanart: kodifitzwell, sourced from POV 6.10.06 at https://github.com/kodifitzwell/repo (revision 2ea2eb7f330988ade16d388d3832b8e4b60c6b24). The selected launcher icon is generated design concept 3, created using the original POV icon as its reference. The upstream add-on manifest declares GNU GPL version 3. The original author is not affiliated with this Android port.
 

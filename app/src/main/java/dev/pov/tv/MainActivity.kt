@@ -592,7 +592,7 @@ class MainActivity : Activity() {
     private fun contentBottomPadding() = dp(if (!publicPreview && InAppPlaybackSession.hasActive()) 184 else 24)
 
     private fun homeCredit() {
-        body.addView(text("POV Offcloud by Rajpoot  ·  Android TV port: Mark Mateo  ·  Original POV: kodifitzwell", 10, muted), margin(-1, -2, top = 20, bottom = 6))
+        body.addView(text("POV Rajpoot  ·  Android TV port: Mark Mateo  ·  Original POV: kodifitzwell", 10, muted), margin(-1, -2, top = 20, bottom = 6))
     }
 
     private fun animePage(type: String = "series", query: String = "", skip: Int = 0) {
@@ -914,14 +914,15 @@ class MainActivity : Activity() {
         current = { offcloudFiles(prepared) }
         val id = page("Choose an Offcloud video", "Choose the correct file for ${prepared.identity.title}.")
         val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+        val sourceKey = prepared.requestId ?: "cache:${prepared.identity.imdbId}:${prepared.identity.season}:${prepared.identity.episode}"
         prepared.files.forEach { file ->
-            val focusKey = "offcloud:${prepared.requestId}:${file.id}"
+            val focusKey = "offcloud:$sourceKey:${file.id}"
             choices.addChoice(TvChoiceRow(this, focusKey, file.name,
                 if (file.size > 0) "${file.size / (1024 * 1024)} MB" else "Offcloud video",
                 palette = theme.palette) { playOffcloudFile(prepared, file) })
         }
         if (pendingFocus == null) prepared.preferredFileId?.let {
-            pendingFocus = TvFocusSnapshot("offcloud:${prepared.requestId}:$it", 0)
+            pendingFocus = TvFocusSnapshot("offcloud:$sourceKey:$it", 0)
         }
         focusAfterRender(id)
     }
@@ -953,6 +954,21 @@ class MainActivity : Activity() {
 
     private fun playPreparedFile(prepared: PreparedSource.Files, file: CloudFile) {
         val identity = prepared.identity
+        prepared.accountTag?.let { tag ->
+            if (store.get("playback.service") == "offcloud" || !torbox.ownsTag(tag)) {
+                toast("Connect TorBox and select the source again"); return
+            }
+            val key = "media:${identity.imdbId}:${identity.season}:${identity.episode}"
+            prepared.resolvedUrls[file.id]?.let { play(it, identity.title, identity, key); return }
+            val hash = prepared.sourceInfoHash ?: run { toast("Select the source again"); return }
+            streamFile(prepared.folder, file, identity.title, identity, key) {
+                check(torbox.ownsTag(tag)) { "The TorBox account changed. Select the source again." }
+                val resolved = torbox.prepareCached(SourceItem(file.name, "TorBox", hash, cached = true), identity, selectedFile = file)
+                check(resolved.accountTag == tag && torbox.ownsTag(tag)) { "The TorBox account changed. Select the source again." }
+                resolved.resolvedUrls.values.single()
+            }
+            return
+        }
         streamFile(prepared.folder, file, identity.title, identity,
             "media:${identity.imdbId}:${identity.season}:${identity.episode}")
     }
@@ -1110,13 +1126,13 @@ class MainActivity : Activity() {
         streamFile(folder, file, file.name, identity, "cloud:${folder.kind}:${folder.id}:${file.id}")
     }
 
-    private fun streamFile(folder: CloudFolder, file: CloudFile, title: String, identity: PlaybackIdentity?, key: String) {
+    private fun streamFile(folder: CloudFolder, file: CloudFile, title: String, identity: PlaybackIdentity?, key: String, resolveUrl: (() -> String)? = null) {
         if (resolvingGeneration == generation || launchingPlayer) { toast("Preparing the selected file…"); return }
         val request = generation; resolvingGeneration = request
         val progress = text("Preparing your video…", 14, accent); body.addView(progress, margin(-1, -2, top = 14))
         worker.execute {
             try {
-                val url = torbox.streamUrl(folder.kind, folder.id, file.id)
+                val url = resolveUrl?.invoke() ?: torbox.streamUrl(folder.kind, folder.id, file.id)
                 runOnUiThread {
                     if (request == generation && !isFinishing && !isDestroyed) {
                         resolvingGeneration = null; body.removeView(progress); play(url, title, identity, key)
@@ -1192,13 +1208,19 @@ class MainActivity : Activity() {
         page("Settings", "Make POV yours.")
         section("Appearance")
         body.addView(button("Themes · ${theme.displayName}  ›") { navigate { appearance() } }, margin(-1, 46, bottom = 9))
-        body.addView(button("Subtitle style · background and bold text  ›") {
+        body.addView(button("Subtitle style · text and size  ›") {
             val preferences = SubtitlePreferences(this)
             AlertDialog.Builder(this).setTitle("Subtitle style")
                 .setMultiChoiceItems(arrayOf("Transparent background", "Bold text"),
                     booleanArrayOf(preferences.transparentBackground, preferences.boldText)) { _, which, checked ->
                     if (which == 0) preferences.transparentBackground = checked else preferences.boldText = checked
                     InAppPlaybackSession.refreshSubtitleStyle()
+                }.setNeutralButton("Size · ${preferences.sizeLabel}") { _, _ ->
+                    AlertDialog.Builder(this).setTitle("Subtitle size")
+                        .setSingleChoiceItems(SubtitlePreferences.SIZE_LABELS.toTypedArray(), SubtitlePreferences.SIZES.indexOf(preferences.sizePercent)) { dialog, index ->
+                            preferences.sizePercent = SubtitlePreferences.SIZES[index]
+                            InAppPlaybackSession.refreshSubtitleStyle(); dialog.dismiss()
+                        }.setPositiveButton("Done", null).show()
                 }.setPositiveButton("Done", null).show()
         }, margin(-1, 46, bottom = 9))
         section("Accounts")
@@ -1235,7 +1257,7 @@ class MainActivity : Activity() {
             val uri = Uri.parse(value.trim()); if (uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { store.put("sources.endpoint", value.trim()); toast("Source provider saved") } else toast("Enter a valid HTTPS address")
         } }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Offcloud · 0.2.5\nPOV Offcloud fork by Rajpoot.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajpoot · 0.2.6\nPOV Rajpoot fork by Rajpoot.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 

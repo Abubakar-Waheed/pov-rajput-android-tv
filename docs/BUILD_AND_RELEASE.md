@@ -33,11 +33,11 @@ For local signing, use `POV_RELEASE_STORE_FILE`, `POV_RELEASE_STORE_PASSWORD`, `
 
 1. Update `versionCode`, `versionName`, release notes, and verification details.
 2. Commit to `main` and let the build pass.
-3. Push a tag equal to `v` plus `versionName`, for example `v0.2.4-offcloud`.
+3. Push a tag equal to `v` plus `versionName`, for example `v0.2.6-rajpoot`.
 
 ```sh
-git tag v0.2.4-offcloud
-git push origin v0.2.4-offcloud
+git tag v0.2.6-rajpoot
+git push origin v0.2.6-rajpoot
 ```
 
 The tagged workflow validates the version, builds and verifies the signed APK, then creates a GitHub Release containing the release APK, SHA-256 checksums, license, release notes, and GitHub's automatic source archives. Only the publish job receives repository-contents write permission. No upstream repository is changed.

@@ -27,6 +27,7 @@ class OffcloudApiTest {
         val account = Account()
         var time = 0L
         var state = "downloaded"
+        var cacheHit = false
         var files = """["https://files.example/Movie.mkv"]"""
         var override: ((String) -> String?)? = null
         val calls = mutableListOf<String>()
@@ -35,7 +36,8 @@ class OffcloudApiTest {
             calls += "$method $path"; fields += input
             override?.invoke(path) ?: when (path) {
                 "account/info" -> """{"user_id":"fixture-user","is_premium":true}"""
-                "cache/info" -> """[{"cached":true}]"""
+                "cache/info" -> """[{"cached":$cacheHit}]"""
+                "cache/download" -> files
                 "cloud" -> """{"requestId":"transfer1","status":"created"}"""
                 "cloud/status" -> """{"status":{"status":"$state"}}"""
                 "cloud/explore/transfer1" -> files
@@ -45,7 +47,7 @@ class OffcloudApiTest {
     }
 
     @Test fun `cache checks use current URL array protocol without creating transfers`() {
-        val h = Harness()
+        val h = Harness().apply { cacheHit = true }
         assertEquals(setOf(hash), h.api.cached(listOf(hash)))
         assertEquals(listOf("POST cache/info"), h.calls)
         assertEquals("magnet:?xt=urn:btih:$hash", h.fields.single()!!.getJSONArray("urls").getString(0))
@@ -57,9 +59,60 @@ class OffcloudApiTest {
         val prepared = h.api.prepare(source, movie)
         assertEquals("Movie.mkv", prepared.files.single().name)
         assertEquals("https://files.example/Movie.mkv", prepared.files.single().url)
-        assertEquals("magnet:?xt=urn:btih:$hash", h.fields.first()!!.getString("url"))
+        assertEquals("magnet:?xt=urn:btih:$hash", h.fields[h.calls.indexOf("POST cloud")]!!.getString("url"))
         assertEquals("transfer1", h.account.saved.getString(hash))
         assertTrue(h.api.owns(prepared))
+    }
+
+
+    @Test fun `cached resolution returns direct files without touching cloud library`() {
+        val h = Harness().apply { cacheHit = true }
+        h.account.saved.put("existing", "keep-me")
+        val prepared = h.api.prepare(source.copy(cached = true), movie)
+        assertNull(prepared.requestId)
+        assertEquals("https://files.example/Movie.mkv", prepared.files.single().url)
+        assertEquals(listOf("POST cache/info", "POST cache/download"), h.calls)
+        assertEquals("magnet:?xt=urn:btih:$hash", h.fields.last()!!.getString("url"))
+        assertEquals("{\"existing\":\"keep-me\"}", h.account.saved.toString())
+        assertTrue(h.api.owns(prepared))
+    }
+
+    @Test fun `newly cached selection avoids creating an uncached transfer`() {
+        val h = Harness().apply { cacheHit = true }
+        assertNull(h.api.prepare(source, movie).requestId)
+        assertFalse(h.calls.any { it.contains("cloud") })
+    }
+
+    @Test fun `stale cache hit cannot silently create a cloud download`() {
+        val h = Harness()
+        assertThrows(IllegalStateException::class.java) { h.api.prepare(source.copy(cached = true), movie) }
+        assertEquals(listOf("POST cache/info"), h.calls)
+        assertEquals(0, h.account.saved.length())
+    }
+
+    @Test fun `cached resolution failures never fall back to cloud transfers`() {
+        listOf("{\"error\":\"unavailable\"}", "[]", "{\"files\":[]}", "[\"http://files.example/Movie.mkv\"]").forEach { payload ->
+            val h = Harness().apply { cacheHit = true }
+            h.override = { if (it == "cache/download") payload else null }
+            assertThrows(Exception::class.java) { h.api.prepare(source.copy(cached = true), movie) }
+            assertFalse(h.calls.any { it.contains("cloud") })
+            assertEquals(0, h.account.saved.length())
+        }
+    }
+
+    @Test fun `cached packs retain episode matching and version choices`() {
+        val h = Harness().apply { cacheHit = true }
+        h.files = """["https://files.example/Show.S01E01.mkv","https://files.example/Show.S01E02.1080p.mkv","https://files.example/Show.S01E02.2160p.mkv","https://files.example/sample.mkv"]"""
+        val prepared = h.api.prepare(source.copy(cached = true), PlaybackIdentity("tt1234567", "series", "Show", 1, 2))
+        assertEquals(listOf(1L, 2L), prepared.files.map { it.id })
+        assertFalse(h.calls.any { it.contains("cloud") })
+    }
+
+    @Test fun `account switch during cached resolution rejects prepared links`() {
+        val h = Harness().apply { cacheHit = true }
+        h.override = { if (it == "cache/download") h.account.token = "replacement-secret"; null }
+        assertThrows(IllegalStateException::class.java) { h.api.prepare(source.copy(cached = true), movie) }
+        assertEquals(0, h.account.saved.length())
     }
 
     @Test fun `pending transfer survives timeout and retry never adds it again`() {
@@ -148,7 +201,7 @@ class OffcloudApiTest {
     }
 
     @Test fun `resolver routes Offcloud without touching TorBox`() {
-        val h = Harness()
+        val h = Harness().apply { cacheHit = true }
         val torbox = object : SourceTorBox {
             override fun cached(hashes: List<String>): Set<String> = error("TorBox must not be called")
             override fun addMagnet(hash: String): Long = error("TorBox must not be called")
@@ -187,6 +240,7 @@ class OffcloudApiTest {
         val account = Account()
         val created = java.util.concurrent.atomic.AtomicInteger()
         val api = OffcloudApi(account, { path, _, _, _ -> when (path) {
+            "cache/info" -> """[{"cached":false}]"""
             "cloud" -> { created.incrementAndGet(); """{"requestId":"shared"}""" }
             "cloud/status" -> """{"status":"downloaded"}"""
             "cloud/explore/shared" -> """["https://files.example/Movie.mkv"]"""

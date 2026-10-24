@@ -22,6 +22,7 @@ class SubtitleStyleInstrumentation : Instrumentation() {
         val preferences = SubtitlePreferences(targetContext)
         val previousTransparent = preferences.transparentBackground
         val previousBold = preferences.boldText
+        val previousSize = preferences.sizePercent
         var resultCode = -1
         try {
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)
@@ -39,9 +40,9 @@ class SubtitleStyleInstrumentation : Instrumentation() {
                 })
                 playerView.subtitleView!!.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 30f)
             }
-            fun render(name: String, transparent: Boolean, bold: Boolean) {
+            fun render(name: String, transparent: Boolean, bold: Boolean, size: Int = 100) {
                 runOnMainSync {
-                    preferences.transparentBackground = transparent; preferences.boldText = bold
+                    preferences.transparentBackground = transparent; preferences.boldText = bold; preferences.sizePercent = size
                     preferences.applyTo(playerView)
                     val text = SpannableString("Subtitle style preview\nThe quick brown fox jumps over the lazy dog.").apply {
                         setSpan(BackgroundColorSpan(Color.BLACK), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -59,6 +60,8 @@ class SubtitleStyleInstrumentation : Instrumentation() {
             }
             render("subtitles-original", false, false)
             render("subtitles-transparent-bold", true, true)
+            render("subtitles-small", true, true, 80)
+            render("subtitles-large", true, true, 130)
             val restored = SubtitlePreferences(targetContext)
             check(restored.transparentBackground && restored.boldText)
             report.putBoolean("render_and_persistence_verified", true)
@@ -67,7 +70,7 @@ class SubtitleStyleInstrumentation : Instrumentation() {
             report.putString("error_type", error.javaClass.simpleName)
             resultCode = 0
         } finally {
-            preferences.transparentBackground = previousTransparent; preferences.boldText = previousBold
+            preferences.transparentBackground = previousTransparent; preferences.boldText = previousBold; preferences.sizePercent = previousSize
         }
         finish(resultCode, report)
     }

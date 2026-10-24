@@ -187,8 +187,19 @@ class PlayerActivity : Activity() {
             PlayerSheetChoice("Bold text", preferences.boldText) {
                 preferences.boldText = !preferences.boldText
                 preferences.applyTo(view); InAppPlaybackSession.refreshSubtitleStyle(); showSubtitleStyle()
-            }
+            },
+            PlayerSheetChoice("Subtitle size · ${preferences.sizeLabel}") { showSubtitleSize() }
         ))
+    }
+
+    private fun showSubtitleSize() {
+        val preferences = SubtitlePreferences(this)
+        showSheet("Subtitle size", "Medium keeps the original size.", SubtitlePreferences.SIZES.mapIndexed { index, size ->
+            PlayerSheetChoice(SubtitlePreferences.SIZE_LABELS[index], preferences.sizePercent == size) {
+                preferences.sizePercent = size
+                preferences.applyTo(view); InAppPlaybackSession.refreshSubtitleStyle(); showSubtitleStyle()
+            }
+        })
     }
 
     private fun showBoost() {

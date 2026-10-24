@@ -8,7 +8,8 @@ import org.json.JSONObject
 class TorBoxApi internal constructor(
     private val store: TorBoxCredentials,
     private val transport: (String, String, Map<String, String>, JSONObject?) -> JSONObject = Net::json,
-    private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime
+    private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
+    private val multipart: (String, Map<String, String>, Map<String, String>) -> JSONObject = Net::multipart
 ) {
     constructor(store: SecureStore) : this(object : TorBoxCredentials {
         override fun get(key: String) = store.get(key)
@@ -25,7 +26,7 @@ class TorBoxApi internal constructor(
     fun startDeviceAuth(): DeviceAuth {
         val (generation, account) = synchronized(authStateLock) { devices.clear(); ++authGeneration to credentialGeneration }
         val started = elapsedRealtime()
-        val value = objectData(call("/user/auth/device/start?app=${Net.encode("POV Standalone Android TV")}", authenticated = false))
+        val value = objectData(call("/user/auth/device/start?app=${Net.encode("POV Rajpoot")}", authenticated = false))
         val auth = DeviceAuth(
             required(value, "device_code"), value.optString("code", value.optString("user_code")),
             value.optString("verification_url", value.optString("friendly_verification_url")),
@@ -106,6 +107,100 @@ class TorBoxApi internal constructor(
 
     fun account(): JSONObject = verifyAccount(token())
 
+    fun ownsTag(value: String): Boolean = store.get("torbox.token").let { it.isNotBlank() && tag(it) == value }
+
+    /** Cached-only resolution: resolve direct URLs, then remove only a new entry from this request. */
+    fun prepareCached(source: SourceItem, identity: PlaybackIdentity, selectedFile: CloudFile? = null,
+        progress: (String) -> Unit = {}): PreparedSource.Files = synchronized(cachedLock) {
+        fun trace(stage: String) { runCatching { progress(stage) } }
+        val key = token()
+        val deadline = elapsedRealtime() + 20_000
+        val hash = source.infoHash.lowercase()
+        require(hash.matches(Regex("[a-f0-9]{40}"))) { "Invalid TorBox source identifier." }
+        trace("cache_recheck")
+        check(hash in cached(listOf(hash))) { "This source is no longer cached. Refresh sources." }
+        fun current() {
+            check(store.get("torbox.token") == key) { "The TorBox account changed. Select the source again." }
+            check(elapsedRealtime() < deadline) { "TorBox source preparation took too long. Refresh sources and try again." }
+        }
+        val headers = mapOf("Authorization" to "Bearer $key")
+        fun scoped(path: String, method: String = "GET", body: JSONObject? = null): Any? =
+            unwrap(transport("$BASE$path", method, headers, body))
+        val entries = mutableListOf<JSONObject>()
+        val seen = mutableSetOf<Long>()
+        var offset = 0
+        while (true) {
+            current()
+            trace("library_snapshot")
+            val page = scoped("/torrents/mylist?limit=1000&offset=$offset&bypass_cache=true")
+            val items = when (page) { is JSONArray -> page; null, JSONObject.NULL -> JSONArray(); else -> malformed() }
+            var added = 0
+            for (index in 0 until items.length()) {
+                val item = items.getJSONObject(index)
+                val itemId = item.getLong("id")
+                check(itemId >= 0) { "TorBox returned an invalid library identifier." }
+                if (seen.add(itemId)) { entries += item; added++ }
+            }
+            if (items.length() < 1000) break
+            check(added > 0) { "Could not verify the complete TorBox library. No cached transfer was created." }
+            offset += items.length()
+            check(offset < 100_000) { "The TorBox library is too large to verify safely." }
+        }
+        val existingIds = entries.map { it.getLong("id") }.toSet()
+        val existing = entries.firstOrNull { it.optString("hash").equals(hash, true) }?.getLong("id")
+        current()
+        trace("cached_entry")
+        val id = existing ?: objectData(unwrap(multipart("$BASE/torrents/createtorrent", mapOf(
+            "magnet" to "magnet:?xt=urn:btih:$hash", "seed" to "3", "allow_zip" to "false",
+            "add_only_if_cached" to "true"
+        ), headers))).optLong("torrent_id", -1)
+        check(id >= 0) { "TorBox did not return a torrent identifier." }
+        val owned = id !in existingIds && existing == null
+        try {
+            trace("cached_files")
+            val raw = scoped("/torrents/mylist?id=$id&bypass_cache=true")
+            val item = when (raw) {
+                is JSONObject -> raw
+                is JSONArray -> (0 until raw.length()).mapNotNull { raw.optJSONObject(it) }.firstOrNull { it.optLong("id", -1) == id }
+                else -> null
+            } ?: throw IllegalStateException("TorBox did not return the cached entry. Check your dashboard before retrying.")
+            val folder = parseFolder(item, "torrents")
+            check(folder.id == id) { "TorBox returned a different transfer." }
+            check(folder.ready) { "The cached source is not ready. Refresh sources and try again." }
+            current()
+            val eligible = EpisodeFilename.choices(folder.files.map { VideoCandidate(it.id, it.name, it.size) }, source.title, identity)
+            // Large packs are choices, not a batch download-link request. Resolve one selection.
+            val selected = if (selectedFile != null) {
+                listOf(eligible.filter { it.name == selectedFile.name && it.size == selectedFile.size }.singleOrNull()
+                    ?: throw IllegalStateException("The selected cached file changed or is ambiguous. Refresh sources."))
+            } else if (eligible.size == 1) eligible else emptyList()
+            val urls = selected.associate { file ->
+                current()
+                trace("cached_link")
+                val url = scoped("/torrents/requestdl?token=${Net.encode(key)}&torrent_id=$id&file_id=${file.id}&redirect=false") as? String
+                    ?: malformed()
+                val uri = try { java.net.URI(url) } catch (_: Exception) { null }
+                check(uri != null && uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { "TorBox did not return a secure playback link." }
+                file.id to url
+            }
+            current()
+            val choices = if (selectedFile != null) selected else eligible
+            PreparedSource.Files(folder, choices.map { CloudFile(it.id, it.name, it.size) }, identity,
+                EpisodeFilename.preferredId(choices, source.title), urls, tag(key), hash)
+        } finally {
+            if (owned) {
+                trace("remove_temporary_entry")
+                // The captured account is deliberate: never send an old transfer ID to a newly linked account.
+                val body = JSONObject().put("torrent_id", id).put("operation", "delete")
+                try { scoped("/torrents/controltorrent", "POST", body) }
+                catch (_: Exception) {
+                    try { scoped("/torrents/controltorrent", "POST", body) }
+                    catch (_: Exception) { throw IllegalStateException("TorBox could not remove the temporary cached entry. Check your dashboard before retrying.") }
+                }
+            }
+        }
+    }
+
     fun cloud(kind: String): List<CloudFolder> {
         checkKind(kind)
         val result = mutableListOf<CloudFolder>()
@@ -181,7 +276,7 @@ class TorBoxApi internal constructor(
         if (!value.matches(Regex("[A-Fa-f0-9]{40}|[A-Za-z2-7]{32}"))) {
             throw ApiException(0, "A source contains an invalid torrent identifier.")
         }
-        val response = Net.multipart("$BASE/torrents/createtorrent", mapOf(
+        val response = multipart("$BASE/torrents/createtorrent", mapOf(
             "magnet" to "magnet:?xt=urn:btih:$value", "seed" to "3", "allow_zip" to "false"
         ), authorization())
         val data = objectData(unwrap(response))
@@ -239,6 +334,9 @@ class TorBoxApi internal constructor(
         private const val BASE = "https://api.torbox.app/v1/api"
         private val authStateLock = Any()
         private var credentialGeneration = 0L
+        private val cachedLock = Any()
+        private fun tag(key: String) = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 }
 

@@ -16,7 +16,11 @@ class SourcePreparationTest {
         var streamed = mutableListOf<Long>()
         var missingFirst = false
         var returnedId = 77L
-        override fun cached(hashes: List<String>) = emptySet<String>()
+        var cacheHit = false
+        override fun cached(hashes: List<String>) = if (cacheHit) hashes.toSet() else emptySet<String>()
+        override fun prepareCached(source: SourceItem, identity: PlaybackIdentity) = PreparedSource.Files(
+            CloudFolder(77, "torrents", "Cached", true, files), files, identity, null,
+            files.associate { it.id to "https://media.example.invalid/cached/${it.id}" }, "fixture-tag")
         override fun addMagnet(hash: String): Long { added++; return 77 }
         override fun folder(kind: String, id: Long): CloudFolder {
             lookedUp++
@@ -35,6 +39,19 @@ class SourcePreparationTest {
         var nanos = 0L
         val resolver = SourceResolver({ "" }, cloud, { error("No catalog network request should occur") },
             { nanos }, { delay -> nanos += delay * 1_000_000 })
+    }
+
+    @Test fun `cached sources route to direct prepared links without adding a transfer`() {
+        val h = Harness(); h.cloud.cacheHit = true; h.cloud.files = listOf(file(42, "Movie.mkv"))
+        assertEquals("https://media.example.invalid/cached/42", h.resolver.resolve(source("Movie"), movie))
+        assertEquals(0, h.cloud.added)
+        assertTrue(h.cloud.streamed.isEmpty())
+    }
+
+    @Test fun `stale cached source never silently starts an uncached transfer`() {
+        val h = Harness()
+        failure { h.resolver.prepare(source("Movie").copy(cached = true), movie) }
+        assertEquals(0, h.cloud.added)
     }
 
     @Test fun `three movie cuts remain separate choices and the exact middle filename only suggests focus`() {

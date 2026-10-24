@@ -4,13 +4,19 @@ import android.app.Instrumentation
 import android.os.Bundle
 import dev.pov.tv.data.OffcloudApi
 import dev.pov.tv.data.SecureStore
+import dev.pov.tv.data.Net
+import dev.pov.tv.data.SourceItem
+import dev.pov.tv.data.PlaybackIdentity
+import org.json.JSONObject
 
 /** Explicit ADB diagnostic. Reports booleans/counts only; never credentials or library titles. */
 class OffcloudConnectionInstrumentation : Instrumentation() {
     private var screenshots = false
+    private var verifyCached = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         screenshots = arguments?.getString("capture_screenshots") == "true"
+        verifyCached = arguments?.getString("verify_cached_resolution") == "true"
         start()
     }
 
@@ -31,6 +37,7 @@ class OffcloudConnectionInstrumentation : Instrumentation() {
             report.putString("stage", "cache")
             api.cached(listOf("0".repeat(40)))
             report.putBoolean("cache_endpoint_verified", true)
+            if (verifyCached) verifyCachedResolution(store, api, report)
             report.putString("stage", "complete")
             finish(-1, report)
         } catch (error: Exception) {
@@ -39,6 +46,32 @@ class OffcloudConnectionInstrumentation : Instrumentation() {
             report.putString("safe_error", uiErrorMessage(error))
             finish(0, report)
         }
+    }
+
+    /** Resolves links only; never creates/deletes a cloud transfer or starts playback. */
+    private fun verifyCachedResolution(store: SecureStore, api: OffcloudApi, report: Bundle) {
+        report.putString("stage", "cached_resolution")
+        val before = api.cloud().map { it.id }.toSet()
+        val saved = JSONObject(store.get("offcloud.transfers", "{}"))
+        val hashes = saved.keys().asSequence().filter { it.matches(Regex("[a-f0-9]{40}")) }.take(40).toMutableList()
+        if (hashes.isEmpty()) {
+            // Public Big Buck Bunny catalog sources; inspect cache availability, not media bytes.
+            val streams = Net.json("https://torrentio.strem.fun/stream/movie/tt1254207.json").getJSONArray("streams")
+            for (index in 0 until streams.length()) {
+                val hash = streams.optJSONObject(index)?.optString("infoHash").orEmpty().lowercase()
+                if (hash.matches(Regex("[a-f0-9]{40}"))) hashes += hash
+            }
+        }
+        val hash = hashes.distinct().take(80).chunked(40).asSequence()
+            .flatMap { api.cached(it).asSequence() }.firstOrNull()
+            ?: error("No cached diagnostic source is available. No cloud transfer was created.")
+        val prepared = api.prepare(SourceItem("Cached video", "diagnostic", hash, cached = true),
+            PlaybackIdentity("tt1254207", "movie", "Cached resolution diagnostic"))
+        check(prepared.requestId == null && prepared.files.isNotEmpty()) { "Cached resolution did not return direct files." }
+        report.putBoolean("cached_direct_files_verified", true)
+        report.putInt("cached_file_count", prepared.files.size)
+        report.putBoolean("cloud_history_unchanged", before == api.cloud().map { it.id }.toSet())
+        check(report.getBoolean("cloud_history_unchanged")) { "Cloud history changed during the diagnostic." }
     }
 
     /** Public catalog/appearance only. Temporarily hide local history without changing saved data. */

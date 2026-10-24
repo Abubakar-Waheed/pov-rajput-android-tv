@@ -55,4 +55,12 @@ class SubtitlePreferencesTest {
         assertEquals(base.edgeColor, style.edgeColor)
         assertTrue(style.typeface!!.isBold)
     }
+    @Test fun `medium preserves original size and selected size survives recreation`() {
+        val first = SubtitlePreferences(context)
+        assertEquals(100, first.sizePercent)
+        first.sizePercent = 130
+        assertEquals(130, SubtitlePreferences(context).sizePercent)
+        first.sizePercent = 80
+        assertEquals("Small · 80%", SubtitlePreferences(context).sizeLabel)
+    }
 }

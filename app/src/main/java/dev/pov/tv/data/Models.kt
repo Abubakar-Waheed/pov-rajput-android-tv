@@ -67,7 +67,7 @@ sealed interface PreparedSource {
     data class Direct(val url: String, override val identity: PlaybackIdentity) : PreparedSource
 
     data class OffcloudFiles(
-        val requestId: String,
+        val requestId: String?,
         val files: List<OffcloudFile>,
         override val identity: PlaybackIdentity,
         val preferredFileId: Long?,
@@ -78,7 +78,10 @@ sealed interface PreparedSource {
         val folder: CloudFolder,
         val files: List<CloudFile>,
         override val identity: PlaybackIdentity,
-        val preferredFileId: Long?
+        val preferredFileId: Long?,
+        val resolvedUrls: Map<Long, String> = emptyMap(),
+        val accountTag: String? = null,
+        val sourceInfoHash: String? = null
     ) : PreparedSource {
         /** An exact filename can suggest focus, but never hides other available versions. */
         val automaticFile: CloudFile? get() = files.singleOrNull()

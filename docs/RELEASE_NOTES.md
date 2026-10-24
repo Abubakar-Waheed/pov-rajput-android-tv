@@ -1,18 +1,21 @@
-# POV Offcloud 0.2.5 — Subtitle style options
+# POV Rajpoot 0.2.6
 
-Rajpoot's subtitle update follows the first GitHub release, 0.2.4.
-
-- Added independent **Transparent background** and **Bold text** switches.
-- Open **Settings → Subtitle style**, or during playback open **Subtitles → Subtitle style** (also available from the remote Menu button).
-- Choices are saved on this TV and apply immediately to text subtitles in fullscreen and the mini player.
-- Transparent mode removes subtitle text/window boxes and keeps an outline when needed for readability.
-- Both options default to off, preserving the original caption styling. Turning both off restores embedded and Android caption styles.
-- Image-based and burned-in subtitles keep their original appearance. Custom styles can override text subtitle fonts/colors supplied by the video.
+- Renamed the app to **POV Rajpoot**, with package ID `dev.pov.tv.rajpoot`.
+- Added direct cached-file resolution for Offcloud without creating a cloud-dashboard entry. Cached resolution failures do not silently create downloads.
+- TorBox resolves direct cached-file links and removes newly created cached entries before playback. Existing library items are reused and retained.
+- Cached TorBox packs show file/version choices first, then resolve only the selected video.
+- Uncached downloads remain in the cloud library.
+- Added **Small (80%)**, **Medium (100%)**, and **Large (130%)** text subtitle sizes. Medium preserves the original size.
+- Transparent subtitle backgrounds and bold text remain available in Settings and the player subtitle menu.
 
 ## Install
 
-Android TV 8.0 or later. Install `POV-Offcloud-release.apk` over the existing POV Offcloud app. No personal API key or account is bundled.
+Android TV 8.0 or later. Download `POV-Rajpoot-release.apk`.
+
+The new package installs separately from POV Offcloud. Connect your debrid and tracking accounts in POV Rajpoot; existing account settings remain with the old app.
+
+TorBox may briefly show a temporary entry while cached links are resolved. If removal fails, an error is shown and the entry may need removal from the dashboard. Offcloud uses its direct cached-download endpoint without creating a cloud entry.
 
 ## Credits and source
 
-Offcloud edition and subtitle options: **Rajpoot**. Original standalone Android TV app: **Mark Mateo / MM-482** ([source](https://github.com/MM-482/pov-android-tv)). Original POV Kodi add-on: **kodifitzwell** ([source](https://github.com/kodifitzwell/repo)). GPL-3.0; original history, license, and acknowledgments are preserved.
+Maintained by **Rajpoot**. Original Android TV application: **Mark Mateo / MM-482** ([source](https://github.com/MM-482/pov-android-tv)). Original POV Kodi add-on: **kodifitzwell** ([source](https://github.com/kodifitzwell/repo)). GPL-3.0; original history, license, and acknowledgments are preserved.

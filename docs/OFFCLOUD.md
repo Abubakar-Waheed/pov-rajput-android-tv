@@ -1,10 +1,10 @@
-# POV Offcloud by Rajpoot
+# POV Rajpoot
 
-POV Offcloud is based on the [Android TV application by Mark Mateo / MM-482](https://github.com/MM-482/pov-android-tv), with Offcloud integration by Rajpoot.
+POV Rajpoot is based on the [Android TV application by Mark Mateo / MM-482](https://github.com/MM-482/pov-android-tv), with Offcloud integration by Rajpoot.
 
 ## Install and connect
 
-1. Sideload the APK on Android TV 8.0 or later. It appears as **POV Offcloud** and uses application ID `dev.pov.tv.offcloud`, so it can coexist with the original POV app.
+1. Sideload the APK on Android TV 8.0 or later. It appears as **POV Rajpoot** and uses application ID `dev.pov.tv.rajpoot`, so it can coexist with the original POV app.
 2. Open **Settings → Connect Offcloud with API key**.
 3. Enter your own API key from your Offcloud account settings. A successful connection selects Offcloud as the playback service.
 4. Browse a movie or episode, open its sources, and select a source. For an uncached transfer, confirm adding it to your Offcloud account.
@@ -17,7 +17,7 @@ POV Offcloud is based on the [Android TV application by Mark Mateo / MM-482](htt
 
 The APK and source contain no personal API key. Keys and locally remembered transfer IDs use the existing Android Keystore-backed encrypted account storage; Android backup is disabled. Keys are sent only to the fixed HTTPS Offcloud API origin. The source provider receives the catalog identifier, but never the Offcloud key. API redirects are rejected. Error messages do not include raw server responses, request URLs, or credentials.
 
-Disconnecting Offcloud removes its locally saved key and request map. It does not delete downloads from the Offcloud account. Changing to another API key clears the local request map and invalidates previously prepared file choices. The cloud-library screen can still retrieve existing account downloads after reconnecting.
+Cached sources use the direct cache/download endpoint and do not create cloud transfers. Uncached downloads remain in your library. Existing account downloads are retained. Disconnecting Offcloud removes its locally saved key and request map. It does not delete downloads from the Offcloud account. Changing to another API key clears the local request map and invalidates previously prepared file choices. The cloud-library screen can still retrieve existing account downloads after reconnecting.
 
 Selecting a source may create an Offcloud cloud download and consume the account's storage or usage allowance. Cache checks and cloud-library browsing do not create transfers. Service availability and account limits depend on Offcloud. This integration does not bypass those limits.
 

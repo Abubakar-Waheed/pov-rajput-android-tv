@@ -18,6 +18,7 @@ class SourceResolver internal constructor(
         override fun addMagnet(hash: String) = torbox.addMagnet(hash)
         override fun folder(kind: String, id: Long) = torbox.folder(kind, id)
         override fun streamUrl(kind: String, folderId: Long, fileId: Long) = torbox.streamUrl(kind, folderId, fileId)
+        override fun prepareCached(source: SourceItem, identity: PlaybackIdentity) = torbox.prepareCached(source, identity)
     }, offcloud = { if (store.get("playback.service") == "offcloud") OffcloudApi(store) else null })
     /** Fetching choices is read-only: checking the selected service cache never creates a transfer. */
     fun sources(identity: PlaybackIdentity): List<SourceItem> {
@@ -92,6 +93,8 @@ class SourceResolver internal constructor(
         offcloud()?.let { return it.prepare(source, identity) }
         val hash = source.infoHash.lowercase(Locale.ROOT)
         require(HASH.matches(hash)) { "The selected source has no valid torrent hash." }
+        if (hash in torbox.cached(listOf(hash))) return torbox.prepareCached(source, identity)
+        check(!source.cached) { "This source is no longer cached. Refresh sources before starting a cloud download." }
         val transfer = torbox.addMagnet(hash)
         // Cached transfers normally expose files immediately. Uncached transfers stay in TorBox;
         // a bounded wait keeps the UI from spinning indefinitely and never deletes user transfers.
@@ -126,7 +129,8 @@ class SourceResolver internal constructor(
             ?: throw IllegalStateException("Choose a video file before playing.")
         is PreparedSource.Files -> {
             val file = prepared.automaticFile ?: throw IllegalStateException("This source contains multiple video versions. Choose a video file before playing.")
-            val url = torbox.streamUrl(prepared.folder.kind, prepared.folder.id, file.id)
+            val url = if (prepared.accountTag != null) prepared.resolvedUrls.getValue(file.id)
+                else torbox.streamUrl(prepared.folder.kind, prepared.folder.id, file.id)
             require(isHttps(url)) { "TorBox did not return a supported HTTPS playback link." }
             url
         }
@@ -168,6 +172,8 @@ internal interface SourceTorBox {
     fun addMagnet(hash: String): Long
     fun folder(kind: String, id: Long): CloudFolder
     fun streamUrl(kind: String, folderId: Long, fileId: Long): String
+    fun prepareCached(source: SourceItem, identity: PlaybackIdentity): PreparedSource.Files =
+        error("Cached TorBox resolution is unavailable.")
 }
 
 /** File selection intentionally does not equate a provider's zero-based fileIdx with a TorBox file id. */

@@ -18,6 +18,11 @@ internal class SubtitlePreferences(context: Context) {
         get() = preferences.getBoolean("bold_text", false)
         set(value) { preferences.edit().putBoolean("bold_text", value).apply() }
 
+    var sizePercent: Int
+        get() = preferences.getInt("size_percent", 100).takeIf { it in SIZES } ?: 100
+        set(value) { require(value in SIZES); preferences.edit().putInt("size_percent", value).apply() }
+    val sizeLabel: String get() = SIZE_LABELS[SIZES.indexOf(sizePercent)]
+
     internal fun style(base: CaptionStyleCompat): CaptionStyleCompat = CaptionStyleCompat(
         base.foregroundColor,
         if (transparentBackground) Color.TRANSPARENT else base.backgroundColor,
@@ -34,12 +39,20 @@ internal class SubtitlePreferences(context: Context) {
         // Embedded cue spans/windows can override background and font weight. Restore them
         // when both options are off, keeping the original rendering as the default.
         subtitles.setApplyEmbeddedStyles(!override)
+        subtitles.setApplyEmbeddedFontSizes(!override && sizePercent == 100)
+        val captions = view.context.getSystemService(Context.CAPTIONING_SERVICE) as? CaptioningManager
+        subtitles.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION *
+            sizePercent / 100f * (captions?.fontScale ?: 1f))
         if (!override) {
             subtitles.setUserDefaultStyle()
             return
         }
-        val captions = view.context.getSystemService(Context.CAPTIONING_SERVICE) as? CaptioningManager
         val base = captions?.userStyle?.let(CaptionStyleCompat::createFromCaptionStyle) ?: CaptionStyleCompat.DEFAULT
         subtitles.setStyle(style(base))
+    }
+
+    companion object {
+        val SIZES = listOf(80, 100, 130)
+        val SIZE_LABELS = listOf("Small · 80%", "Medium · 100%", "Large · 130%")
     }
 }

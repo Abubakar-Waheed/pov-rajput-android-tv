@@ -7,11 +7,11 @@ android {
     namespace = "dev.pov.tv"
     compileSdk = 35
     defaultConfig {
-        applicationId = "dev.pov.tv.offcloud"
+        applicationId = "dev.pov.tv.rajpoot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.2.5-offcloud"
+        versionCode = 11
+        versionName = "0.2.6-rajpoot"
         testInstrumentationRunner = providers.gradleProperty("povTestRunner")
             .orElse("dev.pov.tv.PlaybackAuditInstrumentation").get()
     }
