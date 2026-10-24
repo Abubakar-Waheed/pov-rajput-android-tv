@@ -74,6 +74,10 @@ All connected debrid services are checked together. A source cached on both uses
 
 Source cards show quality and provider-reported file size. Open **Settings → Source sorting**, or **Sort** above the results, to choose highest/lowest quality first and smallest/largest files within each quality. The default is highest quality first, then smallest files first. Unavailable metadata appears last; changing the order reuses the fetched results.
 
+Bold rounded badges highlight quality, size, and explicit release tags such as DV, HDR, WEB-DL, REMUX, and codecs. 4K is yellow, 1080p red, and 720p purple. Format badges reflect the source's metadata; the full filename remains below them.
+
+![Source quality, file size and release badges](docs/screenshots/source-badges.png)
+
 Offcloud cached sources resolve directly without adding a cloud-dashboard entry. If no connected service can resolve a cached source, the app reports an error instead of silently creating a download. Uncached sources still ask for confirmation before adding a cloud download, which stays in your library. Existing downloads are retained.
 
 TorBox resolves direct links and removes newly created cached entries before playback begins. Cached packs let you choose a video before its playback link is resolved. A temporary entry can appear during resolution. Existing library entries are reused and retained. Uncached downloads remain in your library. If cleanup fails, the app reports an error; a temporary entry may need removal from the dashboard.

@@ -919,7 +919,7 @@ class MainActivity : Activity() {
                 else -> "TRANSFER MAY BE NEEDED"
             }
             choices.addChoice(TvChoiceRow(this, TvChoiceKeys.source(source), source.title, source.detail,
-                "${SourceMetadata.qualityLabel(source.qualityHeight)} · ${SourceMetadata.sizeLabel(source.sizeBytes)} · $status · ${source.provider}", theme.palette) {
+                "$status · ${source.provider}", theme.palette, SourceBadges.from(source)) {
                 if (!source.cached && source.directUrl.isEmpty()) {
                     val service = connected.first()
                     confirm("Add this source to your ${DebridServices.name(service)} account? A transfer may need time to finish.") {

@@ -59,16 +59,17 @@ internal class TvChoiceRow(
     detail: String = "",
     eyebrow: String = "",
     palette: ThemePalette = ThemeSpec.CINEMATIC.palette,
+    badges: List<SourceBadge> = emptyList(),
     action: () -> Unit,
 ) : FrameLayout(context) {
     private fun px(value: Int) = (value * resources.displayMetrics.widthPixels / 960f).roundToInt().coerceAtLeast(1)
-    val cardHeight = px(if (eyebrow.isBlank()) 79 else 101)
+    val cardHeight = if (badges.isNotEmpty()) LayoutParams.WRAP_CONTENT else px(if (eyebrow.isBlank()) 79 else 101)
     val gap = px(9)
     private val labels = mutableListOf<TextView>()
 
     init {
         tag = key
-        contentDescription = listOf(eyebrow, title, detail).filter(String::isNotBlank).joinToString(". ")
+        contentDescription = (badges.map { it.label } + listOf(eyebrow, title, detail)).filter(String::isNotBlank).joinToString(". ")
         isFocusable = true
         isFocusableInTouchMode = true
         isClickable = true
@@ -96,10 +97,11 @@ internal class TvChoiceRow(
             setHorizontallyScrolling(false)
             labels += this
         }
+        if (badges.isNotEmpty()) column.addView(SourceBadgeStrip(context, badges), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(7) })
         if (eyebrow.isNotBlank()) column.addView(label(eyebrow, 10, 1, true), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(5) })
         column.addView(label(title, 14, 2, true), LinearLayout.LayoutParams(-1, -2))
         if (detail.isNotBlank()) column.addView(label(detail, 11, 1, false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(5) })
-        addView(column, LayoutParams(-1, -1))
+        addView(column, LayoutParams(-1, if (badges.isNotEmpty()) LayoutParams.WRAP_CONTENT else -1))
         fun paint(focused: Boolean) {
             background = GradientDrawable().apply {
                 setColor(if (focused) palette.accent else palette.panel)
