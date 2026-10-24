@@ -5,7 +5,9 @@
 - TorBox resolves direct cached-file links and removes newly created cached entries before playback. Existing library items are reused and retained.
 - Cached TorBox packs show file/version choices first, then resolve only the selected video.
 - Uncached downloads remain in the cloud library.
-- Added **Small (80%)**, **Medium (100%)**, and **Large (130%)** text subtitle sizes. Medium preserves the original size.
+- Added **Small**, **Medium**, and **Large** text subtitle sizes, with simple labels. Medium preserves the original size.
+- Connected Offcloud and TorBox accounts are searched together. Choose the order in **Settings → Debrid priority**. Shared cached sources use your preferred service; sources cached only on the other service use that service automatically.
+- Both cloud libraries are available from Library. Cached results list every service that has the source.
 - Transparent subtitle backgrounds and bold text remain available in Settings and the player subtitle menu.
 
 ## Install

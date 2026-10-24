@@ -61,6 +61,6 @@ class SubtitlePreferencesTest {
         first.sizePercent = 130
         assertEquals(130, SubtitlePreferences(context).sizePercent)
         first.sizePercent = 80
-        assertEquals("Small · 80%", SubtitlePreferences(context).sizeLabel)
+        assertEquals("Small", SubtitlePreferences(context).sizeLabel)
     }
 }

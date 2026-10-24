@@ -57,7 +57,9 @@ data class DeviceAuth(
 data class SourceItem(
     val title: String, val provider: String, val infoHash: String = "",
     val fileIndex: Int? = null, val directUrl: String = "", val cached: Boolean = false,
-    val detail: String = ""
+    val detail: String = "",
+    val cachedServices: List<String> = emptyList(),
+    val downloadService: String? = null
 )
 
 /** A selected source either streams directly or offers stable TorBox file identities. */

@@ -53,6 +53,6 @@ internal class SubtitlePreferences(context: Context) {
 
     companion object {
         val SIZES = listOf(80, 100, 130)
-        val SIZE_LABELS = listOf("Small · 80%", "Medium · 100%", "Large · 130%")
+        val SIZE_LABELS = listOf("Small", "Medium", "Large")
     }
 }

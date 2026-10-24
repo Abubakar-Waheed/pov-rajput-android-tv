@@ -273,15 +273,20 @@ class MainActivity : Activity() {
     }
 
     private fun updateBadge() {
-        val service = try { if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox" } catch (_: Exception) { "TorBox" }
-        val box = !publicPreview && try { store.has(if (service == "Offcloud") "offcloud.key" else "torbox.token") } catch (_: Exception) { false }
-        val tracked = !publicPreview && try { trakt.connected() } catch (_: Exception) { false }
-        val value = android.text.SpannableString("●  $service    ●  Trakt")
-        value.setSpan(android.text.style.ForegroundColorSpan(if (box) theme.palette.success else muted), 0, 1, 0)
-        val secondDot = value.toString().indexOf('●', 1)
-        value.setSpan(android.text.style.ForegroundColorSpan(if (tracked) theme.palette.success else muted), secondDot, secondDot + 1, 0)
+        val states = DebridServices.IDS.map { service ->
+            DebridServices.name(service) to (!publicPreview && try {
+                store.has(if (service == "offcloud") "offcloud.key" else "torbox.token")
+            } catch (_: Exception) { false })
+        } + ("Trakt" to (!publicPreview && try { trakt.connected() } catch (_: Exception) { false }))
+        val value = android.text.SpannableString(states.joinToString("    ") { "●  ${it.first}" })
+        var position = 0
+        states.forEach { (name, connected) ->
+            val dot = value.toString().indexOf('●', position)
+            value.setSpan(android.text.style.ForegroundColorSpan(if (connected) theme.palette.success else muted), dot, dot + 1, 0)
+            position = dot + name.length + 3
+        }
         badge.text = value
-        badge.contentDescription = "$service ${if (box) "linked" else "not linked"}. Trakt ${if (tracked) "linked" else "not linked"}."
+        badge.contentDescription = states.joinToString(". ") { "${it.first} ${if (it.second) "linked" else "not linked"}" }
     }
     private fun navigate(screen: () -> Unit) {
         backStack.addLast(NavigationSnapshot(current, focusController.capture(), destination))
@@ -474,9 +479,11 @@ class MainActivity : Activity() {
         library.addView(button("▣   Shows     ›") { navigate { catalogPage("series") } }, margin(-1, 44, bottom = 6))
         library.addView(button("☁   Cloud library  ›") { navigate { selectedCloud() } }, margin(-1, 44))
         lower.addView(library, margin(247, -2)); body.addView(lower)
-        val cloudService = if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox"
-        val cloudKey = if (cloudService == "Offcloud") "offcloud.key" else "torbox.token"
-        body.addView(text("$cloudService ${if (!publicPreview && store.has(cloudKey)) "connected" else "not linked"}     ·     Trakt ${if (!publicPreview && trakt.connected()) "connected" else "not linked"}", 12, muted).apply {
+        val connectionStatus = DebridServices.IDS.joinToString("     ·     ") { service ->
+            val connected = !publicPreview && store.has(if (service == "offcloud") "offcloud.key" else "torbox.token")
+            "${DebridServices.name(service)} ${if (connected) "connected" else "not linked"}"
+        }
+        body.addView(text("$connectionStatus     ·     Trakt ${if (!publicPreview && trakt.connected()) "connected" else "not linked"}", 12, muted).apply {
             background = rounded(panel, 9); setPadding(dp(20), dp(12), dp(20), dp(12))
         }, margin(-1, -2, top = 14))
     }
@@ -860,19 +867,31 @@ class MainActivity : Activity() {
     private fun showSources(identity: PlaybackIdentity) {
         current = { showSources(identity) }
         val suffix = if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""
-        val service = if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox"
-        val id = page(identity.title + suffix, "Choose a source to play through $service.")
-        if (!store.has(if (service == "Offcloud") "offcloud.key" else "torbox.token")) {
-            body.addView(button("Connect $service in Settings") { navigate { settings() } }, margin(250, 44)); return
+        val connected = DebridServices.connected(store)
+        val order = connected.joinToString(" → ") { DebridServices.name(it) }
+        val id = page(identity.title + suffix, if (connected.isEmpty()) "Connect a debrid service to find playable sources." else "Cached source priority: $order.")
+        if (connected.isEmpty()) {
+            body.addView(button("Connect Offcloud or TorBox in Settings") { navigate { settings() } }, margin(310, 44)); return
         }
         read(id, { resolver.sources(identity) }) { sources ->
             if (sources.isEmpty()) body.addView(text("No sources were returned. Try again later or check the source provider in Settings.", 15, muted))
             val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
-            sources.distinctBy(TvChoiceKeys::source).take(70).forEach { source ->
-                val status = if (source.cached) "READY IN ${service.uppercase()}" else if (source.directUrl.isNotEmpty()) "DIRECT STREAM" else "TRANSFER MAY BE NEEDED"
+            sources.distinctBy(TvChoiceKeys::source).forEach { source ->
+                val cachedOn = source.cachedServices.map(DebridServices::name)
+                val status = when {
+                    source.directUrl.isNotEmpty() -> "DIRECT STREAM"
+                    cachedOn.size > 1 -> "CACHED · ${cachedOn.joinToString(" + ")} · Plays via ${cachedOn.first()}"
+                    cachedOn.isNotEmpty() -> "CACHED · ${cachedOn.first()}"
+                    else -> "TRANSFER MAY BE NEEDED"
+                }
                 choices.addChoice(TvChoiceRow(this, TvChoiceKeys.source(source), source.title, source.detail,
                     "$status   ·   ${source.provider}", theme.palette) {
-                    if (!source.cached && source.directUrl.isEmpty()) confirm("Add this source to your $service account? A transfer may need time to finish.") { resolve(source, identity) }
+                    if (!source.cached && source.directUrl.isEmpty()) {
+                        val service = connected.first()
+                        confirm("Add this source to your ${DebridServices.name(service)} account? A transfer may need time to finish.") {
+                            resolve(source.copy(downloadService = service), identity)
+                        }
+                    }
                     else resolve(source, identity)
                 })
             }
@@ -928,7 +947,7 @@ class MainActivity : Activity() {
     }
 
     private fun playOffcloudFile(prepared: PreparedSource.OffcloudFiles, file: OffcloudFile) {
-        if (store.get("playback.service") != "offcloud" || !OffcloudApi(store).owns(prepared)) {
+        if (!OffcloudApi(store).owns(prepared)) {
             toast("Connect Offcloud and select the source again"); return
         }
         val identity = prepared.identity
@@ -955,7 +974,7 @@ class MainActivity : Activity() {
     private fun playPreparedFile(prepared: PreparedSource.Files, file: CloudFile) {
         val identity = prepared.identity
         prepared.accountTag?.let { tag ->
-            if (store.get("playback.service") == "offcloud" || !torbox.ownsTag(tag)) {
+            if (!torbox.ownsTag(tag)) {
                 toast("Connect TorBox and select the source again"); return
             }
             val key = "media:${identity.imdbId}:${identity.season}:${identity.episode}"
@@ -974,7 +993,19 @@ class MainActivity : Activity() {
     }
 
     private fun selectedCloud() {
-        if (store.get("playback.service") == "offcloud") offcloudCloud() else cloud("torrents")
+        val services = DebridServices.connected(store)
+        if (services.size == 1) {
+            if (services.first() == "offcloud") offcloudCloud() else cloud("torrents")
+            return
+        }
+        current = { selectedCloud() }; destination = "library"; refreshNavigation()
+        page("Cloud library", "Choose a connected service to browse its downloads.")
+        if (services.isEmpty()) body.addView(button("Connect Offcloud or TorBox in Settings") { navigate { settings() } }, margin(-1, 44))
+        services.forEach { service ->
+            body.addView(button("${DebridServices.name(service)} cloud  ›") {
+                navigate { if (service == "offcloud") offcloudCloud() else cloud("torrents") }
+            }, margin(-1, 44, bottom = 8))
+        }
     }
 
     private fun offcloudCloud() {
@@ -1232,17 +1263,19 @@ class MainActivity : Activity() {
         if (offcloud.connected()) body.addView(button("Disconnect Offcloud") {
             confirm("Disconnect Offcloud on this device?") {
                 offcloud.disconnect()
-                if (store.get("playback.service") == "offcloud") store.put("playback.service", "torbox")
                 settings(); updateBadge()
             }
         }, margin(-1, 44, bottom = 8))
-        val playbackService = if (store.get("playback.service") == "offcloud") "Offcloud" else "TorBox"
-        body.addView(button("Playback service · $playbackService · change") {
-            AlertDialog.Builder(this).setTitle("Playback service")
-                .setItems(arrayOf("TorBox", "Offcloud")) { _, choice ->
-                    store.put("playback.service", if (choice == 1) "offcloud" else "torbox"); settings(); updateBadge()
+        val priority = DebridServices.priority(store)
+        body.addView(button("Debrid priority · ${priority.joinToString(" → ") { DebridServices.name(it) }}") {
+            AlertDialog.Builder(this).setTitle("Debrid priority")
+                .setSingleChoiceItems(arrayOf("Offcloud first, TorBox second", "TorBox first, Offcloud second"),
+                    if (priority.first() == "offcloud") 0 else 1) { dialog, choice ->
+                    DebridServices.prefer(store, if (choice == 0) "offcloud" else "torbox")
+                    dialog.dismiss(); settings(); updateBadge()
                 }.setNegativeButton("Cancel", null).show()
         }, margin(-1, 44, bottom = 8))
+        body.addView(text("Both connected accounts are checked. Cached copies use the first available service in your priority order.", 12, muted), margin(-1, -2, bottom = 10))
         body.addView(button("Use TorBox API key") { inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { updateBadge(); toast("TorBox connected"); settings() } } }, margin(-1, 44, bottom = 8))
         if (store.has("torbox.token")) body.addView(button("Disconnect TorBox") { confirm("Disconnect TorBox on this device?") { torbox.disconnect(); settings(); updateBadge() } }, margin(-1, 44, bottom = 8))
         body.addView(button(if (trakt.connected()) "Trakt · connected · reconnect" else "Connect Trakt") { startTrakt() }, margin(-1, 44, bottom = 8))
@@ -1285,7 +1318,8 @@ class MainActivity : Activity() {
                     OffcloudApi(store).setApiKey(key) { cancelled.get() }
                     runOnUiThread {
                         if (dialog.isShowing && request == generation && !isFinishing && !isDestroyed) {
-                            store.put("playback.service", "offcloud"); dialog.dismiss()
+                            if (store.get("playback.priority").isBlank() && !store.has("torbox.token")) store.put("playback.service", "offcloud")
+                            dialog.dismiss()
                             updateBadge(); toast("Offcloud connected"); settings()
                         }
                     }

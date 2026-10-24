@@ -16,7 +16,7 @@ This is **Rajpoot's Android TV edition**, forked from [MM-482/pov-android-tv](ht
 - Added Offcloud API-key connection with Android Keystore encryption.
 - Updated account validation to the current account API and Bearer authorization, replacing the retired proxy endpoint.
 - Added JSON cache checks, cloud transfer preparation, download-status polling, cloud-history browsing, and exact file selection.
-- Added Offcloud/TorBox service selection, safe episode matching, duplicate-transfer prevention, and retry reuse for pending downloads.
+- Added combined Offcloud/TorBox cache searches and selectable debrid priority, safe episode matching, duplicate-transfer prevention, and retry reuse for pending downloads.
 - Improved the connection dialog with visible progress/errors and retained input when validation fails.
 - Added account-change/cancellation guards and read-only ADB diagnostics that do not expose keys or playback links.
 - Added transparent backgrounds, bold text, and Small/Medium/Large subtitle sizes for fullscreen and mini-player playback.
@@ -61,19 +61,21 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 4. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
 5. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 
-Use **Settings → Playback service** to switch to TorBox. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package.
+Connect TorBox as well to search both caches together. Set **Settings → Debrid priority** to choose **Offcloud first** or **TorBox first**. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package.
 
 From version 0.2.6, the app is named **POV Rajpoot**, with package ID `dev.pov.tv.rajpoot`. It installs separately from POV Offcloud. Reconnect your accounts in the new app; account settings remain with the old package.
 
 ## Cached playback and cloud downloads
 
-Offcloud cached sources resolve directly without adding a cloud-dashboard entry. If a cached source becomes unavailable, the app reports an error instead of silently creating a download. Uncached sources still ask for confirmation before adding a cloud download, which stays in your library. Existing downloads are retained.
+All connected debrid services are checked together. A source cached on both uses your priority order. A source cached only on the second service plays through that service without switching Settings. A failed resolver can try another confirmed cached service, and cached failures never silently start an uncached download.
+
+Offcloud cached sources resolve directly without adding a cloud-dashboard entry. If no connected service can resolve a cached source, the app reports an error instead of silently creating a download. Uncached sources still ask for confirmation before adding a cloud download, which stays in your library. Existing downloads are retained.
 
 TorBox resolves direct links and removes newly created cached entries before playback begins. Cached packs let you choose a video before its playback link is resolved. A temporary entry can appear during resolution. Existing library entries are reused and retained. Uncached downloads remain in your library. If cleanup fails, the app reports an error; a temporary entry may need removal from the dashboard.
 
 ## Subtitle style
 
-Open **Settings → Subtitle style** or **Subtitles → Subtitle style** during playback. Enable **Transparent background** and/or **Bold text**. Choices are saved on-device and work with text subtitles in fullscreen and the mini player. Background transparency and bold text default to off. Size defaults to **Medium (100%)**, with **Small (80%)** and **Large (130%)** available. Image-based and burned-in subtitles retain their original appearance.
+Open **Settings → Subtitle style** or **Subtitles → Subtitle style** during playback. Enable **Transparent background** and/or **Bold text**. Choices are saved on-device and work with text subtitles in fullscreen and the mini player. Background transparency and bold text default to off. Size defaults to **Medium**, with **Small** and **Large** available. Image-based and burned-in subtitles retain their original appearance.
 
 Text subtitle appearance using a sample caption:
 
@@ -81,7 +83,7 @@ Text subtitle appearance using a sample caption:
 | --- | --- |
 | ![Original subtitle style](docs/screenshots/subtitles-original.png) | ![Transparent bold subtitles](docs/screenshots/subtitles-transparent-bold.png) |
 
-| Small (80%) | Medium (100%) | Large (130%) |
+| Small | Medium | Large |
 | --- | --- | --- |
 | ![Small subtitles](docs/screenshots/subtitles-small.png) | ![Medium subtitles](docs/screenshots/subtitles-medium.png) | ![Large subtitles](docs/screenshots/subtitles-large.png) |
 

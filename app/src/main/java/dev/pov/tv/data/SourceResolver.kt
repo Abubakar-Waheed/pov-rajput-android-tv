@@ -4,14 +4,15 @@ import java.net.URI
 import java.util.Locale
 import org.json.JSONObject
 
-/** Stremio stream adapter; torrent transfers run in the selected cloud service, never on-device. */
+/** Stremio sources with combined debrid caches and preference-ordered cloud resolution. */
 class SourceResolver internal constructor(
     private val sourceEndpoint: () -> String,
     private val torbox: SourceTorBox,
     private val publicJson: (String) -> JSONObject = { Net.json(it) },
     private val monotonicNanos: () -> Long = System::nanoTime,
     private val pause: (Long) -> Unit = Thread::sleep,
-    private val offcloud: () -> OffcloudApi? = { null }
+    private val offcloud: () -> OffcloudApi? = { null },
+    private val serviceOrder: (() -> List<String>)? = null
 ) {
     constructor(store: SecureStore, torbox: TorBoxApi) : this({ store.get("sources.endpoint") }, object : SourceTorBox {
         override fun cached(hashes: List<String>) = torbox.cached(hashes)
@@ -19,8 +20,8 @@ class SourceResolver internal constructor(
         override fun folder(kind: String, id: Long) = torbox.folder(kind, id)
         override fun streamUrl(kind: String, folderId: Long, fileId: Long) = torbox.streamUrl(kind, folderId, fileId)
         override fun prepareCached(source: SourceItem, identity: PlaybackIdentity) = torbox.prepareCached(source, identity)
-    }, offcloud = { if (store.get("playback.service") == "offcloud") OffcloudApi(store) else null })
-    /** Fetching choices is read-only: checking the selected service cache never creates a transfer. */
+    }, offcloud = { OffcloudApi(store) }, serviceOrder = { DebridServices.connected(store) })
+    /** Fetching choices is read-only: cache checks never create a transfer. */
     fun sources(identity: PlaybackIdentity): List<SourceItem> {
         validateIdentity(identity)
         val endpoint = endpoint(sourceEndpoint())
@@ -61,26 +62,50 @@ class SourceResolver internal constructor(
                     .filter { it.isNotBlank() }.joinToString(" · ").take(800)
             )
         }.distinctBy { Triple(it.infoHash, it.fileIndex, it.directUrl) }
-        val cached = mutableSetOf<String>()
-        var cacheAvailable = true
-        try {
-            choices.map { it.infoHash }.filter { it.isNotBlank() }.distinct().chunked(40).forEach {
-                cached += (offcloud()?.cached(it) ?: torbox.cached(it)).map { hash -> hash.lowercase(Locale.ROOT) }
-            }
-        } catch (_: Exception) {
-            cacheAvailable = false
-        }
+        val availability = checkCaches(activeServices(), choices.map { it.infoHash }.filter { it.isNotBlank() }.distinct())
         return choices.map { source ->
-            source.copy(
-                cached = source.infoHash in cached,
-                detail = if (!cacheAvailable && source.infoHash.isNotBlank() && source.infoHash !in cached) {
-                    listOf(source.detail, "Cache status unavailable").filter { it.isNotBlank() }.joinToString(" · ")
-                } else source.detail
-            )
+            val cachedOn = availability.filter { source.infoHash in it.hashes }.map { it.service }
+            val unavailable = if (source.infoHash.isNotBlank()) availability.filter { it.failed }
+                .map { "${DebridServices.name(it.service)} cache unavailable" } else emptyList()
+            source.copy(cached = cachedOn.isNotEmpty(), cachedServices = cachedOn,
+                detail = (listOf(source.detail) + unavailable).filter { it.isNotBlank() }.joinToString(" · "))
         }.sortedByDescending { it.cached }
     }
 
-    /** Called after a source is selected. May add it to the selected cloud service. */
+    private data class CacheResult(val service: String, val hashes: Set<String>, val failed: Boolean)
+
+    private fun activeServices(): List<String> = (serviceOrder?.invoke()
+        ?: if (offcloud() != null) listOf("offcloud") else listOf("torbox"))
+        .filter { it in DebridServices.IDS }.distinct()
+
+    /** Independent providers run concurrently; a failed cache API cannot hide another provider's hits. */
+    private fun checkCaches(services: List<String>, hashes: List<String>): List<CacheResult> {
+        if (hashes.isEmpty()) return services.map { CacheResult(it, emptySet(), false) }
+        fun probe(service: String): CacheResult {
+            val hits = mutableSetOf<String>()
+            return try {
+                hashes.chunked(40).forEach { batch ->
+                    if (Thread.currentThread().isInterrupted) throw InterruptedException("Source search cancelled.")
+                    val found = if (service == "offcloud") checkNotNull(offcloud()) { "Connect Offcloud in Settings." }.cached(batch)
+                        else torbox.cached(batch)
+                    hits += found.map { it.lowercase(Locale.ROOT) }.filter { it in batch }
+                }
+                CacheResult(service, hits, false)
+            } catch (error: InterruptedException) { throw error }
+            catch (_: Exception) { CacheResult(service, hits, true) }
+        }
+        if (services.size < 2) return services.map(::probe)
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(services.size)
+        try {
+            val tasks = services.map { service -> executor.submit(java.util.concurrent.Callable { probe(service) }) }
+            return tasks.map { task ->
+                try { task.get() }
+                catch (error: java.util.concurrent.ExecutionException) { throw (error.cause as? Exception ?: error) }
+            }
+        } finally { executor.shutdownNow() }
+    }
+
+    /** Cached providers are tried in priority order; only an explicitly chosen uncached source may create a download. */
     fun prepare(source: SourceItem, identity: PlaybackIdentity): PreparedSource {
         validateIdentity(identity)
         require(identity.type != "series" || !EpisodeFilename.isExplicitMismatch(source.title, identity.season, identity.episode)) {
@@ -90,7 +115,33 @@ class SourceResolver internal constructor(
             require(isHttps(source.directUrl)) { "Only HTTPS video sources are supported." }
             return PreparedSource.Direct(source.directUrl, identity)
         }
-        offcloud()?.let { return it.prepare(source, identity) }
+        val hash = source.infoHash.lowercase(Locale.ROOT)
+        require(HASH.matches(hash)) { "The selected source has no valid torrent hash." }
+        val services = activeServices()
+        check(services.isNotEmpty()) { "Connect Offcloud or TorBox in Settings first." }
+        val availability = checkCaches(services, listOf(hash))
+        val cachedOn = availability.filter { hash in it.hashes }.map { it.service }
+        var failure: Exception? = null
+        for (service in cachedOn) {
+            if (Thread.currentThread().isInterrupted) throw InterruptedException("Source preparation cancelled.")
+            try { return prepareWith(service, source.copy(cached = true), identity) }
+            catch (error: InterruptedException) { throw error }
+            catch (error: java.util.concurrent.CancellationException) { throw error }
+            catch (error: Exception) { if (failure == null) failure = error }
+        }
+        failure?.let { throw it }
+        check(!source.cached) { "This source is no longer cached on your connected services. Refresh sources before starting a cloud download." }
+        check(availability.none { it.failed }) { "Cache availability could not be verified. Try again before starting a download." }
+        val downloadService = source.downloadService ?: services.first()
+        check(downloadService in services) { "The selected download account changed. Refresh sources." }
+        return prepareWith(downloadService, source.copy(cached = false), identity)
+    }
+
+    private fun prepareWith(service: String, source: SourceItem, identity: PlaybackIdentity): PreparedSource =
+        if (service == "offcloud") checkNotNull(offcloud()) { "Connect Offcloud in Settings first." }.prepare(source, identity)
+        else prepareTorBox(source, identity)
+
+    private fun prepareTorBox(source: SourceItem, identity: PlaybackIdentity): PreparedSource.Files {
         val hash = source.infoHash.lowercase(Locale.ROOT)
         require(HASH.matches(hash)) { "The selected source has no valid torrent hash." }
         if (hash in torbox.cached(listOf(hash))) return torbox.prepareCached(source, identity)
