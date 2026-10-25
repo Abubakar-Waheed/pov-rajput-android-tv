@@ -41,6 +41,10 @@ class WeTrakrInstrumentation : Instrumentation() {
             report.putBoolean("connected_account_preserved", true)
             report.putBoolean("live_library_and_likes_read", true)
             report.putBoolean("home_uses_wetrakr", true)
+            if (SecureStore(targetContext).get("wetrakr.home_liked_opt_in") != "true") {
+                check(onMain { views(activity!!.window.decorView).none { it.tag == "wetrakr-home-liked" } })
+                report.putBoolean("home_liked_rows_disabled_by_default", true)
+            }
             passed = true
         } catch (error: Throwable) {
             report.putString("stage", stage); report.putString("error_type", error.javaClass.simpleName)
@@ -53,9 +57,10 @@ class WeTrakrInstrumentation : Instrumentation() {
         if (liveReadOnly) { verifyLiveReadOnly(); return }
         val report = Bundle(); var passed = false; var stage = "start"; var activity: MainActivity? = null
         val store = SecureStore(targetContext)
-        val hadLiked = store.has("wetrakr.home_liked"); val originalLiked = store.get("wetrakr.home_liked")
+        val hadLiked = store.has("wetrakr.home_liked_opt_in"); val originalLiked = store.get("wetrakr.home_liked_opt_in")
         val playbackPrefs = targetContext.getSharedPreferences("playback", android.content.Context.MODE_PRIVATE)
         val originalPlayback = playbackPrefs.all.toMap()
+        val likedRequests = java.util.concurrent.atomic.AtomicInteger(0)
         val deleted = java.util.concurrent.atomic.AtomicBoolean(false)
         try {
             val memory = mutableMapOf("client_id" to "fixture-client-1234567890", "access_token" to "fixture-access", "refresh_token" to "fixture-refresh",
@@ -75,7 +80,7 @@ class WeTrakrInstrumentation : Instrumentation() {
                 path.startsWith("/sync/tracking/planning/shows") -> JSONArray().put(show).toString()
                 path.startsWith("/sync/tracking/watching/shows") -> JSONArray().put(JSONObject(show.toString()).put("next_watching_episode", JSONObject().put("season_number", 1).put("number", 3))).toString()
                 path == "/scrobble/playing" -> { deleted.set(true); """{"action":"cancel"}""" }
-                path.startsWith("/sync/likes/lists") -> """[{"list":{"id":125,"name":"Example liked list"}}]"""
+                path.startsWith("/sync/likes/lists") -> { likedRequests.incrementAndGet(); """[{"list":{"id":125,"name":"Example liked list"}}]""" }
                 path.startsWith("/lists/125/items/all") -> JSONArray().put(movie).toString()
                 path.startsWith("/sync/lists/fixture-list/items") -> JSONArray().put(movie).toString()
                 path.startsWith("/sync/lists") -> """[{"id":"fixture-list","name":"Example list"}]"""
@@ -94,13 +99,44 @@ class WeTrakrInstrumentation : Instrumentation() {
                 error("Offline TV check timed out")
             }
             try {
-                store.put("wetrakr.home_liked", "true")
+                store.remove("wetrakr.home_liked_opt_in")
                 onMain { weField.set(main, client); preview.setBoolean(main, true) }
+                stage = "home_likes_default_off"
+                onMain {
+                    val page = MainActivity::class.java.getDeclaredMethod("page", String::class.java, String::class.java).apply { isAccessible = true }
+                    val id = page.invoke(main, "Fixture Home", "") as Int
+                    MainActivity::class.java.getDeclaredMethod("homeLikedLists", Int::class.javaPrimitiveType).apply { isAccessible = true }.invoke(main, id)
+                }
+                check(likedRequests.get() == 0)
+                check(onMain { views(main.window.decorView).none { it.tag == "wetrakr-home-liked" } })
+                onMain { method("settings").invoke(main) }
+                check(captions().contains("WeTrakr liked lists on Home · Off"))
+                report.putBoolean("home_likes_default_off_without_api_requests", true)
                 for (spec in ThemeSpec.entries) {
                     stage = "tracking_page_${spec.name}"
                     onMain { theme.set(main, spec); method("shell").invoke(main); method("weTrakrPage").invoke(main) }
                     await { captions().contains("Movie watchlist") && captions().contains("TV watchlist") && captions().contains("Up next") }
                     check(captions().contains("My WeTrakr")); check(captions().contains("Continue watching"))
+                    stage = "liked_shelf_${spec.name}"
+                    await { captions().any { it.contains("Example liked list") } }
+                    stage = "thumbnail_focus_${spec.name}"
+                    await { onMain { main.window.decorView.findFocus()?.tag.toString().startsWith("row:Movie watchlist:") } }
+                    stage = "shelf_order_${spec.name}"
+                    onMain {
+                        val texts = views(main.window.decorView).filterIsInstance<TextView>()
+                        val watchlist = texts.first { it.text.toString() == "Movie watchlist" }
+                        val progress = texts.first { it.text.toString() == "Continue watching" }
+                        val positions = IntArray(2); watchlist.getLocationOnScreen(positions); val firstY = positions[1]
+                        progress.getLocationOnScreen(positions); check(firstY < positions[1])
+                        check(views(main.window.decorView).any { it.tag == "wetrakr-section-liked" })
+                    }
+                    if (spec == ThemeSpec.CINEMATIC) {
+                        SystemClock.sleep(300)
+                        val bitmap = uiAutomation.takeScreenshot()
+                        java.io.File(targetContext.externalCacheDir, "wetrakr-library-CINEMATIC.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                        bitmap.recycle()
+                    }
+                    store.put("wetrakr.home_liked_opt_in", "true")
                     onMain {
                         @Suppress("UNCHECKED_CAST") val navigation = field("navigationViews").get(main) as Map<String, View>
                         val settings = checkNotNull(navigation["settings"]); val bounds = Rect()
@@ -129,14 +165,15 @@ class WeTrakrInstrumentation : Instrumentation() {
                     onMain { scrobbling.performClick() }; check(!client.scrobblingEnabled())
                     onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "WeTrakr scrobbling · Off" }.performClick() }; check(client.scrobblingEnabled())
                     onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "WeTrakr liked lists on Home · On" }.performClick() }
-                    check(store.get("wetrakr.home_liked") == "false")
+                    check(store.get("wetrakr.home_liked_opt_in") == "false")
                     onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "WeTrakr liked lists on Home · Off" }.performClick() }
-                    check(store.get("wetrakr.home_liked") == "true")
+                    check(store.get("wetrakr.home_liked_opt_in") == "true")
                     onMain { method("weTrakrLists").invoke(main) }
                     await { captions().contains("Example list") }
                 }
                 report.putInt("themes_with_tracking_lists_and_visible_settings", ThemeSpec.entries.size)
                 report.putBoolean("remote_home_rows_and_settings_toggles", true)
+                report.putBoolean("wetrakr_opens_on_thumbnail_shelves_and_includes_liked_lists", true)
                 stage = "remove_continue_watching"
                 onMain { method("weTrakrPage").invoke(main) }
                 await { captions().any { it.contains("Example Movie") && it.contains("42%") } }
@@ -160,7 +197,7 @@ class WeTrakrInstrumentation : Instrumentation() {
             } finally { onMain { weField.set(main, previousClient); theme.set(main, previousTheme); preview.setBoolean(main, previousPreview) } }
         } catch (error: Throwable) { report.putString("error_type", error.javaClass.simpleName); report.putString("stage", stage) }
         finally {
-            if (hadLiked) store.put("wetrakr.home_liked", originalLiked) else store.remove("wetrakr.home_liked")
+            if (hadLiked) store.put("wetrakr.home_liked_opt_in", originalLiked) else store.remove("wetrakr.home_liked_opt_in")
             val editor = playbackPrefs.edit().clear()
             originalPlayback.forEach { (key, value) -> when (value) {
                 is String -> editor.putString(key, value)

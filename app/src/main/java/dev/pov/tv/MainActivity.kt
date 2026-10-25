@@ -314,6 +314,7 @@ class MainActivity : Activity() {
                 featured?.let { hero(it) }
                 if (remoteHome) {
                     homeContinueWatching(id)
+                    mediaRow("Popular movies", movies)
                 } else if (recent.isNotEmpty()) {
                     resumeRow(recent)
                 } else {
@@ -322,7 +323,7 @@ class MainActivity : Activity() {
                 mediaRow(if (recent.isNotEmpty()) "Discover" else "Popular TV shows", if (recent.isNotEmpty()) movies else series)
                 if (recent.isNotEmpty()) mediaRow("Popular TV shows", series)
             }
-            if (!publicPreview && wetrakr.connected() && store.get("wetrakr.home_liked", "true") != "false") homeLikedLists(id)
+            if (!publicPreview && wetrakr.connected() && store.get("wetrakr.home_liked_opt_in") == "true") homeLikedLists(id)
             homeCredit()
         }
     }
@@ -348,8 +349,15 @@ class MainActivity : Activity() {
     }
 
     private fun homeLikedLists(id: Int) {
-        val host = column().apply { tag = "wetrakr-home-liked" }; body.addView(host, margin(-1, -2, top = 10))
+        if (store.get("wetrakr.home_liked_opt_in") != "true") return
+        likedLists(id, true)
+    }
+
+    private fun likedLists(id: Int, home: Boolean) {
+        val host = column().apply { tag = if (home) "wetrakr-home-liked" else "wetrakr-section-liked" }
+        body.addView(host, margin(-1, -2, top = 10))
         read(id, { wetrakr.likedLists() }) { lists ->
+            if (lists.isEmpty() && !home) host.addView(text("No liked lists on WeTrakr yet.", 13, muted))
             if (lists.isNotEmpty()) {
                 host.addView(text("Liked lists · WeTrakr", 20, ink, true), margin(-1, -2, bottom = 8))
                 lists.forEach { (listId, title) ->
@@ -1307,21 +1315,36 @@ class MainActivity : Activity() {
         val tracker = weTrakrClient()
         val id = page("My ${tracker.name}", "Your watchlist. Your progress. Your next episode.")
         if (!tracker.connected()) { body.addView(button("Connect WeTrakr") { startWeTrakr() }, margin(210, 44)); return }
-        read(id, { Triple(tracker.continueWatching(), tracker.watchlist("movie"), tracker.watchlist("series")) }) { (progress, movies, series) ->
-            val visibleProgress = progress
-            if (visibleProgress.isNotEmpty()) { section("Continue watching"); visibleProgress.forEach { (identity, percent) ->
-                remoteProgress[identityKey(identity)] = percent
-                body.addView(button("${identity.title}${if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""}   ·   ${percent.toInt()}%") { navigate { showSources(identity) } }.apply { continueOptions(this, "", identity, identity.title) }, margin(-1, 44, bottom = 7))
-            } }
-            val nextGroup = column(); body.addView(nextGroup, margin(-1, -2, top = 16))
-            read(id, { tracker.nextEpisodes() }) { next ->
-                if (next.isNotEmpty()) {
-                    nextGroup.addView(text("Up next", 20, ink, true), margin(-1, -2, bottom = 12))
-                    next.forEach { identity -> nextGroup.addView(button("${identity.title}   ·   S${identity.season} E${identity.episode}") { navigate { showSources(identity) } }, margin(-1, 44, bottom = 7)) }
+        // Start with the visual library shelves; progress rows must not push them off-screen.
+        read(id, { tracker.watchlist("movie") to tracker.watchlist("series") }) { (movies, series) ->
+            mediaRow("Movie watchlist", movies); mediaRow("TV watchlist", series)
+            likedLists(id, false)
+            body.addView(button("Personal lists") { navigate { weTrakrLists() } }, margin(180, 42, top = 18))
+            weTrakrProgress(id)
+        }
+    }
+
+    private fun weTrakrProgress(id: Int) {
+        val host = column(); body.addView(host, margin(-1, -2, top = 12))
+        read(id, { wetrakr.continueWatching() }) { progress ->
+            if (progress.isNotEmpty()) {
+                host.addView(text("Continue watching", 20, ink, true), margin(-1, -2, bottom = 8))
+                progress.forEach { (identity, percent) ->
+                    remoteProgress[identityKey(identity)] = percent
+                    host.addView(button("${identity.title}${if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""}   ·   ${percent.toInt()}%") {
+                        navigate { showSources(identity) }
+                    }.apply { continueOptions(this, "", identity, identity.title) }, margin(-1, 44, bottom = 7))
                 }
             }
-            mediaRow("Movie watchlist", movies); mediaRow("TV watchlist", series)
-            body.addView(button("Personal lists") { navigate { weTrakrLists() } }, margin(180, 42, top = 18))
+        }
+        val nextGroup = column(); body.addView(nextGroup, margin(-1, -2, top = 16))
+        read(id, { wetrakr.nextEpisodes() }) { next ->
+            if (next.isNotEmpty()) {
+                nextGroup.addView(text("Up next", 20, ink, true), margin(-1, -2, bottom = 12))
+                next.forEach { identity -> nextGroup.addView(button("${identity.title}   ·   S${identity.season} E${identity.episode}") {
+                    navigate { showSources(identity) }
+                }, margin(-1, 44, bottom = 7)) }
+            }
         }
     }
 
@@ -1458,8 +1481,8 @@ class MainActivity : Activity() {
             wetrakr.setScrobblingEnabled(!wetrakr.scrobblingEnabled()); wetrakrOutbox.clearPending(); settings()
         }, margin(-1, 44, bottom = 8))
         body.addView(text("Automatic playback updates only. Your library, Continue Watching and manual actions remain available when scrobbling is off.", 12, muted), margin(-1, -2, bottom = 10))
-        body.addView(button("WeTrakr liked lists on Home · ${if (store.get("wetrakr.home_liked", "true") != "false") "On" else "Off"}") {
-            store.put("wetrakr.home_liked", (store.get("wetrakr.home_liked", "true") == "false").toString()); settings()
+        body.addView(button("WeTrakr liked lists on Home · ${if (store.get("wetrakr.home_liked_opt_in") == "true") "On" else "Off"}") {
+            store.put("wetrakr.home_liked_opt_in", (store.get("wetrakr.home_liked_opt_in") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("App connections")
         body.addView(button("WeTrakr app Client ID") { configureWeTrakr() }, margin(-1, 44, bottom = 8))

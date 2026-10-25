@@ -3,7 +3,7 @@
 - Added WeTrakr device-code login, token renewal, watchlists, Continue watching, Up next, and personal lists.
 - WeTrakr is the only tracking service. Its official transparent logo replaces My tracking in navigation; old Trakt linking, settings and playback updates are removed.
 - Home Continue Watching loads WeTrakr progress across devices. Long-press removal cancels exactly that movie or episode's WeTrakr playback session without deleting watched history.
-- Liked WeTrakr lists appear as Home rows, with a Settings toggle and access to full lists.
+- The WeTrakr section opens on movie/TV watchlist thumbnails and liked-list rows. Liked lists on Home are optional and off by default; opening Home does not fetch them while disabled. Full lists remain accessible from their headings.
 - Added a scrobbling toggle for automatic playback updates and queued retries. Library reads and manual actions remain available while it is off.
 - Added separate WeTrakr account controls and an application Client ID setting. No client secret is required or bundled; account tokens are encrypted on the device.
 - Library reads are cached for two minutes. Requests respect server rate-limit backoff, and failed final playback updates are retried for their original account with their original timestamp.
