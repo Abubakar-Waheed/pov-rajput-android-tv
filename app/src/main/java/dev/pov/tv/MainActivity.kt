@@ -35,6 +35,8 @@ class MainActivity : Activity() {
     private lateinit var store: SecureStore
     private lateinit var torbox: TorBoxApi
     private lateinit var trakt: TraktApi
+    private lateinit var wetrakr: WeTrakrApi
+    private lateinit var wetrakrOutbox: PlaybackStore
     private lateinit var resolver: SourceResolver
     private val catalog = CatalogApi()
     private lateinit var history: PlaybackStore
@@ -93,7 +95,7 @@ class MainActivity : Activity() {
         val sourcePreview = debug && intent.getBooleanExtra("source_choice_preview", false)
         publicPreview = debug && (intent.getBooleanExtra("public_preview", false) || sourcePreview)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        store = SecureStore(this); torbox = TorBoxApi(store); trakt = TraktApi(store)
+        store = SecureStore(this); torbox = TorBoxApi(store); trakt = TraktApi(store); wetrakr = WeTrakrApi(store); wetrakrOutbox = PlaybackStore(this, "wetrakr.pending")
         resolver = SourceResolver(store, torbox); history = PlaybackStore(this)
         themePreferences = ThemePreferences(this); theme = themePreferences.selected()
         anime = AnimeCatalogApi(trakt)
@@ -165,7 +167,7 @@ class MainActivity : Activity() {
         Destination("home", "Home") { home() }, Destination("movie", "Movies") { catalogPage("movie") },
         Destination("series", "Shows") { catalogPage("series") }, Destination("anime", "Anime") { animePage() },
         Destination("library", "Library") { selectedCloud() }, Destination("search", "Search") { search() },
-        Destination("trakt", "My Trakt") { traktPage() }, Destination("settings", "Settings") { settings() }) +
+        Destination("trakt", "My tracking") { traktPage() }, Destination("settings", "Settings") { settings() }) +
         if (!publicPreview && InAppPlaybackSession.hasActive()) listOf(Destination("nowplaying", "Now playing") { returnToVideo() }) else emptyList()
 
     private fun shell() {
@@ -370,8 +372,9 @@ class MainActivity : Activity() {
                 if (saved?.identity != null) navigate { showSources(saved.identity) } else navigate { details(item) }
             }, margin(160, 38, right = 17))
             if (!split && theme != ThemeSpec.CINEMA && theme != ThemeSpec.NEON) actions.addView(button("＋  Add to Library") {
-                if (trakt.connected()) load(generation, { trakt.setWatchlist(PlaybackIdentity(item.imdbId, item.type, item.title), true) }) { toast("Added to your Trakt watchlist") }
-                else { toast("Connect Trakt to save titles to your library"); navigate { traktPage() } }
+                val tracker = selectedTracker()
+                if (tracker.connected()) load(generation, { tracker.setWatchlist(PlaybackIdentity(item.imdbId, item.type, item.title), true) }) { toast("Added to your ${tracker.name} watchlist") }
+                else { toast("Connect a tracker to save titles to your library"); navigate { traktPage() } }
             }.apply { background = rounded(withAlpha(panel, 90), 24) }, margin(159, 38))
             frame.addView(actions, FrameLayout.LayoutParams(dp(copyWidth), dp(38), Gravity.BOTTOM or Gravity.START).apply {
                 leftMargin = dp(left); bottomMargin = dp(actionBottom)
@@ -464,8 +467,9 @@ class MainActivity : Activity() {
         series.take(3).forEach { item -> row.addView(tile(item, caption = "TV show") { navigate { details(item) } }, margin(204, 139, right = 8)) }
         next.addView(row)
         val request = generation
-        if (!publicPreview && trakt.connected()) worker.execute {
-            val upcoming = try { trakt.nextEpisodes() } catch (_: Exception) { emptyList() }
+        val tracker = selectedTracker()
+        if (!publicPreview && tracker.connected()) worker.execute {
+            val upcoming = try { tracker.nextEpisodes() } catch (_: Exception) { emptyList() }
             runOnUiThread {
                 if (request == generation && upcoming.isNotEmpty() && !isDestroyed) {
                     nextHeading.text = "Up Next"; row.removeAllViews()
@@ -836,10 +840,11 @@ class MainActivity : Activity() {
         if (result.description.isNotBlank()) actions.addView(button("Synopsis") {
             AlertDialog.Builder(this).setTitle(result.title).setMessage(result.description).setPositiveButton("Close", null).show()
         }, margin(110, 44, right = 8))
-        if (trakt.connected()) {
-            actions.addView(button("Add to watchlist") { load(generation, { trakt.setWatchlist(identity, true) }) { toast("Added to your Trakt watchlist") } }, margin(155, 44, right = 8))
-            actions.addView(button("Remove from watchlist") { confirm("Remove ${result.title} from your Trakt watchlist?") { load(generation, { trakt.setWatchlist(identity, false) }) { toast("Removed from your Trakt watchlist") } } }, margin(190, 44, right = 8))
-            if (result.type == "movie") actions.addView(button("Mark watched") { confirm("Mark ${result.title} as watched?") { load(generation, { trakt.markWatched(identity) }) { toast("Trakt history updated") } } }, margin(150, 44))
+        val tracker = selectedTracker()
+        if (tracker.connected()) {
+            actions.addView(button("Add to watchlist") { load(generation, { tracker.setWatchlist(identity, true) }) { toast("Added to your ${tracker.name} watchlist") } }, margin(155, 44, right = 8))
+            actions.addView(button("Remove from watchlist") { confirm("Remove ${result.title} from your ${tracker.name} watchlist?") { load(generation, { tracker.setWatchlist(identity, false) }) { toast("Removed from your ${tracker.name} watchlist") } } }, margin(190, 44, right = 8))
+            if (result.type == "movie") actions.addView(button("Mark watched") { confirm("Mark ${result.title} as watched?") { load(generation, { tracker.markWatched(identity) }) { toast("${tracker.name} history updated") } } }, margin(150, 44))
         }
     }
 
@@ -873,6 +878,7 @@ class MainActivity : Activity() {
     }
 
     private fun episodeButton(identity: PlaybackIdentity, title: String, released: String, detail: String): View {
+        val tracker = selectedTracker()
         val future = EpisodePresentation.future(released)
         val number = if (identity.season == 0) "Special ${identity.episode}" else "S${identity.season} · E${identity.episode}"
         return button("$number   $title\n${if (future) "Not yet released" else detail}") {
@@ -880,8 +886,8 @@ class MainActivity : Activity() {
         }.apply {
             tag = "episode:${identity.imdbId}:${identity.season}:${identity.episode}"
             contentDescription = "$number. $title. ${if (future) "Not yet released" else detail}"
-            if (trakt.connected() && !future) setOnLongClickListener {
-                confirm("Mark $number as watched?") { load(generation, { trakt.markWatched(identity) }) { toast("Episode marked watched") } }; true
+            if (tracker.connected() && !future) setOnLongClickListener {
+                confirm("Mark $number as watched?") { load(generation, { tracker.markWatched(identity) }) { toast("Episode marked watched") } }; true
             }
         }
     }
@@ -1239,16 +1245,25 @@ class MainActivity : Activity() {
     private fun traktPage() {
         current = { traktPage() }
         destination = "trakt"; refreshNavigation()
-        val id = page("My Trakt", "Your watchlist. Your progress. Your next episode.")
-        if (!trakt.connected()) { body.addView(button("Connect Trakt") { startTrakt() }, margin(190, 44)); return }
-        read(id, { Triple(trakt.continueWatching(), trakt.watchlist("movie"), trakt.watchlist("series")) }) { (progress, movies, series) ->
+        val tracker = selectedTracker()
+        val id = page("My ${tracker.name}", "Your watchlist. Your progress. Your next episode.")
+        val tabs = horizontalRow()
+        listOf("trakt" to "Trakt", "wetrakr" to "WeTrakr").forEach { (key, label) ->
+            tabs.addView(button(if (label == tracker.name) "✓ $label" else label) {
+                store.put("tracking.library", key); remoteProgress.clear(); traktPage()
+            }, margin(150, 42, right = 8))
+        }
+        if (!tracker.connected()) { body.addView(button("Connect ${tracker.name}") {
+            if (tracker === wetrakr) startWeTrakr() else startTrakt()
+        }, margin(210, 44)); return }
+        read(id, { Triple(tracker.continueWatching(), tracker.watchlist("movie"), tracker.watchlist("series")) }) { (progress, movies, series) ->
             val visibleProgress = progress.filterNot { history.isHidden(identity = it.first) }
             if (visibleProgress.isNotEmpty()) { section("Continue watching"); visibleProgress.forEach { (identity, percent) ->
                 remoteProgress[identityKey(identity)] = percent
                 body.addView(button("${identity.title}${if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""}   ·   ${percent.toInt()}%") { navigate { showSources(identity) } }.apply { continueOptions(this, "", identity, identity.title) }, margin(-1, 44, bottom = 7))
             } }
             val nextGroup = column(); body.addView(nextGroup, margin(-1, -2, top = 16))
-            read(id, { trakt.nextEpisodes() }) { next ->
+            read(id, { tracker.nextEpisodes() }) { next ->
                 if (next.isNotEmpty()) {
                     nextGroup.addView(text("Up next", 20, ink, true), margin(-1, -2, bottom = 12))
                     next.forEach { identity -> nextGroup.addView(button("${identity.title}   ·   S${identity.season} E${identity.episode}") { navigate { showSources(identity) } }, margin(-1, 44, bottom = 7)) }
@@ -1261,11 +1276,12 @@ class MainActivity : Activity() {
 
     private fun traktLists() {
         current = { traktLists() }
-        val id = page("Your Trakt lists")
-        read(id, { trakt.lists() }) { lists ->
+        val tracker = selectedTracker()
+        val id = page("Your ${tracker.name} lists")
+        read(id, { tracker.lists() }) { lists ->
             if (lists.isEmpty()) body.addView(text("No personal lists yet.", 15, muted))
             lists.forEach { (listId, title) -> body.addView(button(title) {
-                navigate { val pageId = page(title); read(pageId, { trakt.listItems(listId) }) { mediaGrid(it) } }
+                navigate { val pageId = page(title); read(pageId, { tracker.listItems(listId) }) { mediaGrid(it) } }
             }, margin(-1, 44, bottom = 8)) }
         }
     }
@@ -1385,8 +1401,15 @@ class MainActivity : Activity() {
         if (store.has("torbox.token")) body.addView(button("Disconnect TorBox") { confirm("Disconnect TorBox on this device?") { torbox.disconnect(); settings() } }, margin(-1, 44, bottom = 8))
         body.addView(button(if (trakt.connected()) "Trakt · connected · reconnect" else "Connect Trakt") { startTrakt() }, margin(-1, 44, bottom = 8))
         if (trakt.connected()) body.addView(button("Disconnect Trakt") { confirm("Disconnect Trakt on this device?") { trakt.disconnect(); history.clearPending(); remoteProgress.clear(); settings() } }, margin(-1, 44, bottom = 8))
+        body.addView(button(if (wetrakr.connected()) "WeTrakr · connected · reconnect" else "Connect WeTrakr") { startWeTrakr() }, margin(-1, 44, bottom = 8))
+        if (wetrakr.connected()) body.addView(button("Disconnect WeTrakr") { confirm("Disconnect WeTrakr on this device?") {
+            wetrakr.disconnect(); wetrakrOutbox.clearPending(); remoteProgress.clear(); settings()
+        } }, margin(-1, 44, bottom = 8))
+        body.addView(text("Playback syncs to each connected tracker. Choose Trakt or WeTrakr in My tracking for watchlists, progress and lists.", 12, muted), margin(-1, -2, bottom = 10))
         section("App connections")
         body.addView(text("This preview uses your own Trakt app Client ID. Create an app at developer.trakt.tv, then enter its Client ID here before linking your account.", 13, muted), margin(-1, -2, bottom = 9))
+        body.addView(button("WeTrakr app Client ID") { configureWeTrakr() }, margin(-1, 44, bottom = 8))
+        body.addView(text("Use the Client ID from WeTrakr Settings → API. Device-code login uses no client secret or callback URI. Library reads are cached to reduce development-key requests.", 12, muted), margin(-1, -2, bottom = 10))
         body.addView(button("Trakt app Client ID") { configureTraktClientId() }, margin(-1, 44, bottom = 8))
         body.addView(button("Trakt registered callback URI") { inputSetting("Trakt callback URI", "Must match your registered Trakt app callback", store.get("trakt.redirect_uri", "urn:ietf:wg:oauth:2.0:oob")) { value ->
             store.put("trakt.redirect_uri", value.trim()); toast("Registered callback saved")
@@ -1400,7 +1423,7 @@ class MainActivity : Activity() {
             store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Rajput · 0.2.10\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajput · 0.2.11\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 
@@ -1442,6 +1465,23 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun selectedTracker(): TrackingClient = when (store.get("tracking.library")) {
+        "wetrakr" -> wetrakr
+        "trakt" -> trakt
+        else -> if (!trakt.connected() && wetrakr.configured()) wetrakr else trakt
+    }
+    private fun startWeTrakr() {
+        if (!wetrakr.configured()) { configureWeTrakr(); return }
+        authorize("WeTrakr", { wetrakr.startDeviceAuth() }, { wetrakr.pollDeviceAuth(it) },
+            cancel = { wetrakr.cancelDeviceAuth(it) }, configure = ::configureWeTrakr)
+    }
+    private fun configureWeTrakr() {
+        inputSetting("WeTrakr app Client ID", "Client ID from WeTrakr Settings → API", store.get("wetrakr.client_id")) { value ->
+            if (!WeTrakrApi.validClientId(value)) toast("Enter the registered WeTrakr application Client ID")
+            else { wetrakr.setClientId(value); wetrakrOutbox.clearPending(); remoteProgress.clear(); startWeTrakr() }
+        }
+    }
+
     private fun startTorBox() { authorize("TorBox", { torbox.startDeviceAuth() }, { torbox.pollDeviceAuth(it) }, cancel = { torbox.cancelDeviceAuth(it) }) }
     private fun startTrakt() {
         authorize("Trakt", { trakt.startDeviceAuth() }, { trakt.pollDeviceAuth(it) },
@@ -1453,6 +1493,7 @@ class MainActivity : Activity() {
         if (authorization?.isShowing == true) return
         authorization = DeviceAuthorizationDialog(this, name, authWorker, start, poll, onConnected = {
             if (name == "Trakt") { history.clearPending(); remoteProgress.clear() }
+            if (name == "WeTrakr") { wetrakrOutbox.clearPending(); remoteProgress.clear(); store.put("tracking.library", "wetrakr") }
             toast("$name connected"); current()
         }, onCancel = cancel, configure = configure).also { it.show() }
     }
@@ -1497,7 +1538,18 @@ class MainActivity : Activity() {
                     }
                 } catch (_: Exception) { /* Retain for the next launch. */ }
             }
-        } catch (_: Exception) { /* Account storage may be temporarily unavailable. */ } }
+        } catch (_: Exception) { /* Account storage may be temporarily unavailable. */ }
+            try {
+                val revision = wetrakr.accountRevision()
+                if (wetrakr.connected()) wetrakrOutbox.pending().take(10).forEach { event ->
+                    if (event.accountRevision != revision || event.timestamp.isBlank()) wetrakrOutbox.acknowledge(event.identity, event.revision)
+                    else try {
+                        if (wetrakr.restoreProgress(event.identity, event.percent, event.action, event.timestamp, revision))
+                            wetrakrOutbox.acknowledge(event.identity, event.revision)
+                    } catch (_: Exception) { /* Retain this account's final state for a future launch. */ }
+                }
+            } catch (_: Exception) { /* Keep playback usable when tracking is unavailable. */ }
+        }
     }
 
     private fun identityKey(identity: PlaybackIdentity) = "${identity.imdbId}:${identity.season}:${identity.episode}"

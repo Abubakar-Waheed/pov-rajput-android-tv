@@ -6,10 +6,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-class PlaybackStore(context: Context) {
+class PlaybackStore(context: Context, private val pendingKey: String = "pending") {
     private val preferences = context.applicationContext.getSharedPreferences("playback", Context.MODE_PRIVATE)
     data class Recent(val key: String, val title: String, val identity: PlaybackIdentity?, val position: Long, val duration: Long)
-    data class Pending(val identity: PlaybackIdentity, val percent: Double, val action: String, val revision: String)
+    data class Pending(val identity: PlaybackIdentity, val percent: Double, val action: String, val revision: String, val accountRevision: String = "", val timestamp: String = "")
 
     fun save(key: String, title: String, identity: PlaybackIdentity?, position: Long, duration: Long) = synchronized(lock) {
         if (position < 0 || duration <= 0) return@synchronized
@@ -60,12 +60,12 @@ class PlaybackStore(context: Context) {
     } ?: 0
 
     /** Each replacement gets a revision so an older network completion cannot remove it. */
-    fun queue(identity: PlaybackIdentity, percent: Double, action: String): String = synchronized(lock) {
+    fun queue(identity: PlaybackIdentity, percent: Double, action: String, accountRevision: String = "", timestamp: String = java.time.Instant.now().toString()): String = synchronized(lock) {
         require(percent.isFinite() && percent in 0.0..100.0) { "Invalid playback progress." }
         require(action in setOf("start", "pause", "stop")) { "Invalid playback action." }
         val revision = UUID.randomUUID().toString()
         val kept = pendingLocked().filterNot { sameMedia(it.identity, identity) }.toMutableList()
-        kept.add(Pending(identity, percent, action, revision))
+        kept.add(Pending(identity, percent, action, revision, accountRevision, timestamp))
         writePending(kept)
         revision
     }
@@ -82,18 +82,18 @@ class PlaybackStore(context: Context) {
 
     /** Disconnecting or changing the Trakt account must discard its unsent updates. */
     fun clearPending() = synchronized(lock) {
-        check(preferences.edit().remove("pending").commit()) { "Pending playback updates could not be removed." }
+        check(preferences.edit().remove(pendingKey).commit()) { "Pending playback updates could not be removed." }
     }
 
     private fun pendingLocked(): List<Pending> {
-        val array = try { JSONArray(preferences.getString("pending", "[]")) }
+        val array = try { JSONArray(preferences.getString(pendingKey, "[]")) }
             catch (_: Exception) { throw IllegalStateException("Saved playback updates could not be read.") }
         var migrated = false
         val result = (0 until array.length()).map { index ->
             try {
                 val item = array.getJSONObject(index)
                 val revision = item.optString("revision").ifBlank { migrated = true; UUID.randomUUID().toString() }
-                Pending(PlaybackIdentity.fromJson(item.getJSONObject("identity")), item.getDouble("percent"), item.getString("action"), revision)
+                Pending(PlaybackIdentity.fromJson(item.getJSONObject("identity")), item.getDouble("percent"), item.getString("action"), revision, item.optString("accountRevision"), item.optString("timestamp"))
             } catch (_: Exception) {
                 throw IllegalStateException("A saved playback update could not be read.")
             }
@@ -107,9 +107,9 @@ class PlaybackStore(context: Context) {
         val array = JSONArray()
         items.forEach {
             array.put(JSONObject().put("identity", it.identity.toJson()).put("percent", it.percent)
-                .put("action", it.action).put("revision", it.revision))
+                .put("action", it.action).put("revision", it.revision).put("accountRevision", it.accountRevision).put("timestamp", it.timestamp))
         }
-        check(preferences.edit().putString("pending", array.toString()).commit()) { "Playback updates could not be saved." }
+        check(preferences.edit().putString(pendingKey, array.toString()).commit()) { "Playback updates could not be saved." }
     }
 
     private fun sameMedia(first: PlaybackIdentity, second: PlaybackIdentity): Boolean =

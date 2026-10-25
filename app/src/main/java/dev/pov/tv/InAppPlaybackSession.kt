@@ -34,6 +34,8 @@ import androidx.media3.ui.PlayerView
 import dev.pov.tv.data.PlaybackIdentity
 import dev.pov.tv.data.SecureStore
 import dev.pov.tv.data.TraktApi
+import dev.pov.tv.data.WeTrakrApi
+import dev.pov.tv.data.TrackingClient
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 import java.nio.ByteBuffer
@@ -52,6 +54,8 @@ object InAppPlaybackSession {
     private var targetView: WeakReference<PlayerView>? = null
     private lateinit var history: PlaybackStore
     private lateinit var trakt: TraktApi
+    private lateinit var wetrakr: WeTrakrApi
+    private lateinit var wetrakrOutbox: PlaybackStore
     private var sourceUrl = ""
     private var sourceKey = ""
     var debridService: String? = null
@@ -128,6 +132,8 @@ object InAppPlaybackSession {
         application = app
         history = PlaybackStore(app)
         trakt = TraktApi(SecureStore(app))
+        wetrakr = WeTrakrApi(SecureStore(app))
+        wetrakrOutbox = PlaybackStore(app, "wetrakr.pending")
         app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) { foregroundGate.started(activity) }
             override fun onActivityStopped(activity: Activity) { foregroundGate.stopped(activity) }
@@ -434,18 +440,26 @@ object InAppPlaybackSession {
         if (error is VideoCompatibilityException) return
         val media = identity ?: return
         val exo = player ?: return
-        val connected = try { trakt.connected() } catch (_: Exception) { false }
-        if (!connected || exo.duration <= 0) return
+        if (exo.duration <= 0) return
+        val targets = listOf<TrackingClient>(trakt, wetrakr).mapNotNull { client ->
+            try { if (client.connected()) client to client.accountRevision() else null } catch (_: Exception) { null }
+        }
+        if (targets.isEmpty()) return
         val percent = (exo.currentPosition.toDouble() * 100 / exo.duration).coerceIn(0.0, 100.0)
         val now = android.os.SystemClock.elapsedRealtime()
         if (action == lastSyncAction && now - lastSyncAt < 3_000) return
         lastSyncAction = action; lastSyncAt = now
-        val accountRevision = try { trakt.accountRevision() } catch (_: Exception) { return }
-        val revision = try { if (action != "start") history.queue(media, percent, action) else null } catch (_: Exception) { null }
+        val updates = targets.map { (client, account) ->
+            val outbox = if (client === wetrakr) wetrakrOutbox else history
+            val revision = try { if (action != "start") outbox.queue(media, percent, action, account) else null } catch (_: Exception) { null }
+            Triple(client, account, outbox to revision)
+        }
         syncWorker.execute {
-            try {
-                if (trakt.progressForAccount(media, percent, action, accountRevision) && revision != null) history.acknowledge(media, revision)
-            } catch (_: Exception) { /* Pending progress retries at a future app launch. */ }
+            updates.forEach { (client, account, queued) ->
+                try {
+                    if (client.progressForAccount(media, percent, action, account) && queued.second != null) queued.first.acknowledge(media, queued.second!!)
+                } catch (_: Exception) { /* Each provider keeps its own final-state retry. */ }
+            }
         }
     }
 }

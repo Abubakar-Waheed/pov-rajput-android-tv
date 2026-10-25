@@ -1,0 +1,285 @@
+package dev.pov.tv.data
+
+import android.os.SystemClock
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URI
+import java.security.MessageDigest
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+/** Public native-client device flow. No client secret is accepted, stored, or bundled. */
+class WeTrakrApi internal constructor(
+    private val credentials: WeTrakrCredentials,
+    private val transport: (String, String, Map<String, String>, JSONObject?) -> String = { path, method, headers, body -> Net.raw(BASE + path, method, headers, body) },
+    private val now: () -> Long = System::currentTimeMillis,
+    private val elapsed: () -> Long = SystemClock::elapsedRealtime
+) : TrackingClient {
+    override val name = "WeTrakr"
+    constructor(store: SecureStore) : this(object : WeTrakrCredentials {
+        override fun get(key: String) = store.get("wetrakr.$key")
+        override fun put(values: Map<String, String>) = store.putAll(values.mapKeys { "wetrakr.${it.key}" })
+    })
+    private data class Pending(val auth: DeviceAuth, val client: String, val generation: Long, val started: Long, var lastPoll: Long, var interval: Long)
+    @Volatile private var pending: Pending? = null
+    private var attempt = 0L
+    fun configured() = validClientId(credentials.get("client_id"))
+    override fun connected() = configured() && credentials.get("access_token").isNotBlank() && credentials.get("reauth") != "true"
+    override fun accountRevision() = credentials.get("account_revision")
+    fun clientId() = credentials.get("client_id").trim().also { require(validClientId(it)) { "Set your WeTrakr application Client ID first." } }
+    fun setClientId(value: String) = synchronized(stateLock) {
+        val client = value.trim()
+        require(validClientId(client)) { "Enter your registered WeTrakr application Client ID." }
+        if (credentials.get("client_id") != client) {
+            generation++; attempt++; pending = null; cache.clear()
+            credentials.put(emptyAccount() + mapOf("client_id" to client, "retry_at" to ""))
+        }
+    }
+    /** Local unlink is immediate; in-flight old responses cannot reconnect or replace tokens. */
+    fun disconnect() = synchronized(stateLock) { generation++; attempt++; pending = null; cache.clear(); credentials.put(emptyAccount()) }
+    fun cancelDeviceAuth(auth: DeviceAuth? = null) = synchronized(stateLock) {
+        if (auth == null || pending?.auth?.deviceCode == auth.deviceCode) { attempt++; pending = null }
+    }
+    fun startDeviceAuth(): DeviceAuth {
+        val (client, version, request) = synchronized(stateLock) { pending = null; Triple(clientId(), generation, ++attempt) }
+        val start = elapsed()
+        val result = objectCall("/oauth/device/code", JSONObject().put("client_id", client))
+        val seconds = result.optInt("expires_in")
+        val interval = result.optInt("interval")
+        val url = required(result, "verification_url")
+        val uri = try { URI(url) } catch (_: Exception) { malformed() }
+        if (uri.scheme != "https" || uri.host != "wetrakr.com" || uri.userInfo != null || uri.fragment != null ||
+            seconds !in 1..86400 || interval !in 1..300) malformed()
+        val auth = DeviceAuth(required(result, "device_code"), required(result, "user_code"), url, interval, seconds)
+        synchronized(stateLock) {
+            if (version != generation || request != attempt || clientId() != client) ended()
+            pending = Pending(auth, client, version, start, start, interval.toLong())
+        }
+        return auth
+    }
+    @Synchronized fun pollDeviceAuth(auth: DeviceAuth): Boolean {
+        val state = synchronized(stateLock) { pending?.takeIf { it.auth.deviceCode == auth.deviceCode && it.generation == generation && it.client == clientId() } ?: ended() }
+        val time = elapsed()
+        if (time - state.started >= auth.expiresSeconds * 1000L) { cancelDeviceAuth(auth); ended() }
+        if (time - state.lastPoll < state.interval * 1000L) return false
+        state.lastPoll = time
+        val result = try { objectCall("/oauth/device/token", JSONObject().put("code", auth.deviceCode).put("client_id", state.client)) }
+        catch (error: ApiException) {
+            if (error.code == 400 && error.errorKey == "authorization_pending") return false
+            if (error.code == 429) {
+                state.interval = maxOf(state.interval + 5, error.retryAfterSeconds.toLong()); return false
+            }
+            cancelDeviceAuth(auth); throw error
+        }
+        synchronized(stateLock) {
+            if (pending !== state || generation != state.generation || clientId() != state.client) ended()
+            saveTokens(result, newAccount = true); generation++; attempt++; pending = null; cache.clear()
+        }
+        return true
+    }
+    private fun saveTokens(result: JSONObject, newAccount: Boolean = false) {
+        val access = required(result, "access_token")
+        val refresh = result.optString("new_refresh_token").ifBlank { required(result, "refresh_token") }
+        val lifetime = result.optLong("expires_in")
+        if (lifetime !in 1..31_536_000) malformed()
+        val values = mutableMapOf("access_token" to access, "refresh_token" to refresh,
+            "expires_at" to (now() + lifetime * 1000).toString(), "refresh_pending" to "", "reauth" to "")
+        if (newAccount) values["account_revision"] = UUID.randomUUID().toString()
+        credentials.put(values)
+    }
+    private data class Snapshot(val client: String, val access: String, val refresh: String, val revision: String, val generation: Long)
+    private fun snapshot() = synchronized(stateLock) { Snapshot(clientId(), credentials.get("access_token"), credentials.get("refresh_token"), accountRevision(), generation) }
+    private fun ensureCurrent(value: Snapshot) {
+        if (value.generation != generation || value.client != clientId() || value.revision != accountRevision() ||
+            value.access != credentials.get("access_token") || value.refresh != credentials.get("refresh_token")) ended()
+    }
+    private fun accessToken(revision: String, force: String? = null): String = synchronized(refreshLock) {
+        val snapshot = snapshot()
+        if (snapshot.revision != revision) ended()
+        if (!connected()) throw ApiException(401, "Connect WeTrakr in Settings first.")
+        val expires = credentials.get("expires_at").toLongOrNull() ?: 0
+        if (if (force != null) snapshot.access != force else expires > now() + 60_000) return@synchronized snapshot.access
+        val fingerprint = MessageDigest.getInstance("SHA-256").digest(snapshot.refresh.toByteArray()).joinToString("") { "%02x".format(it) }
+        synchronized(stateLock) {
+            ensureCurrent(snapshot)
+            if (snapshot.refresh.isBlank() || credentials.get("refresh_pending") == fingerprint) {
+                credentials.put(mapOf("reauth" to "true")); throw ApiException(401, "Link WeTrakr again to renew this session.")
+            }
+            credentials.put(mapOf("refresh_pending" to fingerprint))
+        }
+        val result = try { objectCall("/oauth/token/refresh", JSONObject().put("refresh_token", snapshot.refresh)) }
+        catch (error: ApiException) {
+            synchronized(stateLock) {
+                ensureCurrent(snapshot)
+                if (error.code == 429) credentials.put(mapOf("refresh_pending" to ""))
+                if (error.code in setOf(400, 401, 403)) credentials.put(mapOf("reauth" to "true"))
+            }
+            throw error
+        }
+        synchronized(stateLock) { ensureCurrent(snapshot); saveTokens(result) }
+        required(result, "access_token")
+    }
+    private fun call(path: String, method: String, body: JSONObject?, access: String? = null, appClient: String? = null): String {
+        val limitingClient = appClient ?: credentials.get("client_id")
+        if (appClient != null && appClient != credentials.get("client_id")) ended()
+        val until = credentials.get("retry_at").toLongOrNull() ?: 0
+        if (now() < until) throw ApiException(429, "WeTrakr asked us to wait before making more requests.", retryAfterSeconds = ((until - now() + 999) / 1000).toInt())
+        val headers = mutableMapOf("wetrakr-api-version" to "1")
+        if (access != null) { headers["wetrakr-api-key"] = checkNotNull(appClient); headers["Authorization"] = "Bearer $access" }
+        try { return transport(path, method, headers, body) }
+        catch (error: ApiException) {
+            if (error.code == 429) {
+                val fallback = if (path == "/oauth/device/code") 900 else if (error.errorKey == "slow_down") 5 else 60
+                synchronized(stateLock) {
+                    if (credentials.get("client_id") == limitingClient)
+                        credentials.put(mapOf("retry_at" to (now() + maxOf(fallback, error.retryAfterSeconds) * 1000L).toString()))
+                }
+            }
+            throw error
+        }
+    }
+    private fun objectCall(path: String, body: JSONObject) = parseObject(call(path, "POST", body))
+    private fun request(path: String, method: String = "GET", body: JSONObject? = null): String {
+        val current = snapshot()
+        val revision = current.revision
+        val access = accessToken(revision)
+        val result = try { call(path, method, body, access, current.client) } catch (error: ApiException) {
+            if (error.code != 401) throw error
+            call(path, method, body, accessToken(revision, access), current.client)
+        }
+        if (revision != accountRevision() || !connected()) ended()
+        return result
+    }
+    private data class Cached(val at: Long, val records: List<JSONObject>)
+    private fun pages(path: String): List<JSONObject> {
+        val revision = accountRevision()
+        if (!connected() || revision.isBlank()) throw ApiException(401, "Connect WeTrakr in Settings first.")
+        val key = "$revision:$path"
+        cache[key]?.takeIf { elapsed() - it.at in 0..120_000 }?.let { return it.records }
+        val records = mutableListOf<JSONObject>()
+        for (page in 1..20) {
+            val raw = request(path + (if ('?' in path) "&" else "?") + "page=$page&limit=100")
+            val array = try { JSONArray(raw) } catch (_: Exception) { malformed() }
+            for (index in 0 until array.length()) array.optJSONObject(index)?.let(records::add)
+            if (array.length() < 100) { cache[key] = Cached(elapsed(), records); return records }
+        }
+        throw ApiException(0, "This WeTrakr list is too large to load at once. Open it on the website.")
+    }
+    override fun watchlist(type: String): List<MediaItemData> {
+        require(type in setOf("movie", "series")) { "Invalid WeTrakr watchlist type." }
+        return pages("/sync/tracking/planning/${if (type == "movie") "movies" else "shows"}").mapNotNull(::media)
+    }
+    override fun lists(): List<Pair<String, String>> = pages("/sync/lists").mapNotNull { record ->
+        record.optString("id").takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,80}")) }?.let { it to record.optString("name", "List") }
+    }
+    override fun listItems(id: String): List<MediaItemData> {
+        require(id.matches(Regex("[A-Za-z0-9_-]{1,80}"))) { "Invalid WeTrakr list." }
+        return pages("/sync/lists/$id/items").mapNotNull(::media)
+    }
+    override fun continueWatching(): List<Pair<PlaybackIdentity, Double>> = listOf("movies", "episodes").flatMap { kind ->
+        pages("/sync/tracking/playing/$kind?extended=show_level_1").mapNotNull { item ->
+            val progress = item.optJSONObject("playback")?.optDouble("progress_percent", Double.NaN) ?: return@mapNotNull null
+            if (!progress.isFinite() || progress <= 0 || progress >= 95) return@mapNotNull null
+            identity(item)?.let { it to progress }
+        }
+    }
+    override fun nextEpisodes(): List<PlaybackIdentity> = pages("/sync/tracking/watching/shows?extended=episode_level_1").mapNotNull { show ->
+        val next = show.optJSONObject("next_watching_episode") ?: return@mapNotNull null
+        identity(next, show)
+    }
+    internal fun identity(item: JSONObject, parent: JSONObject? = null): PlaybackIdentity? {
+        val show = parent ?: item.optJSONObject("show")
+        val media = media(show ?: item) ?: return null
+        if (show == null && media.type == "movie") return PlaybackIdentity(media.imdbId, "movie", media.title)
+        val season = item.optInt("season_number", item.optInt("season", -1)); val number = item.optInt("number", -1)
+        if (season < 0 || number <= 0) return null
+        return PlaybackIdentity(media.imdbId, "series", media.title, season, number)
+    }
+    internal fun media(item: JSONObject): MediaItemData? {
+        val id = item.optJSONObject("ids")?.optString("imdb").orEmpty()
+        if (!id.matches(Regex("tt[0-9]{5,12}"))) return null
+        val type = when (item.optString("type")) { "movie" -> "movie"; "show", "series" -> "series"; else -> return null }
+        val title = item.optString("title").takeIf { it.isNotBlank() } ?: return null
+        fun image(key: String) = item.optString(key).takeIf { it.startsWith('/') }?.let { "https://image.tmdb.org/t/p/w500$it" }.orEmpty()
+        return MediaItemData(id, type, title, item.optString(if (type == "movie") "release_date" else "first_air_date").take(4), image("poster_path"), image("backdrop_path"))
+    }
+    override fun setWatchlist(identity: PlaybackIdentity, add: Boolean) = tracking(identity, "planning", remove = !add)
+    override fun markWatched(identity: PlaybackIdentity) = tracking(identity, "watched")
+    private fun tracking(identity: PlaybackIdentity, status: String, remove: Boolean = false, percent: Double? = null, timestamp: String? = null, replay: Boolean = false) = synchronized(refreshLock) {
+        val item = JSONObject().put("ids", JSONObject().put("imdb", identity.imdbId)).put("status", status)
+        val body = trackingBody(identity, item, status, percent, timestamp).put("allow_rewatch", false)
+        val result = parseObject(request(if (remove) "/sync/tracking/remove" else "/sync/tracking", "POST", body))
+        for (key in listOf("notFound", "errored")) {
+            val errors = result.optJSONObject(key)
+            if (errors != null && errors.keys().asSequence().any { (errors.optJSONArray(it)?.length() ?: 0) > 0 }) {
+                // A lost response may have already logged the play. Never keep retrying it or
+                // log a rewatch; manual writes still show the service's rejection to the user.
+                val reasons = errors.keys().asSequence().flatMap { name ->
+                    val array = errors.optJSONArray(name) ?: JSONArray()
+                    (0 until array.length()).asSequence().map { array.optJSONObject(it)?.optString("error").orEmpty() }
+                }.toList()
+                if (replay && key == "errored" && reasons.isNotEmpty() && reasons.all {
+                    it == "Already watched!" || it.startsWith("Already added!")
+                }) return@synchronized
+                throw ApiException(0, "WeTrakr could not apply this update. Refresh your library to check its current state.")
+            }
+        }
+        if (result.optJSONObject(if (remove) "removed" else "added") == null && result.optJSONObject("existing") == null) malformed()
+        cache.clear()
+    }
+    internal fun trackingBody(identity: PlaybackIdentity, item: JSONObject, status: String, percent: Double?, timestamp: String?): JSONObject {
+        validate(identity)
+        val episode = JSONObject().put("number", identity.episode).put("status", status)
+        val target = if (identity.type == "movie") item else episode
+        if (percent != null) target.put("progress", percent)
+        if (timestamp != null) target.put(if (status == "watched") "tracked_at" else "paused_at", timestamp)
+        if (identity.type != "movie") item.put("seasons", JSONArray().put(JSONObject().put("number", identity.season).put("episodes", JSONArray().put(episode))))
+        return JSONObject().put(if (identity.type == "movie") "movies" else "shows", JSONArray().put(item))
+    }
+    /** Retry stored final state without restarting an old now-playing session. */
+    fun restoreProgress(identity: PlaybackIdentity, percent: Double, action: String, timestamp: String, revision: String): Boolean = synchronized(refreshLock) {
+        if (!connected() || revision.isBlank() || accountRevision() != revision) return false
+        require(percent.isFinite() && percent in 0.0..100.0 && action in setOf("pause", "stop"))
+        require(java.time.Instant.parse(timestamp).toEpochMilli() <= now() + 60_000) { "Invalid saved WeTrakr playback time." }
+        val watched = action == "stop" && percent >= 95
+        if (!watched && percent <= 0) return true
+        tracking(identity, if (watched) "watched" else "paused", percent = if (watched) null else percent.coerceIn(0.01, 99.99), timestamp = timestamp, replay = true)
+        true
+    }
+    override fun progressForAccount(identity: PlaybackIdentity, percent: Double, action: String, revision: String): Boolean = synchronized(refreshLock) {
+        if (!connected() || revision.isBlank() || accountRevision() != revision) return false
+        validate(identity); require(percent.isFinite() && action in setOf("start", "pause", "stop"))
+        val body = JSONObject().put("progress", percent.coerceIn(0.0, 100.0)).put("app_version", "POV Rajput 0.2.11")
+        val media = JSONObject().put("ids", JSONObject().put("imdb", identity.imdbId))
+        if (identity.type == "movie") body.put("movie", media) else body.put("show", media).put("episode", JSONObject().put("season", identity.season).put("number", identity.episode))
+        val result = parseObject(request("/scrobble/$action?min_progress=95", "POST", body))
+        val accepted = if (action == "stop") setOf("pause", "scrobble") else setOf(action)
+        if (result.optBoolean("ignored") || result.optString("action") !in accepted) throw ApiException(0, "WeTrakr did not accept this playback update.")
+        cache.clear(); true
+    }
+    private fun validate(identity: PlaybackIdentity) {
+        require(identity.imdbId.matches(Regex("tt[0-9]{5,12}")) && identity.type in setOf("movie", "series")) { "A matched movie or TV episode is required for WeTrakr." }
+        if (identity.type == "series") require(identity.season >= 0 && identity.episode > 0) { "Select a specific episode first." }
+    }
+    private fun required(objectValue: JSONObject, key: String): String {
+        val value = objectValue.opt(key) as? String ?: malformed()
+        if (value.isBlank() || value == "null" || value.length > 8192 || value.any { it.code < 32 || it.code == 127 }) malformed()
+        return value
+    }
+    private fun parseObject(raw: String) = try { JSONObject(raw) } catch (_: Exception) { malformed() }
+    private fun malformed(): Nothing = throw ApiException(0, "WeTrakr returned an unreadable response. Try again later.")
+    private fun ended(): Nothing = throw ApiException(410, "This WeTrakr connection changed or expired. Link it again in Settings.")
+    private fun emptyAccount() = listOf("access_token", "refresh_token", "expires_at", "account_revision", "refresh_pending", "reauth").associateWith { "" }
+    companion object {
+        private const val BASE = "https://api.wetrakr.com"
+        fun validClientId(value: String) = value.matches(Regex("[A-Za-z0-9_-]{16,256}"))
+        private val stateLock = Any()
+        private val refreshLock = Any()
+        private var generation = 0L
+        private val cache = ConcurrentHashMap<String, Cached>()
+    }
+}
+internal interface WeTrakrCredentials {
+    fun get(key: String): String
+    fun put(values: Map<String, String>)
+}

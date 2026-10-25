@@ -84,6 +84,14 @@ TorBox resolves direct links and removes newly created cached entries before pla
 
 ![Numbered debrid priority](docs/screenshots/debrid-priority.png)
 
+## WeTrakr
+
+Open **Settings → WeTrakr app Client ID** and enter the Client ID from your registered WeTrakr application. The TV requests an activation code; visit **https://wetrakr.com/activate** on your phone and approve the connection. Device login needs no client secret or callback URI. No developer credentials are bundled.
+
+Open **My tracking** and choose **WeTrakr** or **Trakt** for watchlists, Continue watching, Up next and personal lists. Watchlist edits and manual watched actions apply to the selected provider. New playback reports to each connected tracker independently. Linking WeTrakr does not copy existing Trakt history to it. Disconnect either account in Settings.
+
+WeTrakr tokens are stored with Android Keystore encryption. Library reads are cached for two minutes and server retry delays are respected. Failed pause/stop updates keep their original account and timestamp; retrying them never restarts an old now-playing session or deliberately adds a duplicate play. Playback reaches watched status at 95%. Review your developer-key allowance before sharing a Client ID with other users. API reference: [WeTrakr documentation](https://api.wetrakr.com/).
+
 ## Subtitle style
 
 Open **Settings → Subtitle style** or **Subtitles → Subtitle style** during playback. Enable **Transparent background** and/or **Bold text**. Choices are saved on-device and work with text subtitles in fullscreen and the mini player. Background transparency and bold text default to off. Size defaults to **Medium**, with **Small** and **Large** available. Image-based and burned-in subtitles retain their original appearance.

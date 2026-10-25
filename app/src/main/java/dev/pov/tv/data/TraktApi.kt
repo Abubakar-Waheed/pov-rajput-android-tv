@@ -17,7 +17,8 @@ class TraktApi internal constructor(
     },
     private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
     private val apiTransport: (String, String, Map<String, String>, JSONObject?) -> String = Net::raw
-) {
+) : TrackingClient {
+    override val name = "Trakt"
     constructor(store: SecureStore) : this(object : TraktCredentials {
         override fun get(key: String, default: String) = store.get(key, default)
         override fun putAll(values: Map<String, String>) = store.putAll(values)
@@ -34,9 +35,9 @@ class TraktApi internal constructor(
     private var rateUntil = 0L
 
     fun configured(): Boolean = validClientId(store.get("trakt.client_id").trim())
-    fun connected(): Boolean = configured() && store.has("trakt.access_token")
+    override fun connected(): Boolean = configured() && store.has("trakt.access_token")
     /** Stable across token refreshes, different after every completed account authorization. */
-    fun accountRevision(): String = store.get("trakt.account_revision")
+    override fun accountRevision(): String = store.get("trakt.account_revision")
 
     /** Invalidates pending authorization and refreshes without waiting on a network lock. */
     fun disconnect() = synchronized(authStateLock) {
@@ -129,7 +130,7 @@ class TraktApi internal constructor(
         return true
     }
 
-    fun watchlist(type: String): List<MediaItemData> {
+    override fun watchlist(type: String): List<MediaItemData> {
         val kind = when (type) { "movie", "movies" -> "movies"; "series", "show", "shows" -> "shows"; else -> throw IllegalArgumentException("Invalid watchlist type.") }
         return pages("/users/me/watchlist/$kind?extended=full").mapNotNull(::parseMedia)
     }
@@ -161,7 +162,7 @@ class TraktApi internal constructor(
     }
 
     /** Trakt paused-playback records, including the show's IMDb ID for episode matching. */
-    fun continueWatching(): List<Pair<PlaybackIdentity, Double>> =
+    override fun continueWatching(): List<Pair<PlaybackIdentity, Double>> =
         parsePlayback(arrayRequest("/sync/playback?limit=100"))
 
     internal fun parsePlayback(items: JSONArray): List<Pair<PlaybackIdentity, Double>> =
@@ -185,19 +186,19 @@ class TraktApi internal constructor(
                 identity to percent
             }
 
-    fun lists(): List<Pair<String, String>> = pages("/users/me/lists").mapNotNull { value ->
+    override fun lists(): List<Pair<String, String>> = pages("/users/me/lists").mapNotNull { value ->
         val ids = value.optJSONObject("ids") ?: return@mapNotNull null
         val id = ids.optLong("trakt", -1)
         if (id < 0) null else id.toString() to value.optString("name", "Untitled list")
     }
 
-    fun listItems(id: String): List<MediaItemData> {
+    override fun listItems(id: String): List<MediaItemData> {
         require(id.isNotBlank() && id.length <= 200) { "Invalid Trakt list." }
         return pages("/users/me/lists/${Net.encode(id)}/items?extended=full").mapNotNull(::parseMedia)
     }
 
     /** Show entries are added as shows; selecting an episode never adds the entire season. */
-    fun setWatchlist(identity: PlaybackIdentity, add: Boolean) = synchronized(writeLock) {
+    override fun setWatchlist(identity: PlaybackIdentity, add: Boolean) = synchronized(writeLock) {
         val body = watchlistBody(identity)
         val result = try {
             objectRequest(if (add) "/sync/watchlist" else "/sync/watchlist/remove", "POST", body)
@@ -225,7 +226,7 @@ class TraktApi internal constructor(
     }
 
     /** Server-calculated next aired episode for up to ten most recently watched shows. */
-    fun nextEpisodes(): List<PlaybackIdentity> {
+    override fun nextEpisodes(): List<PlaybackIdentity> {
         val watched = arrayRequest("/sync/watched/shows?extended=full")
         val recent = (0 until watched.length()).mapNotNull { watched.optJSONObject(it) }
             .sortedByDescending { it.optString("last_watched_at") }
@@ -253,7 +254,7 @@ class TraktApi internal constructor(
     }
 
     /** Authorization changes and refreshes share tokenLock; an old queued event cannot cross accounts. */
-    fun progressForAccount(identity: PlaybackIdentity, percent: Double, action: String, revision: String): Boolean =
+    override fun progressForAccount(identity: PlaybackIdentity, percent: Double, action: String, revision: String): Boolean =
         synchronized(writeLock) {
             synchronized(tokenLock) {
                 if (revision.isBlank() || !connected() || accountRevision() != revision) false
@@ -282,7 +283,7 @@ class TraktApi internal constructor(
         Unit
     }
 
-    fun markWatched(identity: PlaybackIdentity) = synchronized(writeLock) {
+    override fun markWatched(identity: PlaybackIdentity) = synchronized(writeLock) {
         validateIdentity(identity)
         val media = JSONObject().put("ids", JSONObject().put("imdb", identity.imdbId))
         val body = if (isMovie(identity)) {
