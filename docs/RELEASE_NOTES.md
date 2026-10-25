@@ -1,15 +1,14 @@
-# POV Rajput 0.2.12
+# POV Rajput 0.2.13
 
-- Continue Watching reuses the last successfully played link for up to 24 hours and searches for fresh sources when that link is unavailable.
-- Long-press a Continue Watching item for **Open Media** or **Remove from Continue Watching**. Details include watchlist, watched-status, playlist and fresh-source actions.
-- Home now offers Cinemeta catalogs in this order: **New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies, Popular Shows**. These catalogs work without a WeTrakr account. WeTrakr Continue Watching and optional liked lists remain available.
-- Improved D-pad navigation across Home, Movies, Shows, Anime, Library, WeTrakr and Settings. Shelf headings are selectable, entering a shelf starts at its first poster, and scrolling back up reveals the top content.
-- Returning from details and grids preserves Home position. Removing Continue Watching items updates the row without rebuilding the whole page.
-- Search supports voice input and submits directly from the keyboard Search/Enter action.
-- Recognized cloud-library movies and shows display posters from Cinemeta.
-- Editorial is the default theme for new installations.
+- Added **Settings → Source providers** to manage multiple named scraper addresses.
+- Turn providers on or off independently without removing their saved configuration. Edit names and addresses, or remove providers when no longer needed.
+- Search combines results from enabled providers and displays their names instead of endpoint addresses.
+- Matching torrent files and identical direct links appear once, with the contributing provider names. Different torrent files and signed playback URLs remain separate.
+- Source requests run concurrently. If one provider is unavailable, results from the others remain accessible.
+- Existing quality/file-size sorting and debrid priority apply to combined results. Returning to results after changing provider settings refreshes the search.
+- Existing source addresses are preserved as **Source 1** and can be renamed. Provider addresses stay encrypted on the device.
 
-Add your preferred scraper URL in **Settings → Source provider address** to find playback sources. Use an HTTPS Stremio-compatible add-on URL.
+Add your preferred scraper URLs in **Settings → Source providers** and choose a name for each. Use HTTPS Stremio-compatible add-on URLs.
 
 ## Credits and source
 
@@ -19,4 +18,4 @@ Maintained by **Rajput**. Original Android TV application: **Mark Mateo / MM-482
 
 Users supply their own registered WeTrakr Client ID in Settings. No developer Client ID, client secret or account tokens are included in the source or release APK.
 
-WeTrakr API documentation: [api.wetrakr.com](https://api.wetrakr.com/). See [0.2.11 release notes](RELEASE_NOTES_0.2.11.md) for earlier changes.
+WeTrakr API documentation: [api.wetrakr.com](https://api.wetrakr.com/). See [0.2.12 release notes](RELEASE_NOTES_0.2.12.md) for earlier changes.

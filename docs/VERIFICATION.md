@@ -6,7 +6,7 @@ Release builds run unit tests and Android debug/release lint before APK assembly
 
 Checks cover Offcloud protocol handling, player controls and track selection, subtitle preferences, and existing application behavior. Device and media format compatibility can vary.
 
-## Unreleased: named source providers
+## POV Rajput 0.2.13
 
 366 unit tests and debug/release lint pass. Provider checks cover preserving the existing address, configuration validation, independent enable/disable state, parallel retrieval, partial failures, combined cache checks, exact duplicate merging, separate torrent files and signed URLs, and episode filtering. Android TV instrumentation exercises adding, editing, toggling and confirmed removal using temporary provider fixtures; the original encrypted source configuration is restored afterward.
 
