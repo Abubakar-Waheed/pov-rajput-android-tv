@@ -32,6 +32,29 @@ class CatalogApi internal constructor(private val publicJson: (String) -> JSONOb
         return catalog("$BASE/catalog/$type/top/skip=$skip.json", type)
     }
 
+    data class HomeShelf(val title: String, val type: String, val items: List<MediaItemData>, val unavailable: Boolean = false)
+    fun newReleases(type: String, year: Int = java.time.Year.now(java.time.ZoneOffset.UTC).value): List<MediaItemData> {
+        requireType(type); require(year in 1900..2100)
+        return catalog("$BASE/catalog/$type/year/genre=$year.json", type).filter { it.year.take(4) == year.toString() }
+    }
+    fun featured(type: String): List<MediaItemData> {
+        requireType(type)
+        return catalog("$BASE/catalog/$type/imdbRating.json", type)
+    }
+    /** Keep stable shelf order and useful catalogs even when one public endpoint fails. */
+    fun homeShelves(): List<HomeShelf> {
+        val definitions = listOf("New Movies" to "movie", "New Shows" to "series", "Featured Movies" to "movie",
+            "Featured Shows" to "series", "Popular Movies" to "movie", "Popular Shows" to "series")
+        val executor = Executors.newFixedThreadPool(3)
+        try {
+            val futures = definitions.mapIndexed { index, (title, type) -> executor.submit(Callable {
+                val result = runCatching { when (index) { 0, 1 -> newReleases(type); 2, 3 -> featured(type); else -> popular(type) } }
+                HomeShelf(title, type, result.getOrDefault(emptyList()), result.isFailure)
+            }) }
+            return futures.map { it.get() }
+        } finally { executor.shutdownNow() }
+    }
+
     fun search(query: String, type: String): List<MediaItemData> {
         requireType(type)
         val term = query.trim().take(200)

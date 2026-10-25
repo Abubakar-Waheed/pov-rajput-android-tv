@@ -19,7 +19,7 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 - Added JSON cache checks, cloud transfer preparation, download-status polling, cloud-history browsing, and exact file selection.
 - Added encrypted 24-hour reuse of the last successfully played stream, with fresh source search when an expired link fails.
 - Added keyboard Search/Enter submission and an optional microphone action using the TV voice service.
-- Added release-date-ordered WeTrakr Trending movies and TV shows, expandable Home shelves, and retained pages when returning from details.
+- Added Cinemeta New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies and Popular Shows, expandable shelves, and retained pages when returning from details.
 - Added conservative Cinemeta poster matching for cloud-library filenames without automatically assigning tracking identities.
 - Added combined Offcloud/TorBox cache searches and selectable debrid priority, safe episode matching, duplicate-transfer prevention, and retry reuse for pending downloads.
 - Improved the connection dialog with visible progress/errors and retained input when validation fails.
@@ -67,7 +67,7 @@ Screenshots of POV Rajput for Android TV with the Editorial theme, using sample 
 
 ## Discovery and search
 
-Home shelf headings open a grid of their fetched titles. Connected WeTrakr accounts also get Trending movies and Trending TV shows above the Popular shelves. Trending uses the first 100 titles in WeTrakr’s weekly community feed, orders released titles by newest release date (TV shows use their first-air date), and caches the feed for six hours. Cinemeta remains the metadata source; TMDB integration is postponed.
+Home shelf headings open a grid of their fetched titles. Everyone gets six Cinemeta shelves in this order: **New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies, Popular Shows**. New uses the current-year catalog and filters inconsistent release years; Featured preserves Cinemeta’s own selection, without claiming a highest-rating order. No tracking account or API key is needed for these catalogs. WeTrakr supplies Continue Watching and optional liked lists, alongside its existing watchlist/library features. TMDB integration is postponed.
 
 The search dialog accepts the keyboard’s Search/Enter action directly. **Voice search** uses an installed TV speech-input activity; TVs without one retain keyboard search. Cloud-library posters use exact title/year matches from Cinemeta; ambiguous filenames keep their original labels and are never silently scrobbled as a guessed title.
 

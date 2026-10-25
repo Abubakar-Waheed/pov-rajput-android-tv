@@ -59,7 +59,7 @@ class HomeNavigationInstrumentation : Instrumentation() {
                 override fun put(values: Map<String, String>) { credentials.putAll(values) }
             }, { path, method, _, _ ->
                 when {
-                    path.startsWith("/discover/trending") -> if (path.contains("filter_type=movie")) """[{"type":"movie","title":"Public trending sample","ids":{"imdb":"tt1234567"},"release_date":"2025-01-01"}]""" else """[{"type":"show","title":"Public trending show","ids":{"imdb":"tt7654321"},"first_air_date":"2025-01-01"}]"""
+                    path.startsWith("/discover/") -> error("WeTrakr discovery must not be requested")
                     path == "/scrobble/playing" && method == "DELETE" -> { removals.incrementAndGet(); """{"action":"cancel"}""" }
                     path.startsWith("/sync/tracking/playing/movies") -> """[{"type":"movie","title":"Big Buck Bunny","ids":{"imdb":"tt1254207"},"playback":{"progress_percent":20}}]"""
                     else -> { check(method == "GET"); "[]" }
@@ -68,7 +68,12 @@ class HomeNavigationInstrumentation : Instrumentation() {
             val catalog = CatalogApi { address ->
                 catalogs.incrementAndGet()
                 if (address.contains("/meta/")) JSONObject("""{"meta":{"id":"tt1254207","name":"Big Buck Bunny","type":"movie","year":"2008","description":"A public movie used for native TV navigation checks."}}""")
-                else JSONObject("""{"metas":[{"id":"tt1254207","name":"Big Buck Bunny","year":"2008"},{"id":"tt1234567","name":"Public sample","year":"2025"}]}""")
+                else {
+                    val year = java.time.Year.now(java.time.ZoneOffset.UTC).value.toString()
+                    val data = JSONObject("""{"metas":[{"id":"tt1254207","name":"Big Buck Bunny","year":"2008"},{"id":"tt1234567","name":"Public sample","year":"2025"},{"id":"tt7654321","name":"Third public sample","year":"2025"}]}""")
+                    if (address.contains("/year/")) for (i in 0 until data.getJSONArray("metas").length()) data.getJSONArray("metas").getJSONObject(i).put("year", year)
+                    data
+                }
             }
             val sourceApi = SourceResolver({ "https://provider.example.invalid" }, object : SourceTorBox {
                 override fun cached(hashes: List<String>): Set<String> = emptySet()
@@ -82,17 +87,46 @@ class HomeNavigationInstrumentation : Instrumentation() {
                 field("wetrakr").set(activity, tracker); field("catalog").set(activity, catalog); field("resolver").set(activity, sourceApi)
                 field("publicPreview").setBoolean(activity, false); field("theme").set(activity, ThemeSpec.EDITORIAL); call("shell"); call("home")
             }
-            await { settled() && main { texts().any { it.text.startsWith("Popular movies") } && views(body()).any { it.getTag(R.id.pov_continue_identity) == "tt1254207:0:0" } } }
-            await { settled() && main { texts().any { it.text.startsWith("Trending movies") } && texts().any { it.text.startsWith("Trending TV shows") } } }
+            val shelfNames = listOf("New Movies", "New Shows", "Featured Movies", "Featured Shows", "Popular Movies", "Popular Shows")
+            fun awaitHome() = await { settled() && main { shelfNames.all { label -> views(body()).any { it.tag == "shelf:$label" } } } }
+            awaitHome()
+            stage = "public_catalogs_without_tracker"
+            main { credentials["access_token"] = ""; call("home") }
+            awaitHome()
             main {
-                val roots = children()
-                check(roots.indexOfFirst { it.tag == "home-trending" } < roots.indexOfFirst { it.tag == "shelf:Popular movies" })
-            }; report.putBoolean("trending_above_popular", true)
+                check(children().mapNotNull { (it.tag as? String)?.removePrefix("shelf:")?.takeIf { label -> label in shelfNames } } == shelfNames)
+                check(views(body()).none { it.tag == "home-trending" })
+                credentials["access_token"] = "fixture-access"; call("home")
+            }
+            awaitHome()
+            await { main { views(body()).any { it.getTag(R.id.pov_continue_identity) == "tt1254207:0:0" } } }
+            report.putBoolean("six_cinemeta_shelves_without_tracking_account", true)
+            stage = "shelf_focus_regression"
+            fun step(key: Int) = main {
+                activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)); activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
+            }
+            val firstHeroControl = main { views(views(body()).first { it.tag == "featured-hero" }).first { it.isFocusable } }
+            await { main { activity.currentFocus === firstHeroControl } }
+            report.putBoolean("initial_home_focus_starts_at_hero", true)
+            step(KeyEvent.KEYCODE_DPAD_DOWN)
+            check(main { activity.currentFocus?.getTag(R.id.pov_continue_identity) == "tt1254207:0:0" })
+            step(KeyEvent.KEYCODE_DPAD_DOWN)
+            check(main { activity.currentFocus?.tag == "shelf:New Movies" })
+            for ((index, label) in shelfNames.withIndex()) {
+                val first = main { views(body()).first { (it.tag as? String)?.startsWith("row:$label:") == true } }
+                step(KeyEvent.KEYCODE_DPAD_DOWN); check(main { activity.currentFocus === first })
+                step(KeyEvent.KEYCODE_DPAD_UP); check(main { activity.currentFocus?.tag == "shelf:$label" })
+                step(KeyEvent.KEYCODE_DPAD_DOWN); check(main { activity.currentFocus === first })
+                if (index < shelfNames.lastIndex) {
+                    step(KeyEvent.KEYCODE_DPAD_DOWN); check(main { activity.currentFocus?.tag == "shelf:${shelfNames[index + 1]}" })
+                }
+            }
+            report.putBoolean("headers_never_skipped_and_rows_start_first", true)
             stage = "grid_and_back"
             val homeChildren = main { children() }; val homeGeneration = main { field("generation").getInt(activity) }
             val before = catalogs.get()
-            main { texts().first { it.text.startsWith("Popular movies") }.performClick() }
-            await { main { texts().any { it.text == "Popular movies" } } }
+            main { texts().first { it.text.startsWith("Popular Movies") }.performClick() }
+            await { main { texts().any { it.text == "Popular Movies" } } }
             main { activity.onBackPressed() }
             await { main { children() == homeChildren && field("generation").getInt(activity) == homeGeneration } }
             check(catalogs.get() == before); report.putBoolean("grid_back_retains_home", true)
@@ -194,17 +228,49 @@ class HomeNavigationInstrumentation : Instrumentation() {
             await { sources.get() == 1 && settled() && main { texts().any { it.text.toString().contains("Public sample 1080p") } } }
             check(links.find(identity) == null); removeMonitor(monitor)
             report.putBoolean("expired_link_searches_fresh", true)
+            stage = "all_tabs_return_to_top"
+            main { field("anime").set(activity, AnimeCatalogApi({ JSONObject("""{"data":[]}""") }, { _, _, _ -> null })) }
+            for (tab in listOf("movie", "series", "anime", "library", "wetrakr", "settings")) {
+                main {
+                    when (tab) {
+                        "movie", "series" -> MainActivity::class.java.getDeclaredMethod("catalogPage", String::class.java, String::class.java, Int::class.javaPrimitiveType).apply { isAccessible = true }.invoke(activity, tab, "", 0)
+                        "anime" -> MainActivity::class.java.getDeclaredMethod("animePage", String::class.java, String::class.java, Int::class.javaPrimitiveType).apply { isAccessible = true }.invoke(activity, "series", "", 0)
+                        "library" -> call("selectedCloud")
+                        "wetrakr" -> call("weTrakrPage")
+                        else -> call("settings")
+                    }
+                }
+                await { settled() }
+                main {
+                    val focus = field("focusController").get(activity) as TvFocusController
+                    focus.reset(); check(focus.first())
+                    repeat(80) { focus.move(View.FOCUS_DOWN) }
+                    repeat(80) { focus.move(View.FOCUS_UP) }
+                    check((field("scroller").get(activity) as ScrollView).scrollY == 0)
+                }
+            }
+            report.putBoolean("movies_shows_anime_library_wetrakr_settings_return_to_top", true)
+            stage = "all_theme_shelf_headers"
+            for (theme in ThemeSpec.entries) {
+                main { field("theme").set(activity, theme); call("shell"); call("home") }
+                awaitHome()
+                main {
+                    views(body()).first { it.tag == "shelf:New Movies" }.requestFocus()
+                    val focus = field("focusController").get(activity) as TvFocusController
+                    val first = views(body()).first { (it.tag as? String)?.startsWith("row:New Movies:") == true }
+                    focus.move(View.FOCUS_DOWN); check(activity.currentFocus === first)
+                    focus.move(View.FOCUS_UP); check(activity.currentFocus?.tag == "shelf:New Movies")
+                    focus.move(View.FOCUS_DOWN); focus.move(View.FOCUS_DOWN); check(activity.currentFocus?.tag == "shelf:New Shows")
+                }
+            }
+            report.putBoolean("all_five_themes_header_and_first_poster_navigation", true)
             if (liveDiscovery) {
                 stage = "live_read_only_discovery"
-                val live = WeTrakrApi(store)
-                check(live.connected())
-                report.putInt("live_trending_movies", live.trending("movie").size)
-                report.putInt("live_trending_shows", live.trending("series").size)
-                val query = checkNotNull(CloudMetadata.query("The.Dark.Knight.2008.1080p.mkv"))
-                val match = CloudMetadata.match(query, CatalogApi().searchAll(query.title).items)
-                check(match?.imdbId == "tt0468569" && match.poster.startsWith("https://"))
-                report.putBoolean("live_cinemeta_filename_poster", true)
-                report.putBoolean("live_discovery_read_only", true)
+                val shelves = CatalogApi().homeShelves()
+                check(shelves.map { it.title } == shelfNames)
+                check(shelves.none { it.unavailable } && shelves.all { it.items.isNotEmpty() })
+                shelves.forEachIndexed { index, shelf -> report.putInt("live_cinemeta_shelf_${index + 1}", shelf.items.size) }
+                report.putBoolean("live_cinemeta_six_catalogs", true)
             }
             passed = true
         } catch (error: Throwable) { report.putString("stage", stage); report.putString("error_type", error.javaClass.simpleName); report.putString("failure_at", error.stackTrace.firstOrNull { it.className.contains("HomeNavigation") }?.let { "${it.methodName}:${it.lineNumber}" }) }

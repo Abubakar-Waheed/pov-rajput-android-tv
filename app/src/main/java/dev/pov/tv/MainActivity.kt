@@ -176,7 +176,10 @@ class MainActivity : Activity() {
             if (body.hasFocus() && direction != null && focusController.next(direction) == null) {
                 val leaving = (theme.layout.navigation == NavigationPlacement.TOP_BAR && direction == View.FOCUS_UP) ||
                     (theme.layout.navigation == NavigationPlacement.LEFT_RAIL && direction == View.FOCUS_LEFT)
-                if (leaving && navigationViews[destination]?.requestFocus() == true) return true
+                if (leaving && navigationViews[destination]?.requestFocus() == true) {
+                    if (direction == View.FOCUS_UP) scroller.scrollTo(0, 0)
+                    return true
+                }
             }
             if (body.hasFocus() && event.keyCode in setOf(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP))
                 return focusController.move(if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) View.FOCUS_DOWN else View.FOCUS_UP)
@@ -336,30 +339,29 @@ class MainActivity : Activity() {
         val id = page(""); isHome = true; body.setPadding(0, 0, 0, contentBottomPadding())
         val remoteHome = !publicPreview && wetrakr.connected()
         val recent = if (publicPreview || remoteHome) emptyList() else history.continueWatching()
-        read(id, { catalog.popular("movie") to catalog.popular("series") }) { (movies, series) ->
+        read(id, { catalog.homeShelves() }) { shelves ->
+            val movies = shelves.first { it.title == "Popular Movies" }.items
+            val series = shelves.first { it.title == "Popular Shows" }.items
             if (theme == ThemeSpec.DASHBOARD) {
-                if (remoteHome) homeTrending(id)
                 dashboard(recent, movies, series)
                 if (remoteHome) homeContinueWatching(id)
             } else {
-                val featured = movies.firstOrNull() ?: series.firstOrNull()
-                featured?.let { hero(it) }
+                (movies.firstOrNull() ?: shelves.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull())?.let { hero(it) }
                 if (remoteHome) homeContinueWatching(id) else if (recent.isNotEmpty()) resumeRow(recent)
-                if (remoteHome) homeTrending(id)
-                mediaRow("Popular movies", movies); mediaRow("Popular TV shows", series)
+            }
+            shelves.forEach { shelf ->
+                if (shelf.items.isNotEmpty()) mediaRow(shelf.title, shelf.items) else {
+                    body.addView(button("${shelf.title}  ›") { navigate { shelfGrid(shelf.title, shelf.items) } }
+                        .apply { tag = "shelf:${shelf.title}" }, margin(-1, 40, top = 10, bottom = 7))
+                    body.addView(text(if (shelf.unavailable) "This catalog is temporarily unavailable." else "No titles returned for this catalog.", 13, muted))
+                    if (shelf.unavailable) body.addView(button("Retry ${shelf.title}") { home() }, margin(240, 38, bottom = 10))
+                }
             }
             if (!publicPreview && wetrakr.connected() && store.get("wetrakr.home_liked_opt_in") == "true") homeLikedLists(id)
             homeCredit()
         }
     }
 
-    private fun homeTrending(id: Int) {
-        val host = column().apply { tag = "home-trending" }; body.addView(host, margin(-1, -2))
-        // A failed feed must not hide Continue Watching or the ordinary catalog rows.
-        read(id, { listOf("movie", "series").map { type -> runCatching { wetrakr.trending(type) }.getOrDefault(emptyList()) } }) { feeds ->
-            mediaRow("Trending movies", feeds[0], host); mediaRow("Trending TV shows", feeds[1], host)
-        }
-    }
     private fun homeContinueWatching(id: Int) {
         val host = column().apply { tag = "wetrakr-home-continue" }
         body.addView(host, margin(-1, -2, top = 10))
@@ -616,7 +618,6 @@ class MainActivity : Activity() {
         library.addView(button("▣   Shows     ›") { navigate { catalogPage("series") } }, margin(-1, 44, bottom = 6))
         library.addView(button("☁   Cloud library  ›") { navigate { selectedCloud() } }, margin(-1, 44))
         lower.addView(library, margin(247, -2)); body.addView(lower)
-        mediaRow("Popular movies", movies); mediaRow("Popular TV shows", series)
 
     }
 
@@ -748,7 +749,7 @@ class MainActivity : Activity() {
             val width = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2
             val count = (width / (cardWidth() + theme.layout.cardGapDp)).coerceAtLeast(1)
             result.items.chunked(count).forEach { group ->
-                val row = LinearLayout(this); body.addView(row, margin(-1, -2, top = 14))
+                val row = LinearLayout(this).apply { tag = "media-grid-row" }; body.addView(row, margin(-1, -2, top = 14))
                 group.forEach { title ->
                     val media = MediaItemData("", title.type, title.title, title.year, title.poster, title.background, title.description, title.genres)
                     row.addView(tile(media, caption = animeFormat(title)) { navigate { animeDetails(title) } }.apply { tag = "anime:${title.kitsuId}" }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
@@ -1795,7 +1796,7 @@ class MainActivity : Activity() {
         val width = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2
         val count = (width / (cardWidth() + theme.layout.cardGapDp)).coerceAtLeast(1)
         items.chunked(count).forEach { chunk ->
-            val row = LinearLayout(this); host.addView(row, margin(-1, -2, top = 14))
+            val row = LinearLayout(this).apply { tag = "media-grid-row" }; host.addView(row, margin(-1, -2, top = 14))
             chunk.forEach { item ->
                 val view = if (showType) tile(item, caption = listOf(if (item.type == "movie") "Movie" else "TV show", item.year).filter { it.isNotBlank() }.joinToString(" · ")) { navigate { details(item) } } else card(item)
                 row.addView(view, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))

@@ -5,6 +5,7 @@ import android.view.FocusFinder
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ScrollView
+import android.widget.LinearLayout
 
 internal data class TvFocusSnapshot(val key: String?, val scrollY: Int)
 
@@ -30,14 +31,47 @@ internal class TvFocusController(
     fun move(direction: Int): Boolean {
         val focused = body.findFocus() ?: return first()
         if (focused !in leaves()) return first()
-        next(direction)?.let(::select)
+        val target = next(direction)
+        if (target != null) select(target) else if (direction == View.FOCUS_UP) reveal(focused)
         // Keep the last visible leaf selected at an edge rather than scrolling empty space.
         return true
     }
 
-    fun next(direction: Int): View? = body.findFocus()?.let { focused ->
-        TvChoiceList.nextFrom(focused, direction)
-            ?: FocusFinder.getInstance().findNextFocus(body, focused, direction)?.takeIf { it in leaves() }
+    fun next(direction: Int): View? {
+        val focused = body.findFocus() ?: return null
+        if (direction == View.FOCUS_UP || direction == View.FOCUS_DOWN) {
+            val rows = focusRows()
+            val index = rows.indexOfFirst { focused in it.targets }
+            if (index < 0) return null
+            val target = rows.getOrNull(index + if (direction == View.FOCUS_DOWN) 1 else -1) ?: return null
+            // Grid columns stay aligned; a shelf/header/action boundary always enters at its first item.
+            val column = if (rows[index].owner.tag == "media-grid-row" && target.owner.tag == "media-grid-row")
+                rows[index].targets.indexOf(focused).coerceAtMost(target.targets.lastIndex) else 0
+            return target.targets[column]
+        }
+        return FocusFinder.getInstance().findNextFocus(body, focused, direction)?.takeIf { it in leaves() }
+    }
+    private data class FocusRow(val owner: View, val targets: List<View>)
+    private fun focusRows(): List<FocusRow> {
+        val targets = leaves()
+        fun within(view: View, parent: View): Boolean {
+            var node: View? = view
+            while (node != null && node !== body) { if (node === parent) return true; node = node.parent as? View }
+            return false
+        }
+        fun owner(view: View): View {
+            var branch = view
+            var parent = view.parent as? View
+            while (parent != null && parent !== body) {
+                if (parent is LinearLayout && parent.orientation == LinearLayout.HORIZONTAL) {
+                    // Do not collapse several vertically stacked controls in a dashboard column.
+                    return if (branch.isFocusable || targets.count { within(it, branch) } == 1) parent else view
+                }
+                branch = parent; parent = parent.parent as? View
+            }
+            return view
+        }
+        return targets.groupBy(::owner).map { (row, items) -> FocusRow(row, items) }
     }
 
     fun first(): Boolean {
@@ -65,6 +99,7 @@ internal class TvFocusController(
         return result
     }
     private fun reveal(view: View) {
+        if (focusRows().firstOrNull()?.targets?.contains(view) == true) { scroll.scrollTo(0, 0); return }
         var ancestor: View? = view
         while (ancestor != null && ancestor !== body) {
             if (ancestor.tag == "featured-hero") { scroll.scrollTo(0, 0); return }
