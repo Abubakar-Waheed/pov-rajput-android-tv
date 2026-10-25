@@ -198,7 +198,8 @@ class SourceResolver internal constructor(
     }
 
     private fun endpoint(value: String): String {
-        val candidate = value.trim().ifEmpty { DEFAULT_ENDPOINT }.removeSuffix("/").removeSuffix("/manifest.json")
+        require(value.isNotBlank()) { "Add your own source provider address in Settings before searching for links." }
+        val candidate = value.trim().removeSuffix("/").removeSuffix("/manifest.json")
         require(candidate.length <= 4_096 && isHttps(candidate)) { "Enter a valid HTTPS Stremio add-on endpoint." }
         val uri = URI(candidate)
         require(uri.query == null && uri.fragment == null) { "Use the add-on base URL or manifest URL, without a query or fragment." }
@@ -211,7 +212,6 @@ class SourceResolver internal constructor(
     } catch (_: Exception) { false }
 
     private companion object {
-        const val DEFAULT_ENDPOINT = "https://torrentio.strem.fun"
         val HASH = Regex("[a-f0-9]{40}")
         val IMDB_ID = Regex("tt[0-9]{5,12}")
     }

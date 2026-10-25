@@ -55,6 +55,8 @@ object InAppPlaybackSession {
     private lateinit var wetrakrOutbox: PlaybackStore
     private var sourceUrl = ""
     private var sourceKey = ""
+    private var playbackAccount: String? = null
+    private var lastLinkSaved = false
     var debridService: String? = null
         private set
     private var identity: PlaybackIdentity? = null
@@ -154,6 +156,8 @@ object InAppPlaybackSession {
         stopInternal(notify = false)
         sourceUrl = address
         sourceKey = intent.getStringExtra("key").orEmpty()
+        playbackAccount = saved?.getString("playback_account") ?: intent.getStringExtra("playback_account")
+        lastLinkSaved = false
         debridService = PlaybackDebrid.normalize(saved?.getString("debrid_service") ?: intent.getStringExtra("debrid_service"))
         title = intent.getStringExtra("title").orEmpty()
         identity = try { intent.getStringExtra("identity")?.let { PlaybackIdentity.fromJson(JSONObject(it)) } } catch (_: Exception) { null }
@@ -258,6 +262,13 @@ object InAppPlaybackSession {
             override fun onPlaybackStateChanged(state: Int) {
                 if (!isCurrent(exo)) return
                 if (state != Player.STATE_ENDED && enforceVideoCompatibility(exo)) return
+                if (state == Player.STATE_READY && !lastLinkSaved) {
+                    lastLinkSaved = true
+                    val media = identity; val account = playbackAccount
+                    if (media != null && account != null) runCatching {
+                        dev.pov.tv.data.LastPlayedLinks(SecureStore(application!!)).save(media, sourceUrl, sourceKey, debridService, account)
+                    }
+                }
                 if (state == Player.STATE_READY && remotePercent > 0 && exo.duration > 0) {
                     val percent = remotePercent
                     remotePercent = 0.0
@@ -355,7 +366,7 @@ object InAppPlaybackSession {
         targetView = null
         mediaSession?.release(); mediaSession = null
         exo?.release(); player = null
-        sourceUrl = ""; sourceKey = ""; title = ""; identity = null; debridService = null
+        sourceUrl = ""; sourceKey = ""; title = ""; identity = null; debridService = null; playbackAccount = null; lastLinkSaved = false
         remotePercent = 0.0; error = null
         if (notify) notifyChanged()
     }
@@ -364,6 +375,7 @@ object InAppPlaybackSession {
         val exo = player ?: return
         out.putLong("position", exo.currentPosition.coerceAtLeast(0))
         out.putString("debrid_service", debridService)
+        out.putString("playback_account", playbackAccount)
         out.putBoolean("playWhenReady", exo.playWhenReady && exo.playbackState != Player.STATE_ENDED)
         out.putDouble("remotePercent", remotePercent)
         out.putBundle("tracks", exo.trackSelectionParameters.toBundle())
@@ -373,7 +385,7 @@ object InAppPlaybackSession {
         val exo = player ?: return null
         return Intent(context, PlayerActivity::class.java).putExtra("reuse_session", true)
             .putExtra("url", sourceUrl).putExtra("title", title).putExtra("key", sourceKey)
-            .putExtra("debrid_service", debridService)
+            .putExtra("debrid_service", debridService).putExtra("playback_account", playbackAccount)
             .putExtra("resume", exo.currentPosition).putExtra("resume_percent", remotePercent)
             .putExtra("playWhenReady", exo.playWhenReady)
             .also { value -> identity?.let { value.putExtra("identity", it.toJson().toString()) } }

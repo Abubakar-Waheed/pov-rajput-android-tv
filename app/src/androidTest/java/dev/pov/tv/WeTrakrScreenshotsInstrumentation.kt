@@ -45,6 +45,7 @@ class WeTrakrScreenshotsInstrumentation : Instrumentation() {
             }, { path, method, _, _ ->
                 check(method == "GET")
                 when {
+                    path.startsWith("/discover/trending") -> "[]"
                     path.startsWith("/sync/tracking/planning/movies") -> movies.toString()
                     path.startsWith("/sync/tracking/planning/shows") -> shows.toString()
                     path.startsWith("/sync/likes/lists") -> """[{"list":{"id":125,"name":"Sample favourites"}}]"""

@@ -60,12 +60,14 @@ internal class TvChoiceRow(
     eyebrow: String = "",
     palette: ThemePalette = ThemeSpec.CINEMATIC.palette,
     badges: List<SourceBadge> = emptyList(),
+    withPoster: Boolean = false,
     action: () -> Unit,
 ) : FrameLayout(context) {
     private fun px(value: Int) = (value * resources.displayMetrics.widthPixels / 960f).roundToInt().coerceAtLeast(1)
     val cardHeight = if (badges.isNotEmpty()) LayoutParams.WRAP_CONTENT else px(if (eyebrow.isBlank()) 79 else 101)
     val gap = px(9)
     private val labels = mutableListOf<TextView>()
+    val poster = android.widget.ImageView(context).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_CROP; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
 
     init {
         tag = key
@@ -78,7 +80,7 @@ internal class TvChoiceRow(
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(px(15), px(10), px(15), px(10))
+            setPadding(px(if (withPoster) 70 else 15), px(10), px(15), px(10))
             isFocusable = false
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }
@@ -102,6 +104,7 @@ internal class TvChoiceRow(
         column.addView(label(title, 14, 2, true), LinearLayout.LayoutParams(-1, -2))
         if (detail.isNotBlank()) column.addView(label(detail, 11, 1, false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(5) })
         addView(column, LayoutParams(-1, if (badges.isNotEmpty()) LayoutParams.WRAP_CONTENT else -1))
+        if (withPoster) addView(poster, LayoutParams(px(48), px(67), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = px(10) })
         fun paint(focused: Boolean) {
             background = GradientDrawable().apply {
                 setColor(if (focused) palette.accent else palette.panel)

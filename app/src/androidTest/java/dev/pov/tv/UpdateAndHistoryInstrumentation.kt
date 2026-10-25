@@ -111,12 +111,12 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
                     KeyCharacterMap.VIRTUAL_KEYBOARD, 0, KeyEvent.FLAG_LONG_PRESS, InputDevice.SOURCE_DPAD))
                 sendKeySync(KeyEvent(time, time + 800, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0, 0,
                     KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_DPAD))
-                find("Remove from Continue watching")
+                find("Remove from Continue Watching")
                 if (theme == ThemeSpec.CINEMATIC) capture("continue-watching-remove.png")
-                click("Remove from Continue watching")
+                click("Remove from Continue Watching")
                 check(history.isHidden(saved.key, identity)) { "Removed history item did not stay hidden." }
             }
-            check(refreshes == ThemeSpec.entries.size)
+            check(refreshes == 0)
             report.putBoolean("long_press_all_five_themes", true)
         } finally {
             history.show(saved.key, identity)

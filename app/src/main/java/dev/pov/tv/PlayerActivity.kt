@@ -45,6 +45,7 @@ class PlayerActivity : Activity() {
     private lateinit var seekLabel: TextView
     private val timeline get() = view.findViewById<PreviewTimeBar>(androidx.media3.ui.R.id.exo_progress)
     private var revealKey = KeyEvent.KEYCODE_UNKNOWN
+    private var cachedLinkAttempt = false
     private var observedError: PlaybackException? = null
     private val rowIds = listOf(androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_play_pause,
         androidx.media3.ui.R.id.exo_ffwd, R.id.pov_audio, R.id.pov_subtitles, R.id.pov_boost, R.id.pov_browse)
@@ -68,6 +69,7 @@ class PlayerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        cachedLinkAttempt = intent.getBooleanExtra("cached_playback", false)
         volumeControlStream = AudioManager.STREAM_MUSIC
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -144,6 +146,7 @@ class PlayerActivity : Activity() {
     }
 
     private fun updateControls() {
+        if (player?.playbackState == Player.STATE_READY) cachedLinkAttempt = false
         view.findViewById<TextView>(R.id.pov_playback_title).text = InAppPlaybackSession.title.ifBlank { "Now playing" }
         PlaybackDebrid.bind(view, InAppPlaybackSession.debridService)
         boostButton.text = when {
@@ -157,6 +160,9 @@ class PlayerActivity : Activity() {
     private fun showPlaybackFailure(error: PlaybackException) {
         if (stopped || isFinishing || isDestroyed) return
         observedError = error
+        if (cachedLinkAttempt) {
+            cachedLinkAttempt = false; setResult(RESULT_FIRST_USER, Intent().putExtra("cached_identity", intent.getStringExtra("identity"))); InAppPlaybackSession.stop(); finish(); return
+        }
         if (error is VideoCompatibilityException) {
             showSheet("Choose a compatible video", error.issue.message,
                 listOf(PlayerSheetChoice("Choose another source") { InAppPlaybackSession.stop(); finish() }))

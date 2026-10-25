@@ -121,7 +121,7 @@ enum class ThemeSpec(
 
     companion object {
         /** Unknown or old preferences fall back to the user's selected concept. */
-        fun fromId(id: String?): ThemeSpec = entries.firstOrNull { it.id == id } ?: CINEMATIC
+        fun fromId(id: String?): ThemeSpec = entries.firstOrNull { it.id == id } ?: EDITORIAL
     }
 }
 

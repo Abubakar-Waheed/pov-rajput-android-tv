@@ -50,6 +50,42 @@ class WeTrakrApiTest {
     private val episode = PlaybackIdentity("tt7654321", "series", "Example Show", 0, 2)
     private fun failure(block: () -> Unit): Throwable = try { block(); throw AssertionError("Expected a failure") } catch (error: Exception) { error }
 
+    @Test fun `trending fetches one bounded weekly page and orders released titles newest first`() {
+        val h = Harness(); h.connect(); h.store.put(mapOf("expires_at" to (h.time + 86_400_000L).toString()))
+        h.handler = { path, method, _, _ ->
+            assertEquals("GET", method)
+            assertEquals("/discover/trending?filter_type=movie&days=7&page=1&limit=100", path)
+            """[{"type":"movie","title":"Old","ids":{"imdb":"tt1234567"},"release_date":"1990-01-01"},
+                {"type":"movie","title":"Future","ids":{"imdb":"tt1234568"},"release_date":"2099-01-01"},
+                {"type":"movie","title":"New","ids":{"imdb":"tt1234569"},"release_date":"2026-01-01"},
+                {"type":"movie","title":"Unknown","ids":{"imdb":"tt1234570"}}]"""
+        }
+        assertEquals(listOf("New", "Old", "Unknown"), h.api.trending("movie").map { it.title })
+        h.api.trending("movie"); assertEquals(1, h.calls.size)
+        h.advance(21_600_001); h.api.trending("movie"); assertEquals(2, h.calls.size)
+    }
+    @Test fun `TV trending uses show dates and never shares another account cache`() {
+        val h = Harness(); h.connect()
+        h.handler = { path, _, _, _ ->
+            assertTrue(path.contains("filter_type=show"))
+            """[{"type":"show","title":"Example Show","ids":{"imdb":"tt7654321"},"first_air_date":"2025-10-01"}]"""
+        }
+        assertEquals("series", h.api.trending("series").single().type)
+        h.connect(); h.api.trending("series"); assertEquals(2, h.calls.size)
+    }
+    @Test fun `personal playlist removal posts exact title identity and requires confirmation`() {
+        val h = Harness(); h.connect()
+        h.handler = { path, method, _, body ->
+            assertEquals("/sync/lists/125/items/remove", path); assertEquals("POST", method)
+            assertEquals(movie.imdbId, body!!.getJSONArray("movies").getJSONObject(0).getJSONObject("ids").getString("imdb"))
+            """{"removed":{"total":1,"movies":1},"notFound":{"movies":[]},"errored":{"movies":[]}}"""
+        }
+        h.api.removeListItem("125", movie)
+        h.handler = { _, _, _, _ -> """{"removed":{"total":0},"errored":{"movies":[{"error":"Denied"}]}}""" }
+        assertTrue(failure { h.api.removeListItem("125", movie) } is ApiException)
+        assertTrue(failure { h.api.removeListItem("../other", movie) } is IllegalArgumentException)
+    }
+
     @Test fun `device flow honors interval and stores both tokens without a client secret`() {
         val h = Harness(); val auth = h.api.startDeviceAuth()
         assertFalse(h.api.pollDeviceAuth(auth)); assertEquals(1, h.calls.size)

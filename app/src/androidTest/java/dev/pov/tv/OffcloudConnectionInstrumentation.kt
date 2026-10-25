@@ -56,7 +56,9 @@ class OffcloudConnectionInstrumentation : Instrumentation() {
         val hashes = saved.keys().asSequence().filter { it.matches(Regex("[a-f0-9]{40}")) }.take(40).toMutableList()
         if (hashes.isEmpty()) {
             // Public Big Buck Bunny catalog sources; inspect cache availability, not media bytes.
-            val streams = Net.json("https://torrentio.strem.fun/stream/movie/tt1254207.json").getJSONArray("streams")
+            val endpoint = store.get("sources.endpoint").trim().trimEnd('/').removeSuffix("/manifest.json")
+            check(endpoint.startsWith("https://")) { "Configure your own source provider before running this diagnostic." }
+            val streams = Net.json("$endpoint/stream/movie/tt1254207.json").getJSONArray("streams")
             for (index in 0 until streams.length()) {
                 val hash = streams.optJSONObject(index)?.optString("infoHash").orEmpty().lowercase()
                 if (hash.matches(Regex("[a-f0-9]{40}"))) hashes += hash

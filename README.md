@@ -17,6 +17,10 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 - Added Offcloud API-key connection with Android Keystore encryption.
 - Updated account validation to the current account API and Bearer authorization, replacing the retired proxy endpoint.
 - Added JSON cache checks, cloud transfer preparation, download-status polling, cloud-history browsing, and exact file selection.
+- Added encrypted 24-hour reuse of the last successfully played stream, with fresh source search when an expired link fails.
+- Added keyboard Search/Enter submission and an optional microphone action using the TV voice service.
+- Added release-date-ordered WeTrakr Trending movies and TV shows, expandable Home shelves, and retained pages when returning from details.
+- Added conservative Cinemeta poster matching for cloud-library filenames without automatically assigning tracking identities.
 - Added combined Offcloud/TorBox cache searches and selectable debrid priority, safe episode matching, duplicate-transfer prevention, and retry reuse for pending downloads.
 - Improved the connection dialog with visible progress/errors and retained input when validation fails.
 - Added account-change/cancellation guards and read-only ADB diagnostics that do not expose keys or playback links.
@@ -61,6 +65,12 @@ Screenshots of POV Rajput for Android TV with the Editorial theme, using sample 
 
 ![Five selectable appearances in POV Rajput](docs/screenshots/appearance.png)
 
+## Discovery and search
+
+Home shelf headings open a grid of their fetched titles. Connected WeTrakr accounts also get Trending movies and Trending TV shows above the Popular shelves. Trending uses the first 100 titles in WeTrakr’s weekly community feed, orders released titles by newest release date (TV shows use their first-air date), and caches the feed for six hours. Cinemeta remains the metadata source; TMDB integration is postponed.
+
+The search dialog accepts the keyboard’s Search/Enter action directly. **Voice search** uses an installed TV speech-input activity; TVs without one retain keyboard search. Cloud-library posters use exact title/year matches from Cinemeta; ambiguous filenames keep their original labels and are never silently scrobbled as a guessed title.
+
 ## Features
 
 | Area | Included |
@@ -70,7 +80,7 @@ Screenshots of POV Rajput for Android TV with the Editorial theme, using sample 
 | WeTrakr | Own Client ID, device login, watchlists, liked lists, synced Continue Watching, Up Next, optional scrobbling |
 | Catalog | Movie/show discovery, search, details, seasons, episodes, and anime browsing |
 | Player | Native Media3, fullscreen/mini player, audio/subtitle choices, transparent subtitle backgrounds, bold subtitles, three subtitle sizes, resume, compatibility guard |
-| Appearance | Cinematic, Editorial, Neon, Cinema, and Dashboard |
+| Appearance | Editorial by default for new installs; Cinematic, Neon, Cinema, and Dashboard also available |
 | TV | Android TV launcher, D-pad navigation, Android 8.0/API 26 or later |
 
 Raw cloud files can play without a catalog identity. They are not silently assigned a guessed movie/episode for WeTrakr tracking. Offcloud account plans, limits, availability, and source-provider results remain controlled by their respective services.
@@ -80,8 +90,9 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 1. Download `POV-Rajput-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases).
 2. Sideload it on Android TV 8.0 or later. The launcher name is **POV Rajput**; package ID: `dev.pov.tv.rajput`.
 3. Open **Settings → Connect Offcloud with API key**, enter your own key, and select **Connect**.
-4. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
-5. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
+4. Open **Settings → Source provider address** and enter your own HTTPS Stremio-compatible add-on URL. No source provider is bundled.
+5. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
+6. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 
 Connect TorBox as well to search both caches together. Open **Settings → Debrid priority** to see the numbered order. Select a service, then use **Move up** or **Move down**; number **1** is preferred. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, WeTrakr token, or personal account is bundled. The app can coexist with the original POV package.
 
@@ -151,7 +162,11 @@ The updater downloads only published stable releases from this repository and ch
 
 ## Continue watching
 
-Hold **OK/Select** on a Continue watching card, then choose **Remove from Continue watching**. This works in all five themes and on the WeTrakr page. When connected, it cancels that movie or episode's WeTrakr playback session, removing it from Continue Watching without deleting watched history. The app only confirms removal after WeTrakr accepts it. Saved local resume positions are preserved. Playing the same movie or episode again starts tracking it again. Without a connected account, removal hides the local item on this TV.
+Select a Continue Watching card to resume its last successful stream when the encrypted, account-scoped cache is under 24 hours old. If the link fails to open, the app discards it and searches for fresh sources. A title without a cached link opens source selection.
+
+Hold **OK/Select** on a Continue Watching card for **Open Media** first and **Remove from Continue Watching** second. Open Media shows movie/series details, watchlist and personal-playlist actions, watched controls, and fresh source selection. Removing a card updates the page in place.
+
+Choose **Remove from Continue Watching** to remove that session. This works in all five themes and on the WeTrakr page. When connected, it cancels that movie or episode's WeTrakr playback session, removing it from Continue Watching without deleting watched history. The app only confirms removal after WeTrakr accepts it. Saved local resume positions are preserved. Playing the same movie or episode again starts tracking it again. Without a connected account, removal hides the local item on this TV.
 
 ![Continue watching from WeTrakr](docs/screenshots/continue-watching.png)
 

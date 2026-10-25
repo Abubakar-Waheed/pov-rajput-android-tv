@@ -213,6 +213,40 @@ class WeTrakrApi internal constructor(
         }
         throw ApiException(0, "This WeTrakr list is too large to load at once. Open it on the website.")
     }
+    /** A bounded weekly community feed, sorted by release date within the fetched trending set. */
+    fun trending(type: String): List<MediaItemData> {
+        require(type in setOf("movie", "series"))
+        val path = "/discover/trending?filter_type=${if (type == "movie") "movie" else "show"}&days=7&page=1&limit=100"
+        val revision = accountRevision()
+        if (!connected() || revision.isBlank()) throw ApiException(401, "Connect WeTrakr first.")
+        val key = "$revision:$path"
+        val records = discoveryCache[key]?.takeIf { elapsed() - it.at in 0..21_600_000 }?.records ?: run {
+            val array = try { JSONArray(request(path)) } catch (error: ApiException) { throw error } catch (_: Exception) { malformed() }
+            val values = (0 until minOf(array.length(), 100)).mapNotNull(array::optJSONObject)
+            if (discoveryCache.size > 16) discoveryCache.clear()
+            discoveryCache[key] = Cached(elapsed(), values); values
+        }
+        val today = java.time.Instant.ofEpochMilli(now()).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        return records.mapNotNull { record ->
+            val item = media(record)?.takeIf { it.type == type } ?: return@mapNotNull null
+            val date = runCatching { java.time.LocalDate.parse(record.optString(if (type == "movie") "release_date" else "first_air_date").take(10)) }.getOrNull()
+            if (date != null && date > today) null else item to date
+        }.sortedWith(compareByDescending<Pair<MediaItemData, java.time.LocalDate?>> { it.second ?: java.time.LocalDate.MIN })
+            .map { it.first }.distinctBy { it.imdbId }
+    }
+    /** Only an owned/collaborated list selected by the user can be edited. */
+    fun removeListItem(listId: String, identity: PlaybackIdentity) {
+        require(listId.matches(Regex("[A-Za-z0-9_-]{1,80}")))
+        require(identity.imdbId.matches(Regex("tt[0-9]{5,12}")) && identity.type in setOf("movie", "series"))
+        val target = if (identity.type == "movie") "movies" else "shows"
+        val body = JSONObject().put(target, JSONArray().put(JSONObject().put("ids", JSONObject().put("imdb", identity.imdbId))))
+        val result = parseObject(request("/sync/lists/$listId/items/remove", "POST", body))
+        if ((result.optJSONObject("notFound")?.optJSONArray(target)?.length() ?: 0) > 0 ||
+            (result.optJSONObject("errored")?.optJSONArray(target)?.length() ?: 0) > 0 || result.optJSONObject("removed") == null) {
+            throw ApiException(0, "WeTrakr could not confirm list removal. Refresh the list and try again.")
+        }
+        cache.clear()
+    }
     fun watchlist(type: String): List<MediaItemData> {
         require(type in setOf("movie", "series")) { "Invalid WeTrakr watchlist type." }
         return pages("/sync/tracking/planning/${if (type == "movie") "movies" else "shows"}").mapNotNull(::media)
@@ -329,6 +363,7 @@ class WeTrakrApi internal constructor(
         private val refreshLock = Any()
         private var generation = 0L
         private val cache = ConcurrentHashMap<String, Cached>()
+        private val discoveryCache = ConcurrentHashMap<String, Cached>()
     }
 }
 internal interface WeTrakrCredentials {

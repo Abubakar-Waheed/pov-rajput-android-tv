@@ -65,6 +65,11 @@ internal class TvFocusController(
         return result
     }
     private fun reveal(view: View) {
+        var ancestor: View? = view
+        while (ancestor != null && ancestor !== body) {
+            if (ancestor.tag == "featured-hero") { scroll.scrollTo(0, 0); return }
+            ancestor = ancestor.parent as? View
+        }
         view.requestRectangleOnScreen(Rect(0, 0, view.width, view.height), true)
         val blocked = obstruction() ?: return
         val visible = Rect()

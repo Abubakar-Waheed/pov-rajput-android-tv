@@ -208,7 +208,7 @@ class OffcloudApiTest {
             override fun folder(kind: String, id: Long): CloudFolder = error("TorBox must not be called")
             override fun streamUrl(kind: String, folderId: Long, fileId: Long): String = error("TorBox must not be called")
         }
-        val resolver = SourceResolver({ "" }, torbox, publicJson = {
+        val resolver = SourceResolver({ "https://provider.example.invalid" }, torbox, publicJson = {
             JSONObject("""{"streams":[{"infoHash":"$hash","title":"Movie.mkv"}]}""")
         }, offcloud = { h.api })
         assertTrue(resolver.sources(movie).single().cached)

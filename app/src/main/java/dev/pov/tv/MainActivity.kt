@@ -41,7 +41,7 @@ class MainActivity : Activity() {
     private lateinit var history: PlaybackStore
     private lateinit var body: LinearLayout
     private lateinit var themePreferences: ThemePreferences
-    private var theme = ThemeSpec.CINEMATIC
+    private var theme = ThemeSpec.EDITORIAL
     private lateinit var shellRoot: FrameLayout
     private lateinit var heroBackdrop: FrameLayout
     private lateinit var backdropArt: ImageView
@@ -54,6 +54,8 @@ class MainActivity : Activity() {
     private lateinit var anime: AnimeCatalogApi
     private val worker = Executors.newFixedThreadPool(4)
     private val images = Executors.newFixedThreadPool(3)
+    private val metadataWorker = Executors.newSingleThreadExecutor()
+    private val cloudArtwork = mutableMapOf<String, MediaItemData?>()
     private val bitmapCache = object : LruCache<String, Bitmap>(18 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
@@ -63,7 +65,13 @@ class MainActivity : Activity() {
     private val contentFocusChanged = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, _ ->
         if (::focusController.isInitialized) focusController.revealCurrent()
     }
-    private data class NavigationSnapshot(val screen: () -> Unit, val focus: TvFocusSnapshot, val destination: String)
+    private data class RetainedPage(val children: List<View>, val padding: IntArray, val home: Boolean, val generation: Int,
+        val heroVisibility: Int, val heroHeight: Int, val heroArt: android.graphics.drawable.Drawable?, val heroAddress: String?, val revision: String)
+    private data class NavigationSnapshot(val screen: () -> Unit, val focus: TvFocusSnapshot, val destination: String, val retained: RetainedPage?)
+    private var pageSequence = 0
+    private val pendingLoads = mutableMapOf<Int, Int>()
+    private var cachedPlayback: PlaybackIdentity? = null
+    private var searchDialog: AlertDialog? = null
     private var pendingFocus: TvFocusSnapshot? = null
     private var wantsContentFocus = false
     private var resumed = false
@@ -125,15 +133,28 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         window.decorView.viewTreeObserver.takeIf { it.isAlive }?.removeOnGlobalFocusChangeListener(contentFocusChanged)
         currentPlaybackOptionsDialog?.dismiss(); currentPlaybackOptionsDialog = null
-        authorization?.dismiss(); miniPlayer?.let(InAppPlaybackSession::detachPlayerView)
+        searchDialog?.dismiss(); authorization?.dismiss(); miniPlayer?.let(InAppPlaybackSession::detachPlayerView)
         InAppPlaybackSession.removeListener(playbackChanged)
-        worker.shutdownNow(); images.shutdownNow(); authWorker.shutdownNow(); bitmapCache.evictAll()
+        worker.shutdownNow(); metadataWorker.shutdownNow(); images.shutdownNow(); authWorker.shutdownNow(); bitmapCache.evictAll()
         super.onDestroy()
     }
     @Deprecated("Android TV Back handling") override fun onBackPressed() {
         if (backStack.isNotEmpty()) {
             val saved = backStack.removeLast(); current = saved.screen; destination = saved.destination
-            pendingFocus = saved.focus; current(); refreshNavigation()
+            pendingFocus = saved.focus
+            val cached = saved.retained
+            if (cached != null && cached.revision == pageRevision()) {
+                generation = cached.generation; resolvingGeneration = null; isHome = cached.home
+                focusController.reset(); body.removeAllViews()
+                body.setPadding(cached.padding[0], cached.padding[1], cached.padding[2], cached.padding[3])
+                cached.children.forEach { (it.parent as? ViewGroup)?.removeView(it); body.addView(it) }
+                heroBackdrop.visibility = cached.heroVisibility; heroBackdrop.layoutParams.height = cached.heroHeight
+                backdropArt.tag = cached.heroAddress; backdropArt.setImageDrawable(cached.heroArt)
+                if (cached.heroArt == null) cached.heroAddress?.let { image(backdropArt, it) }
+                heroBackdrop.requestLayout()
+                wantsContentFocus = true; focusAfterRender(generation)
+            } else current()
+            refreshNavigation()
         } else AlertDialog.Builder(this).setTitle("Leave POV?")
             .setPositiveButton(if (InAppPlaybackSession.hasActive()) "Stop and leave" else "Leave") { _, _ -> InAppPlaybackSession.stop(); finish() }
             .setNegativeButton("Stay", null).show()
@@ -275,9 +296,19 @@ class MainActivity : Activity() {
     }
 
     private fun navigate(screen: () -> Unit) {
-        backStack.addLast(NavigationSnapshot(current, focusController.capture(), destination))
+        val retained = if (pendingLoads[generation].orZero() == 0) RetainedPage(
+            (0 until body.childCount).map(body::getChildAt), intArrayOf(body.paddingLeft, body.paddingTop, body.paddingRight, body.paddingBottom),
+            isHome, generation, heroBackdrop.visibility, heroBackdrop.layoutParams.height, backdropArt.drawable, backdropArt.tag as? String, pageRevision()) else null
+        backStack.addLast(NavigationSnapshot(current, focusController.capture(), destination, retained))
+        while (backStack.count { it.retained != null } > 4) {
+            val oldest = backStack.indexOfFirst { it.retained != null }; backStack[oldest] = backStack[oldest].copy(retained = null)
+        }
         pendingFocus = null; current = screen; screen()
     }
+    private fun Int?.orZero() = this ?: 0
+    private fun pageRevision() = java.security.MessageDigest.getInstance("SHA-256").digest(
+        listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint")).joinToString("\u0000").toByteArray()
+    ).joinToString("") { "%02x".format(it.toInt() and 255) }
     private fun focusAfterRender(id: Int) {
         body.post {
             if (id != generation || isDestroyed) return@post
@@ -290,7 +321,7 @@ class MainActivity : Activity() {
         }
     }
     private fun page(title: String, subtitle: String = ""): Int {
-        generation++; resolvingGeneration = null; isHome = false; wantsContentFocus = true
+        generation = ++pageSequence; resolvingGeneration = null; isHome = false; wantsContentFocus = true
         focusController.reset(); body.removeAllViews(); heroBackdrop.visibility = View.GONE
         body.setPadding(0, dp(if (theme.layout.navigation == NavigationPlacement.LEFT_RAIL) 63 else 15), 0, contentBottomPadding())
         scroller.scrollTo(0, 0); heroBackdrop.translationY = 0f
@@ -307,27 +338,28 @@ class MainActivity : Activity() {
         val recent = if (publicPreview || remoteHome) emptyList() else history.continueWatching()
         read(id, { catalog.popular("movie") to catalog.popular("series") }) { (movies, series) ->
             if (theme == ThemeSpec.DASHBOARD) {
+                if (remoteHome) homeTrending(id)
                 dashboard(recent, movies, series)
                 if (remoteHome) homeContinueWatching(id)
             } else {
                 val featured = movies.firstOrNull() ?: series.firstOrNull()
                 featured?.let { hero(it) }
-                if (remoteHome) {
-                    homeContinueWatching(id)
-                    mediaRow("Popular movies", movies)
-                } else if (recent.isNotEmpty()) {
-                    resumeRow(recent)
-                } else {
-                    mediaRow(if (theme == ThemeSpec.EDITORIAL || theme == ThemeSpec.CINEMA) "Discover" else "Popular movies", movies)
-                }
-                mediaRow(if (recent.isNotEmpty()) "Discover" else "Popular TV shows", if (recent.isNotEmpty()) movies else series)
-                if (recent.isNotEmpty()) mediaRow("Popular TV shows", series)
+                if (remoteHome) homeContinueWatching(id) else if (recent.isNotEmpty()) resumeRow(recent)
+                if (remoteHome) homeTrending(id)
+                mediaRow("Popular movies", movies); mediaRow("Popular TV shows", series)
             }
             if (!publicPreview && wetrakr.connected() && store.get("wetrakr.home_liked_opt_in") == "true") homeLikedLists(id)
             homeCredit()
         }
     }
 
+    private fun homeTrending(id: Int) {
+        val host = column().apply { tag = "home-trending" }; body.addView(host, margin(-1, -2))
+        // A failed feed must not hide Continue Watching or the ordinary catalog rows.
+        read(id, { listOf("movie", "series").map { type -> runCatching { wetrakr.trending(type) }.getOrDefault(emptyList()) } }) { feeds ->
+            mediaRow("Trending movies", feeds[0], host); mediaRow("Trending TV shows", feeds[1], host)
+        }
+    }
     private fun homeContinueWatching(id: Int) {
         val host = column().apply { tag = "wetrakr-home-continue" }
         body.addView(host, margin(-1, -2, top = 10))
@@ -342,7 +374,7 @@ class MainActivity : Activity() {
                 remoteProgress[identityKey(identity)] = percent
                 val caption = listOf(if (identity.type == "series") "S${identity.season} E${identity.episode}" else "", "${percent.toInt()}%").filter { it.isNotBlank() }.joinToString(" · ")
                 row.addView(tile(MediaItemData(identity.imdbId, identity.type, identity.title), percent / 100, caption) {
-                    navigate { showSources(identity) }
+                    continuePlayback(identity)
                 }.apply { continueOptions(this, "", identity, identity.title) }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
             }
         }
@@ -431,7 +463,7 @@ class MainActivity : Activity() {
             val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             val saved = if (publicPreview) null else history.continueWatching().firstOrNull { it.identity?.imdbId == item.imdbId }
             actions.addView(primaryButton(if (saved != null) "▶  Resume" else "▶  Explore") {
-                if (saved?.identity != null) navigate { showSources(saved.identity) } else navigate { details(item) }
+                if (saved?.identity != null) continuePlayback(saved.identity) else navigate { details(item) }
             }, margin(160, 38, right = 17))
             if (!split && theme != ThemeSpec.CINEMA && theme != ThemeSpec.NEON) actions.addView(button("＋  Add to Library") {
                 val tracker = weTrakrClient()
@@ -449,18 +481,48 @@ class MainActivity : Activity() {
         in 5..11 -> "Good morning."; in 12..17 -> "Good afternoon."; else -> "Good evening."
     }
 
+    private fun continuePlayback(identity: PlaybackIdentity) {
+        val link = LastPlayedLinks(store).find(identity)
+        if (link == null) { navigate { showSources(identity) }; return }
+        cachedPlayback = identity
+        play(link.url, identity.title, identity, link.key, link.service, resumeImmediately = true)
+    }
+    private fun retainedRoots(): List<View> = listOf(body) + backStack.flatMap { it.retained?.children.orEmpty() }
+    private fun hideContinue(marker: String) {
+        fun hide(root: View) {
+            if (root.getTag(R.id.pov_continue_identity) == marker) root.visibility = View.GONE
+            if (root is ViewGroup) (0 until root.childCount).map(root::getChildAt).forEach(::hide)
+        }
+        retainedRoots().forEach(::hide)
+    }
+    private fun removeContinueViews(view: View) {
+        val parent = view.parent as? ViewGroup
+        val index = parent?.indexOfChild(view) ?: 0
+        hideContinue(view.getTag(R.id.pov_continue_identity).toString())
+        parent?.let { group -> (index until group.childCount).map(group::getChildAt).firstOrNull { it.visibility == View.VISIBLE && it.isFocusable }?.requestFocus()
+            ?: (index - 1 downTo 0).map(group::getChildAt).firstOrNull { it.visibility == View.VISIBLE && it.isFocusable }?.requestFocus() }
+        if (!focusController.hasVisibleLeafFocus()) focusController.first()
+    }
     private fun continueOptions(view: View, key: String, identity: PlaybackIdentity?, title: String) {
+        view.setTag(R.id.pov_continue_identity, identity?.let(::identityKey) ?: key)
         view.setOnLongClickListener {
             val account = wetrakr.accountRevision()
             AlertDialog.Builder(this).setTitle(title)
-                .setItems(arrayOf("Remove from Continue watching")) { _, _ ->
+                .setItems(arrayOf("Open Media", "Remove from Continue Watching")) { _, choice ->
+                    if (choice == 0) {
+                        if (identity != null) {
+                            if (identity.type == "series") selectedSeasons[identity.imdbId] = identity.season
+                            navigate { detailsFor(MediaItemData(identity.imdbId, identity.type, identity.title), identity.takeIf { it.type == "series" }) }
+                        } else navigate { selectedCloud() }
+                        return@setItems
+                    }
                     if (identity != null && wetrakr.connected()) {
                         load(generation, {
                             wetrakr.removeContinueWatching(identity, account)
                             wetrakrOutbox.discard(identity)
                             history.hide(key, identity)
-                        }) { remoteProgress.remove(identityKey(identity)); toast("Removed from WeTrakr Continue Watching"); current() }
-                    } else { history.hide(key, identity); toast("Removed from Continue Watching on this TV"); current() }
+                        }) { remoteProgress.remove(identityKey(identity)); toast("Removed from WeTrakr Continue Watching"); removeContinueViews(view) }
+                    } else { history.hide(key, identity); toast("Removed from Continue Watching on this TV"); removeContinueViews(view) }
                 }.setNegativeButton("Cancel", null).show()
             true
         }
@@ -493,7 +555,7 @@ class MainActivity : Activity() {
                 resumeSaved(saved)
             }
             if (theme == ThemeSpec.CINEMATIC) {
-                val group = column()
+                val group = column().apply { setTag(R.id.pov_continue_identity, saved.identity?.let(::identityKey) ?: saved.key) }
                 group.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), action = action).apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, margin(-1, theme.layout.cardHeightDp))
                 group.addView(text(remaining, 10, muted), margin(-1, -2, top = 4))
                 row.addView(group, margin(cardWidth(), theme.layout.cardHeightDp + 20, right = theme.layout.cardGapDp))
@@ -554,6 +616,7 @@ class MainActivity : Activity() {
         library.addView(button("▣   Shows     ›") { navigate { catalogPage("series") } }, margin(-1, 44, bottom = 6))
         library.addView(button("☁   Cloud library  ›") { navigate { selectedCloud() } }, margin(-1, 44))
         lower.addView(library, margin(247, -2)); body.addView(lower)
+        mediaRow("Popular movies", movies); mediaRow("Popular TV shows", series)
 
     }
 
@@ -567,7 +630,7 @@ class MainActivity : Activity() {
                 return
             }
         }
-        saved.identity?.let { identity -> navigate { showSources(identity) } } ?: navigate { selectedCloud() }
+        saved.identity?.let { identity -> continuePlayback(identity) } ?: navigate { selectedCloud() }
     }
 
     private fun returnToVideo() {
@@ -860,11 +923,58 @@ class MainActivity : Activity() {
     }
 
     private fun search(initialQuery: String = "") {
-        val input = EditText(this).apply { hint = "Movie or TV show"; setText(initialQuery); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT }
-        AlertDialog.Builder(this).setTitle("Search movies & TV shows").setView(input)
-            .setPositiveButton("Search") { _, _ -> val query = input.text.toString().trim().take(200); if (query.isNotEmpty()) navigate { searchResults(query) } }
-            .setNegativeButton("Cancel", null).show()
+        val input = EditText(this).apply {
+            hint = "Movie or TV show"; setText(initialQuery); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        }
+        lateinit var dialog: AlertDialog
+        fun submit() {
+            val query = input.text.toString().trim().take(200)
+            if (query.isEmpty()) return
+            (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(input.windowToken, 0)
+            dialog.dismiss(); navigate { searchResults(query) }
+        }
+        dialog = AlertDialog.Builder(this).setTitle("Search movies & TV shows").setView(input)
+            .setPositiveButton("Search", null).setNeutralButton("🎤 Voice search") { _, _ -> voiceSearch() }
+            .setNegativeButton("Cancel", null).create()
+        input.setOnEditorActionListener { _, action, event ->
+            if (action in setOf(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, android.view.inputmethod.EditorInfo.IME_ACTION_DONE, android.view.inputmethod.EditorInfo.IME_ACTION_GO)) { submit(); true }
+            else if (event?.keyCode in setOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                if (event?.action == KeyEvent.ACTION_UP) submit()
+                true
+            } else false
+        }
+        input.setOnKeyListener { _, key, event ->
+            if (key == KeyEvent.KEYCODE_ENTER || key == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                if (event.action == KeyEvent.ACTION_UP) submit()
+                true
+            } else false
+        }
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { submit() } }
+        searchDialog = dialog; dialog.show(); input.requestFocus()
     }
+    private fun voiceSearch() {
+        val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search movies & TV shows")
+        try { @Suppress("DEPRECATION") startActivityForResult(intent, VOICE_REQUEST) }
+        catch (_: android.content.ActivityNotFoundException) { toast("Voice search is unavailable on this TV. Use the keyboard."); search() }
+    }
+    @Deprecated("Activity result compatibility for Android TV")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == VOICE_REQUEST) {
+            val query = data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty().take(200)
+            if (resultCode == RESULT_OK && query.isNotBlank()) navigate { searchResults(query) } else search()
+        } else if (requestCode == PLAYBACK_REQUEST) {
+            val identity = cachedPlayback ?: runCatching { data?.getStringExtra("cached_identity")?.let { PlaybackIdentity.fromJson(org.json.JSONObject(it)) } }.getOrNull()
+            cachedPlayback = null; launchingPlayer = false
+            if (resultCode == RESULT_FIRST_USER && identity != null) {
+                LastPlayedLinks(store).remove(identity); toast("Last stream unavailable. Finding fresh sources…"); navigate { showSources(identity) }
+            }
+        }
+    }
+    private companion object { const val VOICE_REQUEST = 701; const val PLAYBACK_REQUEST = 702 }
 
     private fun searchResults(query: String, filter: String = "all", cached: CatalogApi.SearchResults? = null) {
         current = { searchResults(query, filter, cached) }
@@ -891,27 +1001,39 @@ class MainActivity : Activity() {
         if (cached == null) read(id, { catalog.searchAll(query) }, ::render) else { render(cached); focusAfterRender(id) }
     }
 
-    private fun details(item: MediaItemData) {
-        current = { details(item) }
+    private fun details(item: MediaItemData) = detailsFor(item, null)
+    private fun detailsFor(item: MediaItemData, episode: PlaybackIdentity?) {
+        current = { detailsFor(item, episode) }
         val id = page(item.title, "Loading title…")
         read(id, { catalog.details(item) }) { result ->
-            body.removeAllViews(); hero(result, false); mediaActions(result)
+            body.removeAllViews(); hero(result, false); mediaActions(result, episode)
             if (result.type == "series") seasonPicker(result)
         }
     }
 
-    private fun mediaActions(result: MediaItemData) {
+    private fun mediaActions(result: MediaItemData, episode: PlaybackIdentity? = null) {
         val identity = PlaybackIdentity(result.imdbId, result.type, result.title)
         val actions = horizontalRow()
         if (result.type == "movie") actions.addView(button("Find movie sources  ▶") { navigate { showSources(identity) } }, margin(200, 44, right = 10))
+        if (episode != null) actions.addView(button("Find S${episode.season} E${episode.episode} sources  ▶") { navigate { showSources(episode) } }, margin(230, 44, right = 10))
         if (result.description.isNotBlank()) actions.addView(button("Synopsis") {
             AlertDialog.Builder(this).setTitle(result.title).setMessage(result.description).setPositiveButton("Close", null).show()
         }, margin(110, 44, right = 8))
         val tracker = weTrakrClient()
         if (tracker.connected()) {
             actions.addView(button("Add to watchlist") { load(generation, { tracker.setWatchlist(identity, true) }) { toast("Added to your ${tracker.name} watchlist") } }, margin(155, 44, right = 8))
-            actions.addView(button("Remove from watchlist") { confirm("Remove ${result.title} from your ${tracker.name} watchlist?") { load(generation, { tracker.setWatchlist(identity, false) }) { toast("Removed from your ${tracker.name} watchlist") } } }, margin(190, 44, right = 8))
-            if (result.type == "movie") actions.addView(button("Mark watched") { confirm("Mark ${result.title} as watched?") { load(generation, { tracker.markWatched(identity) }) { toast("${tracker.name} history updated") } } }, margin(150, 44))
+            actions.addView(button("Remove from watchlist") { confirm("Remove ${result.title} from your ${tracker.name} watchlist?") { load(generation, { tracker.setWatchlist(identity, false) }) { removeFromListViews("watchlist:${identity.type}", identity); toast("Removed from your ${tracker.name} watchlist") } } }, margin(190, 44, right = 8))
+            actions.addView(button("Remove from playlist") {
+                read(generation, { tracker.lists() }) { lists ->
+                    if (lists.isEmpty()) toast("No personal playlists on WeTrakr") else AlertDialog.Builder(this).setTitle("Choose your playlist")
+                        .setItems(lists.map { it.second }.toTypedArray()) { _, index ->
+                            confirm("Remove ${result.title} from ${lists[index].second}?") {
+                                load(generation, { tracker.removeListItem(lists[index].first, identity) }) { removeFromListViews("playlist:${lists[index].first}", identity); toast("Removed from ${lists[index].second}") }
+                            }
+                        }.setNegativeButton("Cancel", null).show()
+                }
+            }, margin(190, 44, right = 8))
+            if (result.type == "movie" || episode != null) actions.addView(button("Mark watched") { confirm("Mark ${result.title}${episode?.let { " S${it.season} E${it.episode}" }.orEmpty()} as watched?") { load(generation, { tracker.markWatched(episode ?: identity) }) { hideContinue(identityKey(episode ?: identity)); toast("${tracker.name} history updated") } } }, margin(150, 44))
         }
     }
 
@@ -1127,8 +1249,7 @@ class MainActivity : Activity() {
             val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
             if (downloads.isEmpty()) body.addView(text("No Offcloud downloads yet. Choose a source from a movie or episode.", 15, muted))
             downloads.forEach { download ->
-                choices.addChoice(TvChoiceRow(this, "offcloud:${download.id}", download.name, download.status,
-                    palette = theme.palette) {
+                choices.addChoice(cloudRow("offcloud:${download.id}", download.name, download.status) {
                     if (download.status == "downloaded") navigate { offcloudCloudFiles(download) }
                     else toast("This download is ${download.status.ifBlank { "not ready" }}. Refresh after Offcloud finishes processing it.")
                 })
@@ -1145,8 +1266,8 @@ class MainActivity : Activity() {
             val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
             if (files.isEmpty()) body.addView(text("No playable video files in this download.", 15, muted))
             files.forEach { file ->
-                choices.addChoice(TvChoiceRow(this, "offcloud:${download.id}:${file.id}", file.name,
-                    if (file.size > 0) "${file.size / (1024 * 1024)} MB" else "Offcloud video", palette = theme.palette) {
+                choices.addChoice(cloudRow("offcloud:${download.id}:${file.id}", file.name,
+                    if (file.size > 0) "${file.size / (1024 * 1024)} MB" else "Offcloud video") {
                     if (api.ownsTag(download.accountTag)) play(file.url, file.name, null, "offcloud:${download.id}:${file.id}", "offcloud")
                     else toast("The Offcloud account changed. Refresh your library.")
                 })
@@ -1165,8 +1286,8 @@ class MainActivity : Activity() {
         read(id, { torbox.cloud(kind) }) { folders ->
             if (folders.isEmpty()) body.addView(text("Nothing here yet. Your TorBox downloads will appear in this library.", 15, muted))
             val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
-            folders.forEach { folder -> choices.addChoice(TvChoiceRow(this, TvChoiceKeys.folder(folder.kind, folder.id),
-                folder.name, if (folder.ready) "Ready to browse" else "Not ready yet", palette = theme.palette) {
+            folders.forEach { folder -> choices.addChoice(cloudRow(TvChoiceKeys.folder(folder.kind, folder.id),
+                folder.name, if (folder.ready) "Ready to browse" else "Not ready yet") {
                 navigate { cloudFolder(folder) }
             }) }
         }
@@ -1179,11 +1300,37 @@ class MainActivity : Activity() {
             val files = result.files.filter { Regex("\\.(mkv|mp4|m4v|avi|mov|webm|ts|m2ts|mpg|mpeg)$", RegexOption.IGNORE_CASE).containsMatchIn(it.name) }
             if (files.isEmpty()) body.addView(text("No playable video files are available yet.", 15, muted))
             val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
-            files.forEach { file -> choices.addChoice(TvChoiceRow(this, TvChoiceKeys.file(result.kind, result.id, file.id),
-                file.name, fileSize(file), palette = theme.palette) { cloudChoice(result, file) }) }
+            files.forEach { file -> choices.addChoice(cloudRow(TvChoiceKeys.file(result.kind, result.id, file.id),
+                file.name, fileSize(file)) { cloudChoice(result, file) }) }
         }
     }
 
+    private fun cloudRow(key: String, filename: String, detail: String, action: () -> Unit): TvChoiceRow {
+        val row = TvChoiceRow(this, key, filename, detail, palette = theme.palette, withPoster = true, action = action)
+        val query = CloudMetadata.query(filename) ?: return row
+        val cacheKey = "${query.type}:${query.title}:${query.year}"
+        // Artwork hints never become playback/tracking identities without explicit identification.
+        fun loadPoster() {
+            val request = generation
+            metadataWorker.execute {
+                if (request != generation || Thread.currentThread().isInterrupted) return@execute
+                val found = synchronized(cloudArtwork) {
+                    if (cloudArtwork.containsKey(cacheKey)) Result.success(cloudArtwork[cacheKey]) else runCatching {
+                        val candidates = query.type?.let { catalog.search(query.title, it) } ?: catalog.searchAll(query.title).items
+                        CloudMetadata.match(query, candidates)
+                    }.onSuccess { if (cloudArtwork.size > 200) cloudArtwork.clear(); cloudArtwork[cacheKey] = it }
+                }
+                runOnUiThread {
+                    if (request == generation && row.isAttachedToWindow && !isDestroyed) found.getOrNull()?.poster?.takeIf(String::isNotBlank)?.let { image(row.poster, it) }
+                }
+            }
+        }
+        row.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) { if (row.poster.drawable == null) loadPoster() }
+            override fun onViewDetachedFromWindow(view: View) = Unit
+        })
+        return row
+    }
     private fun fileSize(file: CloudFile) = String.format(java.util.Locale.getDefault(), "%.2f GB", file.size.toDouble() / 1_000_000_000)
 
     /** Debug-only, offline fixture uses the same cards/navigation without loading any account or library. */
@@ -1284,24 +1431,28 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun play(url: String, title: String, identity: PlaybackIdentity?, key: String, debridService: String? = null) {
+    private fun play(url: String, title: String, identity: PlaybackIdentity?, key: String, debridService: String? = null, resumeImmediately: Boolean = false) {
         if (launchingPlayer) return
         if (Uri.parse(url).scheme != "https") { toast("This stream did not return a secure playback link."); return }
         launchingPlayer = true
         val remotePercent = identity?.let { remoteProgress[identityKey(it)] } ?: 0.0
         val start = {
-            startActivity(Intent(this, PlayerActivity::class.java).putExtra("url", url).putExtra("title", title)
+            val intent = Intent(this, PlayerActivity::class.java).putExtra("url", url).putExtra("title", title)
                 .putExtra("identity", identity?.toJson()?.toString()).putExtra("key", key).putExtra("resume", history.resume(key)).putExtra("resume_percent", remotePercent)
-                .putExtra("debrid_service", PlaybackDebrid.normalize(debridService)))
+                .putExtra("debrid_service", PlaybackDebrid.normalize(debridService)).putExtra("cached_playback", resumeImmediately)
+                .putExtra("playback_account", LastPlayedLinks(store).scope(PlaybackDebrid.normalize(debridService)))
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, PLAYBACK_REQUEST)
             @Suppress("DEPRECATION")
             overridePendingTransition(0, 0)
         }
-        if (history.resume(key) > 0 || remotePercent > 0) AlertDialog.Builder(this).setTitle("Resume watching?")
+        if (!resumeImmediately && (history.resume(key) > 0 || remotePercent > 0)) AlertDialog.Builder(this).setTitle("Resume watching?")
             .setMessage(if (history.resume(key) > 0) "Continue from ${history.resume(key) / 60_000} minutes?" else "Continue from ${remotePercent.toInt()}% watched on WeTrakr?")
             .setPositiveButton("Resume") { _, _ -> start() }
             .setNeutralButton("Start over") { _, _ ->
                 startActivity(Intent(this, PlayerActivity::class.java).putExtra("url", url).putExtra("title", title).putExtra("identity", identity?.toJson()?.toString()).putExtra("key", key)
-                    .putExtra("debrid_service", PlaybackDebrid.normalize(debridService)))
+                    .putExtra("debrid_service", PlaybackDebrid.normalize(debridService))
+                    .putExtra("playback_account", LastPlayedLinks(store).scope(PlaybackDebrid.normalize(debridService))))
                 @Suppress("DEPRECATION")
                 overridePendingTransition(0, 0)
             }
@@ -1332,7 +1483,7 @@ class MainActivity : Activity() {
                 progress.forEach { (identity, percent) ->
                     remoteProgress[identityKey(identity)] = percent
                     host.addView(button("${identity.title}${if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""}   ·   ${percent.toInt()}%") {
-                        navigate { showSources(identity) }
+                        continuePlayback(identity)
                     }.apply { continueOptions(this, "", identity, identity.title) }, margin(-1, 44, bottom = 7))
                 }
             }
@@ -1355,7 +1506,7 @@ class MainActivity : Activity() {
         read(id, { tracker.lists() }) { lists ->
             if (lists.isEmpty()) body.addView(text("No personal lists yet.", 15, muted))
             lists.forEach { (listId, title) -> body.addView(button(title) {
-                navigate { val pageId = page(title); read(pageId, { tracker.listItems(listId) }) { mediaGrid(it) } }
+                navigate { personalListGrid(listId, title) }
             }, margin(-1, 44, bottom = 8)) }
         }
     }
@@ -1487,9 +1638,10 @@ class MainActivity : Activity() {
         section("App connections")
         body.addView(button("WeTrakr app Client ID") { configureWeTrakr() }, margin(-1, 44, bottom = 8))
         body.addView(text("Use the Client ID from WeTrakr Settings → API. Device-code login uses no client secret or callback URI. Library reads are cached to reduce development-key requests.", 12, muted), margin(-1, -2, bottom = 10))
-        body.addView(button("Source provider address") { inputSetting("Source provider", "HTTPS Stremio-compatible add-on address", store.get("sources.endpoint", "https://torrentio.strem.fun")) { value ->
+        body.addView(button("Source provider address") { inputSetting("Source provider", "HTTPS Stremio-compatible add-on address", store.get("sources.endpoint")) { value ->
             val uri = Uri.parse(value.trim()); if (uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { store.put("sources.endpoint", value.trim()); toast("Source provider saved") } else toast("Enter a valid HTTPS address")
         } }, margin(-1, 44, bottom = 8))
+        body.addView(text("No source provider is bundled. Supply your own HTTPS add-on address to search for playback links.", 12, muted), margin(-1, -2, bottom = 10))
         section("Updates")
         body.addView(button("Check for updates ›") { startActivity(Intent(this, UpdateActivity::class.java)) }, margin(-1, 44, bottom = 8))
         body.addView(button("Check for updates on startup · ${if (store.get("updates.startup") == "true") "On" else "Off"}") {
@@ -1587,11 +1739,12 @@ class MainActivity : Activity() {
     private fun <T> read(id: Int, work: () -> T, done: (T) -> Unit) = load(id, work, readOnly = true, done = done)
 
     private fun <T> load(id: Int, work: () -> T, readOnly: Boolean = false, done: (T) -> Unit) {
+        pendingLoads[id] = pendingLoads[id].orZero() + 1
         val progress = text("Loading…", 13, muted); body.addView(progress, margin(-1, -2, top = 12, bottom = 12))
         worker.execute {
-            if (readOnly && id != generation) return@execute
-            try { val result = work(); runOnUiThread { if (id == generation && !isFinishing && !isDestroyed) { body.removeView(progress); done(result); focusAfterRender(id) } } }
-            catch (error: Exception) { runOnUiThread { if (id == generation && !isFinishing && !isDestroyed) { body.removeView(progress); showError(error); focusAfterRender(id) } } }
+            if (readOnly && id != generation) { runOnUiThread { pendingLoads[id] = (pendingLoads[id].orZero() - 1).coerceAtLeast(0) }; return@execute }
+            try { val result = work(); runOnUiThread { pendingLoads[id] = (pendingLoads[id].orZero() - 1).coerceAtLeast(0); if (id == generation && !isFinishing && !isDestroyed) { body.removeView(progress); done(result); focusAfterRender(id) } } }
+            catch (error: Exception) { runOnUiThread { pendingLoads[id] = (pendingLoads[id].orZero() - 1).coerceAtLeast(0); if (id == generation && !isFinishing && !isDestroyed) { body.removeView(progress); showError(error); focusAfterRender(id) } } }
         }
     }
 
@@ -1609,17 +1762,40 @@ class MainActivity : Activity() {
     private fun section(title: String) {
         body.addView(text(title, theme.layout.sectionTitleSizeSp, ink, true), margin(-1, -2, top = if (isHome && body.childCount == 1) 3 else 11, bottom = 7))
     }
-    private fun mediaRow(title: String, items: List<MediaItemData>) {
+    private fun mediaRow(title: String, items: List<MediaItemData>, host: LinearLayout = body) {
         if (items.isEmpty()) return
-        section(title); val row = horizontalRow()
+        host.addView(button("$title  ›") {
+            navigate { shelfGrid(title, items) }
+        }.apply { tag = "shelf:$title" }, margin(-1, 40, top = 10, bottom = 7))
+        val row = horizontalRow(host)
+        if (title.contains("watchlist", ignoreCase = true)) row.setTag(R.id.pov_list_scope, "watchlist:${items.first().type}")
         items.take(20).forEach { row.addView(card(it).apply { tag = "row:$title:${it.type}:${it.imdbId}" }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp)) }
     }
-    private fun mediaGrid(items: List<MediaItemData>, showType: Boolean = false) {
-        if (items.isEmpty()) { body.addView(text("No titles found. Try a different search.", 14, muted)); return }
+    private fun removeFromListViews(scope: String, identity: PlaybackIdentity) {
+        fun visit(root: View, inside: Boolean = false) {
+            val selected = inside || root.getTag(R.id.pov_list_scope) == scope
+            val tag = root.tag as? String
+            if (selected && (tag == "media:${identity.type}:${identity.imdbId}" || tag?.endsWith(":${identity.type}:${identity.imdbId}") == true)) root.visibility = View.GONE
+            if (root is ViewGroup) (0 until root.childCount).map(root::getChildAt).forEach { visit(it, selected) }
+        }
+        retainedRoots().forEach { visit(it) }
+    }
+    private fun personalListGrid(listId: String, title: String) {
+        current = { personalListGrid(listId, title) }; val id = page(title, "Your WeTrakr playlist")
+        val host = column().apply { setTag(R.id.pov_list_scope, "playlist:$listId") }; body.addView(host)
+        read(id, { wetrakr.listItems(listId) }) { mediaGrid(it, host = host) }
+    }
+    private fun shelfGrid(title: String, items: List<MediaItemData>) {
+        current = { shelfGrid(title, items) }; val id = page(title)
+        val host = column().apply { if (title.contains("watchlist", ignoreCase = true) && items.isNotEmpty()) setTag(R.id.pov_list_scope, "watchlist:${items.first().type}") }
+        body.addView(host); mediaGrid(items, host = host); focusAfterRender(id)
+    }
+    private fun mediaGrid(items: List<MediaItemData>, showType: Boolean = false, host: LinearLayout = body) {
+        if (items.isEmpty()) { host.addView(text("No titles found. Try a different search.", 14, muted)); return }
         val width = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2
         val count = (width / (cardWidth() + theme.layout.cardGapDp)).coerceAtLeast(1)
         items.chunked(count).forEach { chunk ->
-            val row = LinearLayout(this); body.addView(row, margin(-1, -2, top = 14))
+            val row = LinearLayout(this); host.addView(row, margin(-1, -2, top = 14))
             chunk.forEach { item ->
                 val view = if (showType) tile(item, caption = listOf(if (item.type == "movie") "Movie" else "TV show", item.year).filter { it.isNotBlank() }.joinToString(" · ")) { navigate { details(item) } } else card(item)
                 row.addView(view, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
@@ -1682,10 +1858,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun horizontalRow(): LinearLayout {
+    private fun horizontalRow(host: LinearLayout = body): LinearLayout {
         val scroller = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; clipChildren = false; clipToPadding = false; isFocusable = false; isFocusableInTouchMode = false; descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS }
         val row = LinearLayout(this).apply { setPadding(dp(3), dp(4), dp(10), dp(4)); clipChildren = false; clipToPadding = false }
-        scroller.addView(row); body.addView(scroller, margin(-1, -2)); return row
+        scroller.addView(row); host.addView(scroller, margin(-1, -2)); return row
     }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun text(value: String, size: Int, color: Int, bold: Boolean = false) = TextView(this).apply {
