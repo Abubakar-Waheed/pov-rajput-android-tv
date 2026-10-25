@@ -208,19 +208,4 @@ class AnimeCatalogApiTest {
         assertEquals(429, assertThrows(ApiException::class.java) { busy.resolve(title) }.code)
     }
 
-    private fun trakt() = TraktApi(object : TraktCredentials {
-        override fun get(key: String, default: String) = default
-        override fun putAll(values: Map<String, String>) = Unit
-        override fun remove(key: String) = Unit
-    })
-
-    @Test fun `Trakt exact-ID lookup rejects wrong media type mismatched IDs and ambiguous IMDb roots`() {
-        val valid = JSONObject("""{"type":"show","show":{"title":"Example","ids":{"tvdb":267440,"imdb":"tt2560140"}}}""")
-        assertEquals("tt2560140", trakt().parseCatalogLookup(JSONArray().put(valid), "tvdb", "267440", "series")?.imdbId)
-        assertNull(trakt().parseCatalogLookup(JSONArray().put(valid), "tvdb", "267441", "series"))
-        assertNull(trakt().parseCatalogLookup(JSONArray().put(valid), "tvdb", "267440", "movie"))
-        val another = JSONObject(valid.toString())
-        another.getJSONObject("show").getJSONObject("ids").put("imdb", "tt7654321")
-        assertNull(trakt().parseCatalogLookup(JSONArray().put(valid).put(another), "tvdb", "267440", "series"))
-    }
 }

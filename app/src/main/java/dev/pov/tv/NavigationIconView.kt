@@ -48,7 +48,6 @@ class NavigationIconView(context: Context, private val key: String, color: Int) 
             "anime" -> anime(canvas)
             "library" -> library(canvas)
             "search" -> search(canvas)
-            "trakt" -> trakt(canvas)
             "settings" -> settings(canvas)
             "nowplaying" -> {
                 canvas.drawRoundRect(2f, 4f, 22f, 20f, 3f, 3f, ink)
@@ -112,13 +111,6 @@ class NavigationIconView(context: Context, private val key: String, color: Int) 
     private fun search(canvas: Canvas) {
         canvas.drawCircle(10f, 10f, 6.7f, ink)
         canvas.drawLine(15f, 15f, 21.3f, 21.3f, ink)
-    }
-
-    private fun trakt(canvas: Canvas) {
-        canvas.drawCircle(12f, 12f, 9f, ink)
-        canvas.drawPath(Path().apply {
-            moveTo(6.7f, 11.9f); lineTo(10.3f, 15.5f); lineTo(17.4f, 8.4f)
-        }, ink)
     }
 
     private fun settings(canvas: Canvas) {

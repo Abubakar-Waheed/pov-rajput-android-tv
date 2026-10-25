@@ -14,8 +14,8 @@ class WeTrakrApi internal constructor(
     private val transport: (String, String, Map<String, String>, JSONObject?) -> String = { path, method, headers, body -> Net.raw(BASE + path, method, headers, body) },
     private val now: () -> Long = System::currentTimeMillis,
     private val elapsed: () -> Long = SystemClock::elapsedRealtime
-) : TrackingClient {
-    override val name = "WeTrakr"
+) {
+    val name = "WeTrakr"
     constructor(store: SecureStore) : this(object : WeTrakrCredentials {
         override fun get(key: String) = store.get("wetrakr.$key")
         override fun put(values: Map<String, String>) = store.putAll(values.mapKeys { "wetrakr.${it.key}" })
@@ -24,8 +24,8 @@ class WeTrakrApi internal constructor(
     @Volatile private var pending: Pending? = null
     private var attempt = 0L
     fun configured() = validClientId(credentials.get("client_id"))
-    override fun connected() = configured() && credentials.get("access_token").isNotBlank() && credentials.get("reauth") != "true"
-    override fun accountRevision() = credentials.get("account_revision")
+    fun connected() = configured() && credentials.get("access_token").isNotBlank() && credentials.get("reauth") != "true"
+    fun accountRevision() = credentials.get("account_revision")
     fun clientId() = credentials.get("client_id").trim().also { require(validClientId(it)) { "Set your WeTrakr application Client ID first." } }
     fun setClientId(value: String) = synchronized(stateLock) {
         val client = value.trim()
@@ -76,6 +76,54 @@ class WeTrakrApi internal constructor(
             saveTokens(result, newAccount = true); generation++; attempt++; pending = null; cache.clear()
         }
         return true
+    }
+    fun scrobblingEnabled() = credentials.get("scrobbling") != "false"
+    fun scrobbleRevision() = credentials.get("scrobble_revision")
+    fun setScrobblingEnabled(enabled: Boolean) = synchronized(stateLock) {
+        credentials.put(mapOf("scrobbling" to enabled.toString(), "scrobble_revision" to UUID.randomUUID().toString()))
+    }
+    private fun suppressionKey(identity: PlaybackIdentity) = "suppressed.${identity.type}.${identity.imdbId}.${identity.season}.${identity.episode}"
+    fun allowPlayback(identity: PlaybackIdentity) = synchronized(stateLock) { credentials.put(mapOf(suppressionKey(identity) to "")) }
+    /** Cancel exactly this title's session. Never delete watched plays or another device's current title. */
+    fun removeContinueWatching(identity: PlaybackIdentity, revision: String = accountRevision()) = synchronized(refreshLock) {
+        if (revision.isBlank() || accountRevision() != revision || !connected()) ended()
+        validate(identity)
+        val body = playbackBody(identity)
+        try {
+            val result = parseObject(request("/scrobble/playing", "DELETE", body))
+            if (result.optString("action") != "cancel") throw ApiException(0, "WeTrakr did not confirm removal. Try again.")
+        } catch (error: ApiException) {
+            if (error.code != 404 || error.errorKey != "NO_SESSION") throw error
+        }
+        // Prevent a queued pause/stop from recreating this removed item. A deliberate new play clears it.
+        synchronized(stateLock) {
+            if (accountRevision() != revision || !connected()) ended()
+            credentials.put(mapOf(suppressionKey(identity) to revision))
+        }
+        cache.clear()
+    }
+    fun likedLists(): List<Pair<String, String>> = pages("/sync/likes/lists", paginated = false).mapNotNull { entry ->
+        val list = entry.optJSONObject("list") ?: return@mapNotNull null
+        list.optString("id").takeIf { it.matches(Regex("[1-9][0-9]{0,18}")) }?.let { it to list.optString("name", "List") }
+    }.distinctBy { it.first }
+    fun likedListItems(id: String): List<MediaItemData> {
+        require(id.matches(Regex("[1-9][0-9]{0,18}"))) { "Invalid WeTrakr list." }
+        return pages("/lists/$id/items/all").mapNotNull(::media)
+    }
+    fun likedListPreview(id: String): List<MediaItemData> {
+        require(id.matches(Regex("[1-9][0-9]{0,18}"))) { "Invalid WeTrakr list." }
+        val path = "/lists/$id/items/all?page=1&limit=20"
+        val key = "${accountRevision()}:$path"
+        cache[key]?.takeIf { elapsed() - it.at in 0..120_000 }?.let { return it.records.mapNotNull(::media) }
+        val array = try { JSONArray(request(path)) } catch (error: ApiException) { throw error } catch (_: Exception) { malformed() }
+        val records = (0 until array.length()).mapNotNull(array::optJSONObject)
+        cache[key] = Cached(elapsed(), records)
+        return records.mapNotNull(::media)
+    }
+    private fun playbackBody(identity: PlaybackIdentity): JSONObject {
+        val media = JSONObject().put("ids", JSONObject().put("imdb", identity.imdbId))
+        return if (identity.type == "movie") JSONObject().put("movie", media)
+        else JSONObject().put("show", media).put("episode", JSONObject().put("season", identity.season).put("number", identity.episode))
     }
     private fun saveTokens(result: JSONObject, newAccount: Boolean = false) {
         val access = required(result, "access_token")
@@ -151,39 +199,39 @@ class WeTrakrApi internal constructor(
         return result
     }
     private data class Cached(val at: Long, val records: List<JSONObject>)
-    private fun pages(path: String): List<JSONObject> {
+    private fun pages(path: String, paginated: Boolean = true): List<JSONObject> {
         val revision = accountRevision()
         if (!connected() || revision.isBlank()) throw ApiException(401, "Connect WeTrakr in Settings first.")
         val key = "$revision:$path"
         cache[key]?.takeIf { elapsed() - it.at in 0..120_000 }?.let { return it.records }
         val records = mutableListOf<JSONObject>()
         for (page in 1..20) {
-            val raw = request(path + (if ('?' in path) "&" else "?") + "page=$page&limit=100")
+            val raw = request(if (paginated) path + (if ('?' in path) "&" else "?") + "page=$page&limit=100" else path)
             val array = try { JSONArray(raw) } catch (_: Exception) { malformed() }
             for (index in 0 until array.length()) array.optJSONObject(index)?.let(records::add)
-            if (array.length() < 100) { cache[key] = Cached(elapsed(), records); return records }
+            if (!paginated || array.length() < 100) { cache[key] = Cached(elapsed(), records); return records }
         }
         throw ApiException(0, "This WeTrakr list is too large to load at once. Open it on the website.")
     }
-    override fun watchlist(type: String): List<MediaItemData> {
+    fun watchlist(type: String): List<MediaItemData> {
         require(type in setOf("movie", "series")) { "Invalid WeTrakr watchlist type." }
         return pages("/sync/tracking/planning/${if (type == "movie") "movies" else "shows"}").mapNotNull(::media)
     }
-    override fun lists(): List<Pair<String, String>> = pages("/sync/lists").mapNotNull { record ->
+    fun lists(): List<Pair<String, String>> = pages("/sync/lists").mapNotNull { record ->
         record.optString("id").takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,80}")) }?.let { it to record.optString("name", "List") }
     }
-    override fun listItems(id: String): List<MediaItemData> {
+    fun listItems(id: String): List<MediaItemData> {
         require(id.matches(Regex("[A-Za-z0-9_-]{1,80}"))) { "Invalid WeTrakr list." }
         return pages("/sync/lists/$id/items").mapNotNull(::media)
     }
-    override fun continueWatching(): List<Pair<PlaybackIdentity, Double>> = listOf("movies", "episodes").flatMap { kind ->
+    fun continueWatching(): List<Pair<PlaybackIdentity, Double>> = listOf("movies", "episodes").flatMap { kind ->
         pages("/sync/tracking/playing/$kind?extended=show_level_1").mapNotNull { item ->
             val progress = item.optJSONObject("playback")?.optDouble("progress_percent", Double.NaN) ?: return@mapNotNull null
             if (!progress.isFinite() || progress <= 0 || progress >= 95) return@mapNotNull null
             identity(item)?.let { it to progress }
         }
     }
-    override fun nextEpisodes(): List<PlaybackIdentity> = pages("/sync/tracking/watching/shows?extended=episode_level_1").mapNotNull { show ->
+    fun nextEpisodes(): List<PlaybackIdentity> = pages("/sync/tracking/watching/shows?extended=episode_level_1").mapNotNull { show ->
         val next = show.optJSONObject("next_watching_episode") ?: return@mapNotNull null
         identity(next, show)
     }
@@ -203,8 +251,8 @@ class WeTrakrApi internal constructor(
         fun image(key: String) = item.optString(key).takeIf { it.startsWith('/') }?.let { "https://image.tmdb.org/t/p/w500$it" }.orEmpty()
         return MediaItemData(id, type, title, item.optString(if (type == "movie") "release_date" else "first_air_date").take(4), image("poster_path"), image("backdrop_path"))
     }
-    override fun setWatchlist(identity: PlaybackIdentity, add: Boolean) = tracking(identity, "planning", remove = !add)
-    override fun markWatched(identity: PlaybackIdentity) = tracking(identity, "watched")
+    fun setWatchlist(identity: PlaybackIdentity, add: Boolean) = tracking(identity, "planning", remove = !add)
+    fun markWatched(identity: PlaybackIdentity) = tracking(identity, "watched")
     private fun tracking(identity: PlaybackIdentity, status: String, remove: Boolean = false, percent: Double? = null, timestamp: String? = null, replay: Boolean = false) = synchronized(refreshLock) {
         val item = JSONObject().put("ids", JSONObject().put("imdb", identity.imdbId)).put("status", status)
         val body = trackingBody(identity, item, status, percent, timestamp).put("allow_rewatch", false)
@@ -228,6 +276,10 @@ class WeTrakrApi internal constructor(
         cache.clear()
     }
     internal fun trackingBody(identity: PlaybackIdentity, item: JSONObject, status: String, percent: Double?, timestamp: String?): JSONObject {
+        if (status == "planning" && identity.type == "series" && identity.episode == 0) {
+            require(identity.imdbId.matches(Regex("tt[0-9]{5,12}")))
+            return JSONObject().put("shows", JSONArray().put(item))
+        }
         validate(identity)
         val episode = JSONObject().put("number", identity.episode).put("status", status)
         val target = if (identity.type == "movie") item else episode
@@ -237,8 +289,9 @@ class WeTrakrApi internal constructor(
         return JSONObject().put(if (identity.type == "movie") "movies" else "shows", JSONArray().put(item))
     }
     /** Retry stored final state without restarting an old now-playing session. */
-    fun restoreProgress(identity: PlaybackIdentity, percent: Double, action: String, timestamp: String, revision: String): Boolean = synchronized(refreshLock) {
-        if (!connected() || revision.isBlank() || accountRevision() != revision) return false
+    fun restoreProgress(identity: PlaybackIdentity, percent: Double, action: String, timestamp: String, revision: String, expectedScrobbleRevision: String = scrobbleRevision()): Boolean = synchronized(refreshLock) {
+        if (!connected() || !scrobblingEnabled() || credentials.get(suppressionKey(identity)) == revision || revision.isBlank() || accountRevision() != revision) return false
+        if (expectedScrobbleRevision != scrobbleRevision()) return false
         require(percent.isFinite() && percent in 0.0..100.0 && action in setOf("pause", "stop"))
         require(java.time.Instant.parse(timestamp).toEpochMilli() <= now() + 60_000) { "Invalid saved WeTrakr playback time." }
         val watched = action == "stop" && percent >= 95
@@ -246,12 +299,11 @@ class WeTrakrApi internal constructor(
         tracking(identity, if (watched) "watched" else "paused", percent = if (watched) null else percent.coerceIn(0.01, 99.99), timestamp = timestamp, replay = true)
         true
     }
-    override fun progressForAccount(identity: PlaybackIdentity, percent: Double, action: String, revision: String): Boolean = synchronized(refreshLock) {
-        if (!connected() || revision.isBlank() || accountRevision() != revision) return false
+    fun progressForAccount(identity: PlaybackIdentity, percent: Double, action: String, revision: String, expectedScrobbleRevision: String = scrobbleRevision()): Boolean = synchronized(refreshLock) {
+        if (!connected() || !scrobblingEnabled() || credentials.get(suppressionKey(identity)) == revision || revision.isBlank() || accountRevision() != revision) return false
+        if (expectedScrobbleRevision != scrobbleRevision()) return false
         validate(identity); require(percent.isFinite() && action in setOf("start", "pause", "stop"))
-        val body = JSONObject().put("progress", percent.coerceIn(0.0, 100.0)).put("app_version", "POV Rajput 0.2.11")
-        val media = JSONObject().put("ids", JSONObject().put("imdb", identity.imdbId))
-        if (identity.type == "movie") body.put("movie", media) else body.put("show", media).put("episode", JSONObject().put("season", identity.season).put("number", identity.episode))
+        val body = playbackBody(identity).put("progress", percent.coerceIn(0.0, 100.0)).put("app_version", "POV Rajput 0.2.11")
         val result = parseObject(request("/scrobble/$action?min_progress=95", "POST", body))
         val accepted = if (action == "stop") setOf("pause", "scrobble") else setOf(action)
         if (result.optBoolean("ignored") || result.optString("action") !in accepted) throw ApiException(0, "WeTrakr did not accept this playback update.")

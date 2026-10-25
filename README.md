@@ -5,7 +5,7 @@
 [![Android APKs](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions/workflows/apks.yml/badge.svg)](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions/workflows/apks.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-**A native Android TV app with Offcloud and TorBox cloud playback, Trakt tracking, five themes, anime browsing, and a Media3 player.** Kodi is not required.
+**A native Android TV app with Offcloud and TorBox cloud playback, WeTrakr tracking, five themes, anime browsing, and a Media3 player.** Kodi is not required.
 
 This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv). The original Android TV port was created by **Mark Mateo**, based on the original POV Kodi add-on by **[kodifitzwell](https://github.com/kodifitzwell/repo)**. Their work, attribution, and GPL-3.0 license are preserved.
 
@@ -27,7 +27,7 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 - Added direct cached playback: Offcloud avoids cloud transfers; TorBox resolves direct links and removes newly created cached entries before playback. Uncached downloads remain in the library.
 - Added numbered debrid priorities with Move up / Move down controls.
 - Added verified in-app updates from published GitHub releases and optional startup checks.
-- Added long-press removal from Continue watching across all five themes and the Trakt page.
+- Added long-press removal from Continue watching across all five themes and the WeTrakr page.
 - Added automated debug/release APK builds, tests, lint reports, checksums, and signed APK publication to tagged GitHub Releases.
 
 ## Screenshots
@@ -50,11 +50,10 @@ Screenshots of POV Rajput for Android TV.
 | TorBox | Account connection, cloud libraries, cached playback with temporary-entry removal, direct links |
 | Catalog | Movie/show discovery, search, details, seasons, episodes, and anime browsing |
 | Player | Native Media3, fullscreen/mini player, audio/subtitle choices, transparent subtitle backgrounds, bold subtitles, three subtitle sizes, resume, compatibility guard |
-| Trakt | Original device linking, watchlists, progress and watched tracking; own Trakt Client ID required |
 | Appearance | Cinematic, Editorial, Neon, Cinema, and Dashboard |
 | TV | Android TV launcher, D-pad navigation, Android 8.0/API 26 or later |
 
-Raw cloud files can play without a catalog identity. They are not silently assigned a guessed movie/episode for Trakt tracking. Offcloud account plans, limits, availability, and source-provider results remain controlled by their respective services.
+Raw cloud files can play without a catalog identity. They are not silently assigned a guessed movie/episode for WeTrakr tracking. Offcloud account plans, limits, availability, and source-provider results remain controlled by their respective services.
 
 ## Install and connect
 
@@ -64,7 +63,7 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 4. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
 5. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 
-Connect TorBox as well to search both caches together. Open **Settings → Debrid priority** to see the numbered order. Select a service, then use **Move up** or **Move down**; number **1** is preferred. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, Trakt token, or personal account is bundled. The app can coexist with the original POV package.
+Connect TorBox as well to search both caches together. Open **Settings → Debrid priority** to see the numbered order. Select a service, then use **Move up** or **Move down**; number **1** is preferred. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, WeTrakr token, or personal account is bundled. The app can coexist with the original POV package.
 
 From version 0.2.6, the app is named **POV Rajput**, with package ID `dev.pov.tv.rajput`. It installs separately from earlier POV packages. Connect your accounts once in POV Rajput; earlier installations retain their own settings.
 
@@ -88,7 +87,7 @@ TorBox resolves direct links and removes newly created cached entries before pla
 
 Open **Settings → WeTrakr app Client ID** and enter the Client ID from your registered WeTrakr application. The TV requests an activation code; visit **https://wetrakr.com/activate** on your phone and approve the connection. Device login needs no client secret or callback URI. No developer credentials are bundled.
 
-Open **My tracking** and choose **WeTrakr** or **Trakt** for watchlists, Continue watching, Up next and personal lists. Watchlist edits and manual watched actions apply to the selected provider. New playback reports to each connected tracker independently. Linking WeTrakr does not copy existing Trakt history to it. Disconnect either account in Settings.
+Open **WeTrakr** for watchlists, Continue Watching, Up Next and personal lists. Home Continue Watching comes from WeTrakr when connected, including progress from other devices. Without a connected account, Home uses local playback history. **Settings → WeTrakr liked lists on Home** shows or hides rows from your liked lists; select a list heading to browse all its items. **Settings → WeTrakr scrobbling** controls automatic playback updates and pending retries. Turning it off leaves browsing and deliberate library actions available. Trakt linking and scrobbling have been removed; your WeTrakr connection is retained on upgrade.
 
 WeTrakr tokens are stored with Android Keystore encryption. Library reads are cached for two minutes and server retry delays are respected. Failed pause/stop updates keep their original account and timestamp; retrying them never restarts an old now-playing session or deliberately adds a duplicate play. Playback reaches watched status at 95%. Review your developer-key allowance before sharing a Client ID with other users. API reference: [WeTrakr documentation](https://api.wetrakr.com/).
 
@@ -132,7 +131,7 @@ The updater downloads only published stable releases from this repository and ch
 
 ## Continue watching
 
-Hold **OK/Select** on a Continue watching card, then choose **Remove from Continue watching**. This works in all five themes and on the My Trakt page. Removal is local to this app and preserves resume positions and Trakt history. Playing the same movie or episode again makes it visible again.
+Hold **OK/Select** on a Continue watching card, then choose **Remove from Continue watching**. This works in all five themes and on the WeTrakr page. When connected, it cancels that movie or episode's WeTrakr playback session, removing it from Continue Watching without deleting watched history. The app only confirms removal after WeTrakr accepts it. Saved local resume positions are preserved. Playing the same movie or episode again starts tracking it again. Without a connected account, removal hides the local item on this TV.
 
 ![Long-press Continue watching menu](docs/screenshots/continue-watching.png)
 
@@ -159,7 +158,7 @@ The screenshots and connection checks do not establish every TV, codec, HDR/audi
 - **kodifitzwell** — original POV Kodi add-on and POV visual identity. [Original project](https://github.com/kodifitzwell/repo).
 - **Android Open Source Project / AndroidX Media3**, **JetBrains / Kotlin**, and the original project's credited metadata and artwork providers.
 
-This project is not endorsed by Offcloud, TorBox, Trakt, Kodi, or the upstream authors. Product names and artwork remain with their respective owners. See the in-app open-source notices and [original project documentation](docs/UPSTREAM_README.md).
+This project is not endorsed by Offcloud, TorBox, WeTrakr, Trakt, Kodi, or the upstream authors. Product names and artwork remain with their respective owners. See the in-app open-source notices and [original project documentation](docs/UPSTREAM_README.md).
 
 ## License
 

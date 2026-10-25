@@ -5,7 +5,7 @@ import org.json.JSONObject
 import java.net.URI
 import java.util.Locale
 
-/** Anime discovery identity is kept separate from playback/Trakt's IMDb identity. */
+/** Anime discovery identity is kept separate from playback's IMDb identity. */
 data class AnimeTitle(
     val kitsuId: String,
     val title: String,
@@ -47,8 +47,8 @@ data class AnimeRelated(
 
 /**
  * Credential-free, paged Kitsu discovery. Call on a worker. Browse/search never use account tokens.
- * Explicit Kitsu -> Trakt/TVDB relationships are preferred for matching. The community Anime Kitsu
- * metadata endpoint can supply a same-Kitsu IMDb mapping when those relationships are absent.
+ * The community Anime Kitsu metadata endpoint supplies verified same-Kitsu IMDb mappings.
+ * Optional injected external-ID lookups must also return exact matching identities.
  * No title-similarity matching, guessed IMDb IDs, or guessed season/absolute episode numbers.
  */
 class AnimeCatalogApi internal constructor(
@@ -57,9 +57,9 @@ class AnimeCatalogApi internal constructor(
     private val monotonicMillis: () -> Long = { System.nanoTime() / 1_000_000 },
     private val canonicalDetails: (MediaItemData) -> MediaItemData = CatalogApi()::details
 ) {
-    constructor(trakt: TraktApi) : this(
+    constructor() : this(
         { url -> Net.json(url, headers = mapOf("Accept" to "application/vnd.api+json")) },
-        trakt::lookupCatalogId
+        { _, _, _ -> null } // Public same-Kitsu mappings remain the exact identity fallback.
     )
 
     private data class Cached(val at: Long, val page: AnimePage)
@@ -123,7 +123,7 @@ class AnimeCatalogApi internal constructor(
         for ((site, id) in listOf("trakt" to title.traktId, "tvdb" to title.tvdbId)) {
             if (!NUMERIC_ID.matches(id)) continue
             val mapped = try { lookupId(site, id, title.type) } catch (error: ApiException) {
-                // Discovery still works without a configured/available Trakt app. The separate,
+                // Discovery still works without an external-ID lookup. The separate,
                 // public metadata service is allowed to supply only explicit same-Kitsu IDs.
                 if (error.code == 429) throw error
                 null

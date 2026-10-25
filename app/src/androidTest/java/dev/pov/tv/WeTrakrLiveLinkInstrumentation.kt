@@ -54,6 +54,9 @@ class WeTrakrLiveLinkInstrumentation : Instrumentation() {
             stage = "continue_watching"; api.continueWatching()
             stage = "up_next"; api.nextEpisodes()
             stage = "personal_lists"; api.lists()
+            stage = "liked_lists"; val liked = api.likedLists()
+            liked.take(1).forEach { (id, _) -> stage = "liked_list_items"; api.likedListPreview(id) }
+            report.putBoolean("liked_lists_verified", true)
             report.putBoolean("read_only_library_endpoints_verified", true)
             report.putBoolean("connected", api.connected())
             passed = true

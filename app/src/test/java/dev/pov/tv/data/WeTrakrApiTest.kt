@@ -190,4 +190,72 @@ class WeTrakrApiTest {
         assertEquals("", h.store.get("retry_at"))
     }
     private fun media(index: Int) = JSONObject().put("type", "movie").put("title", "Example $index").put("ids", JSONObject().put("imdb", "tt${1234567 + index}"))
+
+    @Test fun `cancel removes exactly the selected episode and blocks stale scrobbles until new playback`() {
+        val h = Harness(); h.connect(); val account = h.api.accountRevision()
+        h.handler = { path, method, _, body ->
+            assertEquals("/scrobble/playing", path); assertEquals("DELETE", method)
+            assertEquals("tt7654321", body!!.getJSONObject("show").getJSONObject("ids").getString("imdb"))
+            assertEquals(0, body.getJSONObject("episode").getInt("season")); assertEquals(2, body.getJSONObject("episode").getInt("number"))
+            assertFalse(body.has("progress")); assertFalse(body.has("movies"))
+            """{"action":"cancel","target":"episode"}"""
+        }
+        h.api.removeContinueWatching(episode)
+        val count = h.calls.size
+        assertFalse(h.api.progressForAccount(episode, 30.0, "stop", account))
+        assertFalse(h.api.restoreProgress(episode, 30.0, "pause", "2026-09-01T10:00:00Z", account))
+        assertEquals(count, h.calls.size)
+        h.api.allowPlayback(episode)
+        h.handler = { _, _, _, _ -> """{"action":"start"}""" }
+        assertTrue(h.api.progressForAccount(episode, 30.0, "start", account))
+    }
+    @Test fun `cancel is idempotent only for no session and never claims other failures succeeded`() {
+        val h = Harness(); h.connect()
+        h.handler = { _, _, _, _ -> throw ApiException(404, "None", "NO_SESSION") }
+        h.api.removeContinueWatching(movie)
+        h.api.allowPlayback(movie)
+        h.handler = { _, _, _, _ -> throw ApiException(404, "Missing", "NOT_FOUND") }
+        assertTrue(failure { h.api.removeContinueWatching(movie) } is ApiException)
+        h.handler = { _, _, _, _ -> "{}" }
+        assertTrue(failure { h.api.removeContinueWatching(movie) } is ApiException)
+    }
+    @Test fun `scrobble switch blocks live updates retries and previously queued work after reenable`() {
+        val h = Harness(); h.connect(); val account = h.api.accountRevision(); val old = h.api.scrobbleRevision()
+        h.api.setScrobblingEnabled(false)
+        assertFalse(h.api.scrobblingEnabled())
+        assertFalse(h.api.progressForAccount(movie, 50.0, "stop", account))
+        assertFalse(h.api.restoreProgress(movie, 50.0, "pause", "2026-09-01T10:00:00Z", account))
+        assertTrue(h.calls.isEmpty())
+        h.api.setScrobblingEnabled(true)
+        assertFalse(h.api.progressForAccount(movie, 50.0, "stop", account, old))
+        h.handler = { _, _, _, _ -> """{"action":"pause"}""" }
+        assertTrue(h.api.progressForAccount(movie, 50.0, "stop", account))
+    }
+    @Test fun `liked lists use likes pointers and public list contents rather than owned list endpoint`() {
+        val h = Harness(); h.connect()
+        h.handler = { path, _, headers, _ ->
+            assertEquals("Bearer fixture-access", headers["Authorization"])
+            when {
+                path.startsWith("/sync/likes/lists") -> """[{"list":{"id":125,"name":"Example favourites"}},{"comment":{"id":5}},{"list":{"id":"../bad","name":"Invalid"}}]"""
+                path.startsWith("/lists/125/items/all") -> """[{"type":"movie","title":"Example Movie","ids":{"imdb":"tt1234567"}},{"type":"person","ids":{"imdb":"nm1234567"}}]"""
+                else -> error("Wrong endpoint")
+            }
+        }
+        assertEquals(listOf("125" to "Example favourites"), h.api.likedLists())
+        assertEquals("tt1234567", h.api.likedListPreview("125").single().imdbId)
+        assertEquals("tt1234567", h.api.likedListItems("125").single().imdbId)
+        val count = h.calls.size; h.api.likedListPreview("125"); h.api.likedLists(); assertEquals(count, h.calls.size)
+        assertTrue(failure { h.api.likedListItems("../bad") } is IllegalArgumentException)
+    }
+    @Test fun `show watchlist uses the show root while cancellation always requires exact episode`() {
+        val h = Harness(); h.connect()
+        h.handler = { _, _, _, body ->
+            val show = body!!.getJSONArray("shows").getJSONObject(0)
+            assertEquals("planning", show.getString("status")); assertFalse(show.has("seasons"))
+            """{"added":{"total":1}}"""
+        }
+        val show = PlaybackIdentity("tt7654321", "series", "Example Show")
+        h.api.setWatchlist(show, true)
+        assertTrue(failure { h.api.removeContinueWatching(show) } is IllegalArgumentException)
+    }
 }

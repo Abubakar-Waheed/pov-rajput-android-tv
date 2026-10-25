@@ -3,7 +3,7 @@ package dev.pov.tv.data
 import org.json.JSONObject
 import java.net.URI
 
-/** A displayed anime episode retains the canonical identity sent to sources and Trakt. */
+/** A displayed anime episode retains the canonical identity sent to sources and WeTrakr. */
 data class AnimeEpisodeChoice(
     val catalogEpisode: Int,
     val absoluteEpisode: Int?,
@@ -35,7 +35,7 @@ internal object AnimeEpisodeCatalogParser {
             poster = anime.poster.ifBlank { canonical.poster }, background = anime.background.ifBlank { canonical.background },
             description = anime.description.ifBlank { canonical.description }, genres = (listOf("Anime") + anime.genres + canonical.genres).distinct())
         if (anime.type == "movie") return AnimeEpisodeCatalog(anime, selected.copy(episodes = emptyList()), emptyList(),
-            notice = "Anime movie. Playback and Trakt use this film's IMDb identity.")
+            notice = "Anime movie. Playback and WeTrakr use this film's IMDb identity.")
         val videos = meta.optJSONArray("videos") ?: unavailable()
         val canonicalEpisodes = canonical.episodes.associateBy { it.season to it.episode }
         val candidates = (0 until videos.length()).mapNotNull { index ->
@@ -75,8 +75,8 @@ internal object AnimeEpisodeCatalogParser {
         val note = when {
             choices.isEmpty() -> "Episode mappings for this anime entry could not be verified. Choose a matching title manually; no episodes have been substituted."
             missing > 0 -> "$missing episode ${if (missing == 1) "mapping is" else "mappings are"} unavailable. Only verified episodes from this anime entry are shown."
-            anime.category == "special" -> "Special or OVA presentation. Source searches and Trakt keep the original show episode numbers."
-            else -> "Only this selected season or part is shown. Source searches and Trakt keep the original show episode numbers."
+            anime.category == "special" -> "Special or OVA presentation. Source searches and WeTrakr keep the original show episode numbers."
+            else -> "Only this selected season or part is shown. Source searches and WeTrakr keep the original show episode numbers."
         }
         val scopedEpisodes = choices.map { choice -> EpisodeData(choice.identity.season, choice.identity.episode,
             choice.title, choice.released, choice.thumbnail) }

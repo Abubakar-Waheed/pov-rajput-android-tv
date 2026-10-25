@@ -33,9 +33,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import dev.pov.tv.data.PlaybackIdentity
 import dev.pov.tv.data.SecureStore
-import dev.pov.tv.data.TraktApi
 import dev.pov.tv.data.WeTrakrApi
-import dev.pov.tv.data.TrackingClient
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 import java.nio.ByteBuffer
@@ -53,7 +51,6 @@ object InAppPlaybackSession {
     private var mediaSession: MediaSession? = null
     private var targetView: WeakReference<PlayerView>? = null
     private lateinit var history: PlaybackStore
-    private lateinit var trakt: TraktApi
     private lateinit var wetrakr: WeTrakrApi
     private lateinit var wetrakrOutbox: PlaybackStore
     private var sourceUrl = ""
@@ -131,7 +128,6 @@ object InAppPlaybackSession {
         val app = context.applicationContext as Application
         application = app
         history = PlaybackStore(app)
-        trakt = TraktApi(SecureStore(app))
         wetrakr = WeTrakrApi(SecureStore(app))
         wetrakrOutbox = PlaybackStore(app, "wetrakr.pending")
         app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
@@ -161,7 +157,7 @@ object InAppPlaybackSession {
         debridService = PlaybackDebrid.normalize(saved?.getString("debrid_service") ?: intent.getStringExtra("debrid_service"))
         title = intent.getStringExtra("title").orEmpty()
         identity = try { intent.getStringExtra("identity")?.let { PlaybackIdentity.fromJson(JSONObject(it)) } } catch (_: Exception) { null }
-        if (saved == null) history.show(sourceKey, identity)
+        if (saved == null) { history.show(sourceKey, identity); identity?.let(wetrakr::allowPlayback) }
         val position = (saved?.getLong("position") ?: intent.getLongExtra("resume", 0L)).coerceAtLeast(0)
         remotePercent = saved?.getDouble("remotePercent") ?: if (position == 0L) intent.getDoubleExtra("resume_percent", 0.0) else 0.0
         if (!remotePercent.isFinite() || remotePercent !in 0.0..100.0) remotePercent = 0.0
@@ -441,7 +437,8 @@ object InAppPlaybackSession {
         val media = identity ?: return
         val exo = player ?: return
         if (exo.duration <= 0) return
-        val targets = listOf<TrackingClient>(trakt, wetrakr).mapNotNull { client ->
+        if (!wetrakr.scrobblingEnabled() || history.isHidden(identity = media)) return
+        val targets = listOf(wetrakr).mapNotNull { client ->
             try { if (client.connected()) client to client.accountRevision() else null } catch (_: Exception) { null }
         }
         if (targets.isEmpty()) return
@@ -449,15 +446,16 @@ object InAppPlaybackSession {
         val now = android.os.SystemClock.elapsedRealtime()
         if (action == lastSyncAction && now - lastSyncAt < 3_000) return
         lastSyncAction = action; lastSyncAt = now
+        val scrobbleRevision = wetrakr.scrobbleRevision()
         val updates = targets.map { (client, account) ->
-            val outbox = if (client === wetrakr) wetrakrOutbox else history
-            val revision = try { if (action != "start") outbox.queue(media, percent, action, account) else null } catch (_: Exception) { null }
+            val outbox = wetrakrOutbox
+            val revision = try { if (action != "start") outbox.queue(media, percent, action, account, scrobbleRevision = scrobbleRevision) else null } catch (_: Exception) { null }
             Triple(client, account, outbox to revision)
         }
         syncWorker.execute {
             updates.forEach { (client, account, queued) ->
                 try {
-                    if (client.progressForAccount(media, percent, action, account) && queued.second != null) queued.first.acknowledge(media, queued.second!!)
+                    if (!history.isHidden(identity = media) && client.progressForAccount(media, percent, action, account, scrobbleRevision) && queued.second != null) queued.first.acknowledge(media, queued.second!!)
                 } catch (_: Exception) { /* Each provider keeps its own final-state retry. */ }
             }
         }
