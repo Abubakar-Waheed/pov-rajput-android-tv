@@ -6,6 +6,10 @@ Release builds run unit tests and Android debug/release lint before APK assembly
 
 Checks cover Offcloud protocol handling, player controls and track selection, subtitle preferences, and existing application behavior. Device and media format compatibility can vary.
 
+## POV Rajput 0.2.12
+
+353 unit tests and debug/release lint pass. Android TV instrumentation verifies all six Cinemeta shelves, header selection and first-poster navigation across all five themes, returning to the top of every main tab, and retaining Home when returning from grids and details. Device checks also cover cached playback and expired-link fallback, Continue Watching actions, keyboard and voice-result search submission, and shared-player link caching. Live Cinemeta catalog requests pass. Tracking writes use isolated fixtures during automated tests.
+
 ## POV Rajput 0.2.7
 
 313 unit tests pass, including subtitle preference persistence, text-only track overrides, and one-second seek state, cancellation, boundaries, and long-video timing. Subtitle position checks cover authored text regions, persistence, restoring default placement, and retaining image subtitles. Audio preference tests preserve subtitle/video settings and overrides; accelerated seeking tests cover all speed thresholds, reversals, new holds, and end bounds. Debug and release lint pass.

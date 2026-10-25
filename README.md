@@ -67,7 +67,7 @@ Screenshots of POV Rajput for Android TV with the Editorial theme, using sample 
 
 ## Discovery and search
 
-Home shelf headings open a grid of their fetched titles. Everyone gets six Cinemeta shelves in this order: **New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies, Popular Shows**. New uses the current-year catalog and filters inconsistent release years; Featured preserves Cinemeta’s own selection, without claiming a highest-rating order. No tracking account or API key is needed for these catalogs. WeTrakr supplies Continue Watching and optional liked lists, alongside its existing watchlist/library features. TMDB integration is postponed.
+Home shelf headings open a grid of their fetched titles. Everyone gets six Cinemeta shelves in this order: **New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies, Popular Shows**. New uses the current-year catalog and filters inconsistent release years; Featured preserves Cinemeta’s own selection, without claiming a highest-rating order. No tracking account or API key is needed for these catalogs. WeTrakr supplies Continue Watching and optional liked lists, alongside its existing watchlist/library features.
 
 The search dialog accepts the keyboard’s Search/Enter action directly. **Voice search** uses an installed TV speech-input activity; TVs without one retain keyboard search. Cloud-library posters use exact title/year matches from Cinemeta; ambiguous filenames keep their original labels and are never silently scrobbled as a guessed title.
 
@@ -90,7 +90,7 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 1. Download `POV-Rajput-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases).
 2. Sideload it on Android TV 8.0 or later. The launcher name is **POV Rajput**; package ID: `dev.pov.tv.rajput`.
 3. Open **Settings → Connect Offcloud with API key**, enter your own key, and select **Connect**.
-4. Open **Settings → Source provider address** and enter your own HTTPS Stremio-compatible add-on URL. No source provider is bundled.
+4. Add your preferred scraper URL in **Settings → Source provider address** to find playback sources. Use an HTTPS Stremio-compatible add-on URL.
 5. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
 6. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 

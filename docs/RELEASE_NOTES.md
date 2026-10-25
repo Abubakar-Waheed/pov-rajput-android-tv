@@ -1,12 +1,15 @@
-# POV Rajput 0.2.11
+# POV Rajput 0.2.12
 
-- Added WeTrakr device-code login, token renewal, watchlists, Continue watching, Up next, and personal lists.
-- WeTrakr is the only tracking service. Its official transparent logo replaces My tracking in navigation; old Trakt linking, settings and playback updates are removed.
-- Home Continue Watching loads WeTrakr progress across devices. Long-press removal cancels exactly that movie or episode's WeTrakr playback session without deleting watched history.
-- The WeTrakr section opens on movie/TV watchlist thumbnails and liked-list rows. Liked lists on Home are optional and off by default; opening Home does not fetch them while disabled. Full lists remain accessible from their headings.
-- Added a scrobbling toggle for automatic playback updates and queued retries. Library reads and manual actions remain available while it is off.
-- Added separate WeTrakr account controls and an application Client ID setting. No client secret is required or bundled; account tokens are encrypted on the device.
-- Library reads are cached for two minutes. Requests respect server rate-limit backoff, and failed final playback updates are retried for their original account with their original timestamp.
+- Continue Watching reuses the last successfully played link for up to 24 hours and searches for fresh sources when that link is unavailable.
+- Long-press a Continue Watching item for **Open Media** or **Remove from Continue Watching**. Details include watchlist, watched-status, playlist and fresh-source actions.
+- Home now offers Cinemeta catalogs in this order: **New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies, Popular Shows**. These catalogs work without a WeTrakr account. WeTrakr Continue Watching and optional liked lists remain available.
+- Improved D-pad navigation across Home, Movies, Shows, Anime, Library, WeTrakr and Settings. Shelf headings are selectable, entering a shelf starts at its first poster, and scrolling back up reveals the top content.
+- Returning from details and grids preserves Home position. Removing Continue Watching items updates the row without rebuilding the whole page.
+- Search supports voice input and submits directly from the keyboard Search/Enter action.
+- Recognized cloud-library movies and shows display posters from Cinemeta.
+- Editorial is the default theme for new installations.
+
+Add your preferred scraper URL in **Settings → Source provider address** to find playback sources. Use an HTTPS Stremio-compatible add-on URL.
 
 ## Credits and source
 
@@ -16,4 +19,4 @@ Maintained by **Rajput**. Original Android TV application: **Mark Mateo / MM-482
 
 Users supply their own registered WeTrakr Client ID in Settings. No developer Client ID, client secret or account tokens are included in the source or release APK.
 
-WeTrakr API documentation: [api.wetrakr.com](https://api.wetrakr.com/). See [0.2.10 release notes](RELEASE_NOTES_0.2.10.md) for earlier changes.
+WeTrakr API documentation: [api.wetrakr.com](https://api.wetrakr.com/). See [0.2.11 release notes](RELEASE_NOTES_0.2.11.md) for earlier changes.

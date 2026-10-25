@@ -1642,14 +1642,14 @@ class MainActivity : Activity() {
         body.addView(button("Source provider address") { inputSetting("Source provider", "HTTPS Stremio-compatible add-on address", store.get("sources.endpoint")) { value ->
             val uri = Uri.parse(value.trim()); if (uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { store.put("sources.endpoint", value.trim()); toast("Source provider saved") } else toast("Enter a valid HTTPS address")
         } }, margin(-1, 44, bottom = 8))
-        body.addView(text("No source provider is bundled. Supply your own HTTPS add-on address to search for playback links.", 12, muted), margin(-1, -2, bottom = 10))
+        body.addView(text("Add your preferred HTTPS scraper URL to find playback sources.", 12, muted), margin(-1, -2, bottom = 10))
         section("Updates")
         body.addView(button("Check for updates ›") { startActivity(Intent(this, UpdateActivity::class.java)) }, margin(-1, 44, bottom = 8))
         body.addView(button("Check for updates on startup · ${if (store.get("updates.startup") == "true") "On" else "Off"}") {
             store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
         }, margin(-1, 44, bottom = 8))
         section("About")
-        body.addView(text("POV Rajput · 0.2.11\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nWeTrakr tracking and API by alberdev, developer of WeTrakr (wetrakr.com).\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
+        body.addView(text("POV Rajput · 0.2.12\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nWeTrakr tracking and API by alberdev, developer of WeTrakr (wetrakr.com).\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
     }
 
