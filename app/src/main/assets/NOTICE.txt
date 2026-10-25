@@ -19,3 +19,6 @@ Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
 GNU GPL version 3: https://www.gnu.org/licenses/gpl-3.0.txt
 
 Offcloud API integration added 2026-10-23 to the MM-482 Android TV port. This modified build is independent of Offcloud and the original authors. Offcloud is a trademark of its respective owner. API reference: https://github.com/Offcloud/offcloud-api
+
+WeTrakr tracking service, API and official logo: WeTrakr and its developer, alberdev. Thank you for developing WeTrakr and providing API access for this integration. https://wetrakr.com/ | https://api.wetrakr.com/ | https://www.reddit.com/user/alberdev/
+Official logo paths and colors are represented as Android vector drawables. WeTrakr names, artwork, metadata and service remain the property of their respective owners. This independent app is not endorsed by WeTrakr.

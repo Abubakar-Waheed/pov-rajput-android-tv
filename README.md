@@ -13,6 +13,7 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 
 ## Rajput's contributions
 
+- Added WeTrakr-only device login, encrypted account tokens, watchlist/liked-list thumbnail shelves, remote Continue Watching, safe playback-session removal, and optional scrobbling. Users supply their own registered Client ID; no developer credentials are bundled.
 - Added Offcloud API-key connection with Android Keystore encryption.
 - Updated account validation to the current account API and Bearer authorization, replacing the retired proxy endpoint.
 - Added JSON cache checks, cloud transfer preparation, download-status polling, cloud-history browsing, and exact file selection.
@@ -32,7 +33,21 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 
 ## Screenshots
 
-Screenshots of POV Rajput for Android TV.
+Screenshots of POV Rajput for Android TV, using sample lists and public titles.
+
+### WeTrakr library
+
+![Movie and TV watchlists open as thumbnail shelves](docs/screenshots/wetrakr-library.png)
+
+![Liked lists with thumbnail previews in WeTrakr](docs/screenshots/wetrakr-liked-lists.png)
+
+### Continue Watching from WeTrakr
+
+![WeTrakr Continue Watching alongside catalog rows](docs/screenshots/continue-watching.png)
+
+### WeTrakr settings
+
+![Scrobbling and optional Home liked-list controls](docs/screenshots/wetrakr-settings.png)
 
 ### Settings
 
@@ -48,6 +63,7 @@ Screenshots of POV Rajput for Android TV.
 | --- | --- |
 | Offcloud | Bring-your-own API key, direct cached playback, cloud downloads, library, status, file selection |
 | TorBox | Account connection, cloud libraries, cached playback with temporary-entry removal, direct links |
+| WeTrakr | Own Client ID, device login, watchlists, liked lists, synced Continue Watching, Up Next, optional scrobbling |
 | Catalog | Movie/show discovery, search, details, seasons, episodes, and anime browsing |
 | Player | Native Media3, fullscreen/mini player, audio/subtitle choices, transparent subtitle backgrounds, bold subtitles, three subtitle sizes, resume, compatibility guard |
 | Appearance | Cinematic, Editorial, Neon, Cinema, and Dashboard |
@@ -153,9 +169,10 @@ The screenshots and connection checks do not establish every TV, codec, HDR/audi
 - Fork base revision: [`c5a64e9`](https://github.com/MM-482/pov-android-tv/commit/c5a64e92232fa90889507114721e736c37450f2d), retaining the upstream Git history.
 - Original POV Kodi add-on: **[kodifitzwell/repo](https://github.com/kodifitzwell/repo)**, including the credited POV visual identity and original fanart.
 
-- **Rajput** — this Offcloud edition, integration work, connection fixes, branding, and release automation.
+- **Rajput** — this edition, Offcloud and WeTrakr integrations, playback and subtitle improvements, TV interface refinements, branding, and release automation.
 - **Mark Mateo / MM-482** — original standalone Android TV application, TV interface, themes, catalog integration, Media3 player, TorBox and Trakt support. [Upstream source](https://github.com/MM-482/pov-android-tv).
 - **kodifitzwell** — original POV Kodi add-on and POV visual identity. [Original project](https://github.com/kodifitzwell/repo).
+- **[WeTrakr](https://wetrakr.com/) and [alberdev](https://www.reddit.com/user/alberdev/), its developer** — tracking service, API, official logo, and developer access that made this integration possible. Thank you for building WeTrakr and supporting community integrations. [API documentation](https://api.wetrakr.com/).
 - **Android Open Source Project / AndroidX Media3**, **JetBrains / Kotlin**, and the original project's credited metadata and artwork providers.
 
 This project is not endorsed by Offcloud, TorBox, WeTrakr, Trakt, Kodi, or the upstream authors. Product names and artwork remain with their respective owners. See the in-app open-source notices and [original project documentation](docs/UPSTREAM_README.md).

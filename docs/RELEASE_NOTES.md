@@ -12,4 +12,8 @@
 
 Maintained by **Rajput**. Original Android TV application: **Mark Mateo / MM-482** ([source](https://github.com/MM-482/pov-android-tv)). Original POV Kodi add-on: **kodifitzwell** ([source](https://github.com/kodifitzwell/repo)). GPL-3.0; original history, license, and acknowledgments are preserved.
 
+**Thanks to [WeTrakr](https://wetrakr.com/) and its developer [alberdev](https://www.reddit.com/user/alberdev/)** for building the tracking service, providing the API and logo, and enabling developer access for this integration.
+
+Users supply their own registered WeTrakr Client ID in Settings. No developer Client ID, client secret or account tokens are included in the source or release APK.
+
 WeTrakr API documentation: [api.wetrakr.com](https://api.wetrakr.com/). See [0.2.10 release notes](RELEASE_NOTES_0.2.10.md) for earlier changes.
