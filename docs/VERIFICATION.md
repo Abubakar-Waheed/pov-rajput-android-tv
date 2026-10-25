@@ -6,6 +6,10 @@ Release builds run unit tests and Android debug/release lint before APK assembly
 
 Checks cover Offcloud protocol handling, player controls and track selection, subtitle preferences, and existing application behavior. Device and media format compatibility can vary.
 
+## Unreleased: named source providers
+
+366 unit tests and debug/release lint pass. Provider checks cover preserving the existing address, configuration validation, independent enable/disable state, parallel retrieval, partial failures, combined cache checks, exact duplicate merging, separate torrent files and signed URLs, and episode filtering. Android TV instrumentation exercises adding, editing, toggling and confirmed removal using temporary provider fixtures; the original encrypted source configuration is restored afterward.
+
 ## POV Rajput 0.2.12
 
 353 unit tests and debug/release lint pass. Android TV instrumentation verifies all six Cinemeta shelves, header selection and first-poster navigation across all five themes, returning to the top of every main tab, and retaining Home when returning from grids and details. Device checks also cover cached playback and expired-link fallback, Continue Watching actions, keyboard and voice-result search submission, and shared-player link caching. Live Cinemeta catalog requests pass. Tracking writes use isolated fixtures during automated tests.

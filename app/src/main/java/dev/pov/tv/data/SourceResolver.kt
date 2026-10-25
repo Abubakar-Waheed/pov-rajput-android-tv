@@ -12,7 +12,8 @@ class SourceResolver internal constructor(
     private val monotonicNanos: () -> Long = System::nanoTime,
     private val pause: (Long) -> Unit = Thread::sleep,
     private val offcloud: () -> OffcloudApi? = { null },
-    private val serviceOrder: (() -> List<String>)? = null
+    private val serviceOrder: (() -> List<String>)? = null,
+    private val configuredProviders: (() -> List<SourceProvider>)? = null
 ) {
     constructor(store: SecureStore, torbox: TorBoxApi) : this({ store.get("sources.endpoint") }, object : SourceTorBox {
         override fun cached(hashes: List<String>) = torbox.cached(hashes)
@@ -20,24 +21,55 @@ class SourceResolver internal constructor(
         override fun folder(kind: String, id: Long) = torbox.folder(kind, id)
         override fun streamUrl(kind: String, folderId: Long, fileId: Long) = torbox.streamUrl(kind, folderId, fileId)
         override fun prepareCached(source: SourceItem, identity: PlaybackIdentity) = torbox.prepareCached(source, identity)
-    }, offcloud = { OffcloudApi(store) }, serviceOrder = { DebridServices.connected(store) })
-    /** Fetching choices is read-only: cache checks never create a transfer. */
-    fun sources(identity: PlaybackIdentity): List<SourceItem> {
+    }, offcloud = { OffcloudApi(store) }, serviceOrder = { DebridServices.connected(store) }, configuredProviders = { SourceProviders(store).load() })
+    fun sources(identity: PlaybackIdentity): List<SourceItem> = search(identity).items
+
+    internal data class SearchResult(val items: List<SourceItem>, val unavailableProviders: List<String>)
+
+    /** Fetch all enabled add-ons concurrently, then perform one combined debrid cache check. */
+    internal fun search(identity: PlaybackIdentity): SearchResult {
         validateIdentity(identity)
-        val endpoint = endpoint(sourceEndpoint())
-        val id = if (identity.type == "series") {
-            "${identity.imdbId}:${identity.season}:${identity.episode}"
-        } else identity.imdbId
-        val payload = try {
-            publicJson("$endpoint/stream/${identity.type}/$id.json")
-        } catch (_: Exception) {
-            throw IllegalStateException("The source provider could not be reached. Try again or check the source endpoint in Settings.")
-        }
+        val providers = (configuredProviders?.invoke()
+            ?: listOf(SourceProvider("legacy", "Source 1", sourceEndpoint()))).filter { it.enabled }
+        require(providers.isNotEmpty()) { "Add or enable a source provider in Settings before searching for links." }
+        require(providers.size <= SourceProviders.MAX) { "Too many source providers. Check Settings." }
+        // Validate before starting any requests; an empty legacy endpoint has the same setup guidance.
+        val endpoints = providers.map { SourceProviders.endpoint(it.address) }
+        val id = if (identity.type == "series") "${identity.imdbId}:${identity.season}:${identity.episode}" else identity.imdbId
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(minOf(providers.size, 4))
+        val failures = mutableListOf<String>()
+        var successful = 0
+        val all = mutableListOf<SourceItem>()
+        try {
+            val tasks = providers.mapIndexed { index, provider -> executor.submit(java.util.concurrent.Callable {
+                try { parseStreams(publicJson("${endpoints[index]}/stream/${identity.type}/$id.json"), provider.name, identity) }
+                catch (error: InterruptedException) { throw error }
+                catch (error: java.util.concurrent.CancellationException) { throw error }
+                catch (_: Exception) { null }
+            }) }
+            tasks.forEachIndexed { index, task ->
+                val items = try { task.get() }
+                    catch (error: java.util.concurrent.ExecutionException) { throw (error.cause as? Exception ?: error) }
+                if (items == null) failures += providers[index].name else { successful++; all += items }
+            }
+        } finally { executor.shutdownNow() }
+        check(successful > 0) { "The enabled source providers could not be reached. Try again or check source providers in Settings." }
+        val choices = deduplicate(all)
+        val availability = checkCaches(activeServices(), choices.map { it.infoHash }.filter { it.isNotBlank() }.distinct())
+        val results = choices.map { source ->
+            val cachedOn = availability.filter { source.infoHash in it.hashes }.map { it.service }
+            val unavailable = if (source.infoHash.isNotBlank()) availability.filter { it.failed }
+                .map { "${DebridServices.name(it.service)} cache unavailable" } else emptyList()
+            source.copy(cached = cachedOn.isNotEmpty(), cachedServices = cachedOn,
+                detail = (listOf(source.detail) + unavailable).filter { it.isNotBlank() }.joinToString(" · "))
+        }.sortedByDescending { it.cached }
+        return SearchResult(results, failures)
+    }
+
+    private fun parseStreams(payload: JSONObject, provider: String, identity: PlaybackIdentity): List<SourceItem> {
         val streams = payload.optJSONArray("streams") ?: return emptyList()
-        val provider = URI(endpoint).host
-        val choices = (0 until minOf(streams.length(), 300)).mapNotNull { index ->
+        return (0 until minOf(streams.length(), 300)).mapNotNull { index ->
             val stream = streams.optJSONObject(index) ?: return@mapNotNull null
-            // Header-dependent URLs cannot be represented by SourceItem yet; never silently discard headers.
             if (stream.optJSONObject("behaviorHints")?.optJSONObject("proxyHeaders") != null) return@mapNotNull null
             val hash = stream.optString("infoHash").lowercase(Locale.ROOT).takeIf(HASH::matches).orEmpty()
             val direct = stream.optString("url").takeIf(::isHttps).orEmpty()
@@ -46,32 +78,23 @@ class SourceResolver internal constructor(
             val filename = stream.optJSONObject("behaviorHints")?.optString("filename").orEmpty()
             val title = filename.ifBlank { description.lineSequence().firstOrNull().orEmpty() }
                 .ifBlank { stream.optString("name").ifBlank { "Video source" } }.take(500)
-            if (identity.type == "series" && EpisodeFilename.isExplicitMismatch(title, identity.season, identity.episode)) {
-                return@mapNotNull null
-            }
-            val fileIndex = if (stream.has("fileIdx") && !stream.isNull("fileIdx")) {
-                stream.optInt("fileIdx", -1).takeIf { it >= 0 }
-            } else null
-            SourceItem(
-                title = title,
-                provider = provider,
-                infoHash = hash,
-                fileIndex = fileIndex,
-                directUrl = direct,
-                sizeBytes = SourceMetadata.sizeBytes(stream),
-                qualityHeight = SourceMetadata.qualityHeight(stream),
+            if (identity.type == "series" && EpisodeFilename.isExplicitMismatch(title, identity.season, identity.episode)) return@mapNotNull null
+            val fileIndex = if (stream.has("fileIdx") && !stream.isNull("fileIdx")) stream.optInt("fileIdx", -1).takeIf { it >= 0 } else null
+            SourceItem(title = title, provider = provider, infoHash = hash, fileIndex = fileIndex, directUrl = direct,
+                sizeBytes = SourceMetadata.sizeBytes(stream), qualityHeight = SourceMetadata.qualityHeight(stream),
                 detail = listOf(stream.optString("name"), description.lineSequence().drop(1).joinToString(" · "))
-                    .filter { it.isNotBlank() }.joinToString(" · ").take(800)
-            )
-        }.distinctBy { Triple(it.infoHash, it.fileIndex, it.directUrl) }
-        val availability = checkCaches(activeServices(), choices.map { it.infoHash }.filter { it.isNotBlank() }.distinct())
-        return choices.map { source ->
-            val cachedOn = availability.filter { source.infoHash in it.hashes }.map { it.service }
-            val unavailable = if (source.infoHash.isNotBlank()) availability.filter { it.failed }
-                .map { "${DebridServices.name(it.service)} cache unavailable" } else emptyList()
-            source.copy(cached = cachedOn.isNotEmpty(), cachedServices = cachedOn,
-                detail = (listOf(source.detail) + unavailable).filter { it.isNotBlank() }.joinToString(" · "))
-        }.sortedByDescending { it.cached }
+                    .filter { it.isNotBlank() }.joinToString(" · ").take(800))
+        }
+    }
+
+    private fun deduplicate(items: List<SourceItem>): List<SourceItem> {
+        // Never compare filenames or strip signed URL query parameters. A file index distinguishes torrent files.
+        val groups = items.groupBy { if (it.directUrl.isNotBlank()) Triple("", null, it.directUrl) else Triple(it.infoHash, it.fileIndex, "") }
+        return groups.values.map { copies ->
+            val first = copies.first()
+            first.copy(provider = copies.map { it.provider }.distinct().joinToString(" + "),
+                sizeBytes = copies.firstNotNullOfOrNull { it.sizeBytes }, qualityHeight = copies.firstNotNullOfOrNull { it.qualityHeight })
+        }
     }
 
     private data class CacheResult(val service: String, val hashes: Set<String>, val failed: Boolean)
@@ -195,15 +218,6 @@ class SourceResolver internal constructor(
         require(identity.type != "series" || (identity.season >= 0 && identity.episode > 0)) {
             "Choose an episode before searching for sources."
         }
-    }
-
-    private fun endpoint(value: String): String {
-        require(value.isNotBlank()) { "Add your own source provider address in Settings before searching for links." }
-        val candidate = value.trim().removeSuffix("/").removeSuffix("/manifest.json")
-        require(candidate.length <= 4_096 && isHttps(candidate)) { "Enter a valid HTTPS Stremio add-on endpoint." }
-        val uri = URI(candidate)
-        require(uri.query == null && uri.fragment == null) { "Use the add-on base URL or manifest URL, without a query or fragment." }
-        return candidate.trimEnd('/')
     }
 
     private fun isHttps(value: String): Boolean = try {

@@ -310,7 +310,7 @@ class MainActivity : Activity() {
     }
     private fun Int?.orZero() = this ?: 0
     private fun pageRevision() = java.security.MessageDigest.getInstance("SHA-256").digest(
-        listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint")).joinToString("\u0000").toByteArray()
+        listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint"), store.get(SourceProviders.KEY)).joinToString("\u0000").toByteArray()
     ).joinToString("") { "%02x".format(it.toInt() and 255) }
     private fun focusAfterRender(id: Int) {
         body.post {
@@ -1091,19 +1091,26 @@ class MainActivity : Activity() {
         if (connected.isEmpty()) {
             body.addView(button("Connect Offcloud or TorBox in Settings") { navigate { settings() } }, margin(310, 44)); return
         }
-        read(id, { resolver.sources(identity) }) { sources -> sourceResults(identity, sources) }
+        read(id, { resolver.search(identity) }) { result -> sourceResults(identity, result.items, result.unavailableProviders) }
     }
 
-    private fun sourceResults(identity: PlaybackIdentity, sources: List<SourceItem>) {
-        current = { sourceResults(identity, sources) }
+    private fun sourceResults(identity: PlaybackIdentity, sources: List<SourceItem>) = sourceResults(identity, sources, emptyList())
+
+    private fun sourceResults(identity: PlaybackIdentity, sources: List<SourceItem>, unavailable: List<String>) {
+        val providerRevision = store.get(SourceProviders.KEY) + "\u0000" + store.get("sources.endpoint")
+        current = {
+            if (providerRevision != store.get(SourceProviders.KEY) + "\u0000" + store.get("sources.endpoint")) showSources(identity)
+            else sourceResults(identity, sources, unavailable)
+        }
         val connected = DebridServices.connected(store)
         if (connected.isEmpty()) { showSources(identity); return }
         val suffix = if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""
         val id = page(identity.title + suffix, "Cached source priority: ${connected.joinToString(" → ") { DebridServices.name(it) }}.")
         val sorting = SourceSortPreferences(this)
         body.addView(button("Sort · ${sorting.label}  ›") {
-            SourceSortPreferences.show(this) { sourceResults(identity, sources) }
+            SourceSortPreferences.show(this) { sourceResults(identity, sources, unavailable) }
         }, margin(-1, 42, bottom = 8))
+        if (unavailable.isNotEmpty()) body.addView(text("Unavailable providers: ${unavailable.joinToString(", ")}. Other providers were searched.", 14, muted), margin(-1, -2, bottom = 8))
         if (sources.isEmpty()) body.addView(text("No sources were returned. Try again later or check the source provider in Settings.", 15, muted))
         val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
         sorting.order.sorted(sources.distinctBy(TvChoiceKeys::source)).forEach { source ->
@@ -1639,10 +1646,8 @@ class MainActivity : Activity() {
         section("App connections")
         body.addView(button("WeTrakr app Client ID") { configureWeTrakr() }, margin(-1, 44, bottom = 8))
         body.addView(text("Use the Client ID from WeTrakr Settings → API. Device-code login uses no client secret or callback URI. Library reads are cached to reduce development-key requests.", 12, muted), margin(-1, -2, bottom = 10))
-        body.addView(button("Source provider address") { inputSetting("Source provider", "HTTPS Stremio-compatible add-on address", store.get("sources.endpoint")) { value ->
-            val uri = Uri.parse(value.trim()); if (uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null) { store.put("sources.endpoint", value.trim()); toast("Source provider saved") } else toast("Enter a valid HTTPS address")
-        } }, margin(-1, 44, bottom = 8))
-        body.addView(text("Add your preferred HTTPS scraper URL to find playback sources.", 12, muted), margin(-1, -2, bottom = 10))
+        body.addView(button("Source providers ›") { sourceProviders() }, margin(-1, 44, bottom = 8))
+        body.addView(text("Add your preferred HTTPS scraper URLs, give each a name, and turn providers on or off. Results combine enabled providers and merge matching files.", 12, muted), margin(-1, -2, bottom = 10))
         section("Updates")
         body.addView(button("Check for updates ›") { startActivity(Intent(this, UpdateActivity::class.java)) }, margin(-1, 44, bottom = 8))
         body.addView(button("Check for updates on startup · ${if (store.get("updates.startup") == "true") "On" else "Off"}") {
@@ -1651,6 +1656,63 @@ class MainActivity : Activity() {
         section("About")
         body.addView(text("POV Rajput · 0.2.12\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nWeTrakr tracking and API by alberdev, developer of WeTrakr (wetrakr.com).\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
         body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
+    }
+
+    private fun sourceProviders() {
+        val config = SourceProviders(store)
+        val providers = try { config.load() } catch (error: Exception) { toast(uiErrorMessage(error)); return }
+        val labels = providers.map { "${it.name} · ${if (it.enabled) "On" else "Off"}  ›" } + "Add source provider…"
+        AlertDialog.Builder(this).setTitle("Source providers")
+            .setItems(labels.toTypedArray()) { _, index ->
+                if (index == providers.size) editSourceProvider(null)
+                else sourceProviderActions(providers[index])
+            }.setNegativeButton("Close", null).show()
+    }
+
+    private fun sourceProviderActions(provider: SourceProvider) {
+        AlertDialog.Builder(this).setTitle(provider.name)
+            .setItems(arrayOf(if (provider.enabled) "Turn off" else "Turn on", "Edit name and address", "Remove")) { _, index ->
+                when (index) {
+                    0 -> {
+                        try {
+                            val config = SourceProviders(store)
+                            config.save(config.load().map { if (it.id == provider.id) it.copy(enabled = !it.enabled) else it })
+                            sourceProviders()
+                        } catch (error: Exception) { toast(uiErrorMessage(error)) }
+                    }
+                    1 -> editSourceProvider(provider)
+                    2 -> confirm("Remove ${provider.name} from source providers?") {
+                        try {
+                            val config = SourceProviders(store); config.save(config.load().filterNot { it.id == provider.id }); sourceProviders()
+                        } catch (error: Exception) { toast(uiErrorMessage(error)) }
+                    }
+                }
+            }.setNegativeButton("Back") { _, _ -> sourceProviders() }.show()
+    }
+
+    private fun editSourceProvider(provider: SourceProvider?) {
+        val content = column().apply { setPadding(dp(18), dp(8), dp(18), dp(8)) }
+        val name = EditText(this).apply { hint = "Provider name"; setSingleLine(); setText(provider?.name.orEmpty()) }
+        val address = EditText(this).apply {
+            hint = "HTTPS Stremio-compatible add-on URL"; setSingleLine()
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            setText(provider?.address.orEmpty())
+        }
+        val status = text("", 14, muted)
+        content.addView(name, margin(-1, -2)); content.addView(address, margin(-1, -2, top = 8)); content.addView(status, margin(-1, -2, top = 8))
+        val dialog = AlertDialog.Builder(this).setTitle(if (provider == null) "Add source provider" else "Edit source provider")
+            .setView(content).setPositiveButton("Save", null).setNegativeButton("Cancel") { _, _ -> sourceProviders() }.create()
+        dialog.show()
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+            try {
+                val config = SourceProviders(store)
+                val updated = if (provider == null) SourceProviders.create(name.text.toString(), address.text.toString())
+                    else provider.copy(name = SourceProviders.name(name.text.toString()), address = SourceProviders.endpoint(address.text.toString()))
+                val existing = config.load()
+                config.save(if (provider == null) existing + updated else existing.map { if (it.id == provider.id) updated else it })
+                dialog.dismiss(); sourceProviders()
+            } catch (error: Exception) { status.text = uiErrorMessage(error) }
+        }
     }
 
     private fun connectOffcloud() {

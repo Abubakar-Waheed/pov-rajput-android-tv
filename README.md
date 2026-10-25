@@ -65,6 +65,12 @@ Screenshots of POV Rajput for Android TV with the Editorial theme, using sample 
 
 ![Five selectable appearances in POV Rajput](docs/screenshots/appearance.png)
 
+## Source providers
+
+Open **Settings → Source providers** to add a name and HTTPS Stremio-compatible add-on URL for each scraper. Select a saved provider to turn it on or off, edit its name/address, or remove it. Disabling a provider keeps its configuration for later.
+
+Search combines results from all enabled providers. Matching torrent hashes and file indexes, or identical direct URLs, appear once with the contributing provider names. Different torrent files and signed playback URLs remain separate. Quality/file-size sorting and debrid priority apply to the combined results. If one provider is unavailable, results from the others remain accessible.
+
 ## Discovery and search
 
 Home shelf headings open a grid of their fetched titles. Everyone gets six Cinemeta shelves in this order: **New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies, Popular Shows**. New uses the current-year catalog and filters inconsistent release years; Featured preserves Cinemeta’s own selection, without claiming a highest-rating order. No tracking account or API key is needed for these catalogs. WeTrakr supplies Continue Watching and optional liked lists, alongside its existing watchlist/library features.
@@ -90,7 +96,7 @@ Raw cloud files can play without a catalog identity. They are not silently assig
 1. Download `POV-Rajput-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases).
 2. Sideload it on Android TV 8.0 or later. The launcher name is **POV Rajput**; package ID: `dev.pov.tv.rajput`.
 3. Open **Settings → Connect Offcloud with API key**, enter your own key, and select **Connect**.
-4. Add your preferred scraper URL in **Settings → Source provider address** to find playback sources. Use an HTTPS Stremio-compatible add-on URL.
+4. Open **Settings → Source providers** to add and name your preferred scrapers. Use HTTPS Stremio-compatible add-on URLs. Each provider can be turned on or off without removing it.
 5. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
 6. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
 

@@ -24,7 +24,7 @@ class TorBoxCachedLinkInstrumentation : Instrumentation() {
             stage("history_before")
             val before = api.cloud("torrents").map { it.id }.toSet()
             stage("catalog")
-            val endpoint = SecureStore(targetContext).get("sources.endpoint").trim().trimEnd('/').removeSuffix("/manifest.json")
+            val endpoint = dev.pov.tv.data.SourceProviders(SecureStore(targetContext)).load().firstOrNull { it.enabled }?.let { dev.pov.tv.data.SourceProviders.endpoint(it.address) }.orEmpty()
             check(endpoint.startsWith("https://")) { "Configure your own source provider before running this diagnostic." }
             val streams = Net.json("$endpoint/stream/movie/tt1254207.json").getJSONArray("streams")
             val hashes = (0 until streams.length()).mapNotNull {
