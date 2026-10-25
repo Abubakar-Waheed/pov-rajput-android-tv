@@ -33,7 +33,11 @@ This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](htt
 
 ## Screenshots
 
-Screenshots of POV Rajput for Android TV, using sample lists and public titles.
+Screenshots of POV Rajput for Android TV with the Editorial theme, using sample lists and public titles. Video playback and Android dialogs retain their standard styling.
+
+### Home
+
+![Editorial Home with public sample titles](docs/screenshots/home.png)
 
 ### WeTrakr library
 
@@ -149,7 +153,7 @@ The updater downloads only published stable releases from this repository and ch
 
 Hold **OK/Select** on a Continue watching card, then choose **Remove from Continue watching**. This works in all five themes and on the WeTrakr page. When connected, it cancels that movie or episode's WeTrakr playback session, removing it from Continue Watching without deleting watched history. The app only confirms removal after WeTrakr accepts it. Saved local resume positions are preserved. Playing the same movie or episode again starts tracking it again. Without a connected account, removal hides the local item on this TV.
 
-![Long-press Continue watching menu](docs/screenshots/continue-watching.png)
+![Continue watching from WeTrakr](docs/screenshots/continue-watching.png)
 
 ## Builds and releases
 

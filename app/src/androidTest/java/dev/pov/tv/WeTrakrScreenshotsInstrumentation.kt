@@ -18,6 +18,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 
 /** Public screenshot fixtures: no real account data or API registration is included. */
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class WeTrakrScreenshotsInstrumentation : Instrumentation() {
     private fun <T> main(task: () -> T): T {
         val result = AtomicReference<Result<T>>()
@@ -27,6 +28,7 @@ class WeTrakrScreenshotsInstrumentation : Instrumentation() {
     override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); start() }
     override fun onStart() {
         val report = Bundle(); var passed = false; var stage = "setup"; var activity: MainActivity? = null
+        val backups = listOf("pov_appearance", "pov_subtitles").associateWith { targetContext.getSharedPreferences(it, 0).all.toMap() }
         val store = SecureStore(targetContext); val hadOptIn = store.has("wetrakr.home_liked_opt_in"); val originalOptIn = store.get("wetrakr.home_liked_opt_in")
         try {
             fun media(type: String, id: String, title: String, poster: String, backdrop: String) = JSONObject().put("type", type).put("title", title)
@@ -83,7 +85,8 @@ class WeTrakrScreenshotsInstrumentation : Instrumentation() {
             }
             try {
                 store.remove("wetrakr.home_liked_opt_in")
-                main { field("theme").set(app, ThemeSpec.CINEMATIC); field("publicPreview").set(app, false); field("wetrakr").set(app, client); field("catalog").set(app, catalog); call("shell"); call("weTrakrPage") }
+                main { ThemePreferences(targetContext).select(ThemeSpec.EDITORIAL) }
+                main { field("theme").set(app, ThemeSpec.EDITORIAL); field("publicPreview").set(app, false); field("wetrakr").set(app, client); field("catalog").set(app, catalog); call("shell"); call("weTrakrPage") }
                 stage = "library"
                 await { main { tagged("wetrakr-section-liked")?.let { views(it).filterIsInstance<TextView>().any { text -> text.text.contains("Sample favourites") } } == true } }
                 capture("wetrakr-library")
@@ -98,12 +101,73 @@ class WeTrakrScreenshotsInstrumentation : Instrumentation() {
                 main { toggle.requestFocus() }; scrollTo(toggle, 90); SystemClock.sleep(1000)
                 val bitmap = uiAutomation.takeScreenshot()
                 File(targetContext.externalCacheDir, "public-wetrakr-settings.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                fun snap(name: String) {
+                    SystemClock.sleep(1200)
+                    val shot = checkNotNull(uiAutomation.takeScreenshot())
+                    File(targetContext.externalCacheDir, "public-$name.png").outputStream().use { shot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    shot.recycle()
+                }
+                stage = "appearance"; main { call("appearance") }; snap("appearance")
+                stage = "settings_overview"; main { call("settings"); (field("scroller").get(app) as ScrollView).scrollTo(0, 0) }; snap("settings")
+                stage = "priority"; main { call("debridPriority") }; snap("debrid-priority"); sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+                stage = "language"; main { MainActivity::class.java.getDeclaredMethod("subtitleLanguage", Boolean::class.javaPrimitiveType).apply { isAccessible = true }.invoke(app, false) }; snap("subtitle-language"); sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+                stage = "position"
+                val positionDialog = main { SubtitlePositionPicker.show(app, liveVideo = false, changed = {}) }
+                snap("subtitle-position"); main { positionDialog.dismiss() }
+                stage = "sources"
+                val sources = listOf(
+                    SourceItem("Example.Movie.2160p.DV.HDR10Plus.BluRay.REMUX.HEVC.mkv", "Public preview", directUrl = "https://example.invalid/one", qualityHeight = 2160, sizeBytes = 10000000000L),
+                    SourceItem("Example.Movie.2160p.DV.WEB-DL.HEVC.mkv", "Public preview", directUrl = "https://example.invalid/two", qualityHeight = 2160, sizeBytes = 2500000000L),
+                    SourceItem("Example.Movie.1080p.BluRay.H264.mkv", "Public preview", directUrl = "https://example.invalid/three", qualityHeight = 1080, sizeBytes = 4000000000L),
+                    SourceItem("Example.Movie.1080p.WEB-DL.H264.mkv", "Public preview", directUrl = "https://example.invalid/four", qualityHeight = 1080, sizeBytes = 1000000000L),
+                    SourceItem("Example.Movie.720p.WEBRip.H264.mkv", "Public preview", directUrl = "https://example.invalid/five", qualityHeight = 720, sizeBytes = 700000000L))
+                main { field("publicPreview").set(app, true); MainActivity::class.java.getDeclaredMethod("sourceResults", PlaybackIdentity::class.java, List::class.java).apply { isAccessible = true }.invoke(app, PlaybackIdentity("tt1234567", "movie", "Source sorting preview"), sources) }; snap("source-badges")
+                stage = "updates"
+                val updates = startActivitySync(Intent(targetContext, UpdateActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                SystemClock.sleep(5000); snap("updates"); main { updates.finish() }
+                stage = "player"
+                val playerActivity = startActivitySync(Intent(targetContext, PlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra("url", "https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd")
+                    .putExtra("key", "").putExtra("title", "Public subtitle preview").putExtra("playWhenReady", false)) as PlayerActivity
+                try {
+                    await { main { InAppPlaybackSession.playerOrNull?.playbackState == androidx.media3.common.Player.STATE_READY } }
+                    val playerView = main { playerActivity.findViewById<androidx.media3.ui.PlayerView>(R.id.pov_player) }
+                    main { playerView.controllerAutoShow = false; InAppPlaybackSession.playerOrNull!!.apply { volume = 0f; seekTo(8000); play() }; playerView.hideController() }
+                    SystemClock.sleep(6000)
+                    main { InAppPlaybackSession.playerOrNull!!.pause(); playerView.hideController() }
+                    val preferences = SubtitlePreferences(targetContext)
+                    fun render(name: String, transparent: Boolean, bold: Boolean, size: Int) {
+                        main {
+                            preferences.transparentBackground = transparent; preferences.boldText = bold; preferences.sizePercent = size; preferences.positionPercent = -1
+                            preferences.applyTo(playerView)
+                            playerView.hideController()
+                            playerView.subtitleView!!.setCues(listOf(androidx.media3.common.text.Cue.Builder().setText("Subtitle style preview\nThe quick brown fox jumps over the lazy dog.").build()))
+                        }
+                        snap(name)
+                    }
+                    render("subtitles-original", false, false, 100)
+                    render("subtitles-transparent-bold", true, true, 100)
+                    render("subtitles-small", true, true, 80)
+                    render("subtitles-medium", true, true, 100)
+                    render("subtitles-large", true, true, 130)
+                    stage = "seek"
+                    main { playerView.subtitleView!!.setCues(emptyList()); playerView.hideController(); playerActivity.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) }
+                    snap("seek-preview")
+                    main { playerActivity.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) }
+                } finally { main { playerActivity.finish(); InAppPlaybackSession.stop() } }
                 passed = true
             } finally { main { names.forEach { field(it).set(app, original[it]) } } }
         } catch (error: Throwable) { report.putString("stage", stage); report.putString("error_type", error.javaClass.simpleName) }
         finally {
             if (hadOptIn) store.put("wetrakr.home_liked_opt_in", originalOptIn) else store.remove("wetrakr.home_liked_opt_in")
-            main { activity?.finish() }; report.putBoolean("passed", passed); report.putBoolean("public_fixtures_only", true); finish(if (passed) -1 else 0, report)
+            main {
+                backups.forEach { (name, values) ->
+                    val edit = targetContext.getSharedPreferences(name, 0).edit().clear()
+                    values.forEach { (key, value) -> when (value) { is String -> edit.putString(key, value); is Boolean -> edit.putBoolean(key, value); is Int -> edit.putInt(key, value); is Long -> edit.putLong(key, value); is Float -> edit.putFloat(key, value) } }
+                    check(edit.commit())
+                }
+                activity?.finish()
+            }; report.putBoolean("passed", passed); report.putBoolean("public_fixtures_only", true); finish(if (passed) -1 else 0, report)
         }
     }
 }
