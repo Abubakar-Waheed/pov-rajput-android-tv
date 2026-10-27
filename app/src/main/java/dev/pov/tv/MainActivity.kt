@@ -474,8 +474,9 @@ class MainActivity : Activity() {
         (0 until body.childCount).map(body::getChildAt), intArrayOf(body.paddingLeft, body.paddingTop, body.paddingRight, body.paddingBottom),
         isHome, generation, heroBackdrop.visibility, heroBackdrop.layoutParams.height, backdropArt.drawable, backdropArt.tag as? String, pageRevision())
     private fun restorePage(cached: RetainedPage) {
-        generation = cached.generation; resolvingGeneration = null; isHome = cached.home
+        generation = cached.generation; resolvingGeneration = null; isHome = cached.home; flixScrollTarget = -1
         focusController.reset(); body.removeAllViews()
+        body.animate().cancel(); body.alpha = 1f; body.translationY = 0f
         body.setPadding(cached.padding[0], cached.padding[1], cached.padding[2], cached.padding[3])
         cached.children.forEach { (it.parent as? ViewGroup)?.removeView(it); body.addView(it) }
         heroBackdrop.visibility = cached.heroVisibility; heroBackdrop.layoutParams.height = cached.heroHeight
@@ -493,6 +494,7 @@ class MainActivity : Activity() {
         }
         pendingFocus = null; current = screen; screen()
     }
+
     private fun Int?.orZero() = this ?: 0
     private fun pageRevision() = java.security.MessageDigest.getInstance("SHA-256").digest(
         listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint"), store.get(SourceProviders.KEY), store.get(TMDB_KEY), store.get(TMDB_REGION), store.get(RESUME_CARDS)).joinToString("\u0000").toByteArray()
@@ -509,10 +511,11 @@ class MainActivity : Activity() {
         }
     }
     private fun page(title: String, subtitle: String = ""): Int {
-        generation = ++pageSequence; resolvingGeneration = null; isHome = false; wantsContentFocus = true
+        generation = ++pageSequence; resolvingGeneration = null; isHome = false; wantsContentFocus = true; flixScrollTarget = -1
         featureHandler.removeCallbacksAndMessages(null); featureShown = null; backdropArt.alpha = 1f
         bottomAligner?.let(body::removeOnLayoutChangeListener); bottomAligner = null
         focusController.reset(); body.removeAllViews(); heroBackdrop.visibility = View.GONE
+        body.animate().cancel(); body.alpha = 1f; body.translationY = 0f
         body.setPadding(0, dp(if (theme.layout.navigation == NavigationPlacement.LEFT_RAIL) 63 else 15), 0, contentBottomPadding())
         scroller.scrollTo(0, 0); heroBackdrop.translationY = 0f
         if (title.isNotBlank()) body.addView(text(title, 29, ink, true), margin(-1, -2, bottom = 5))
@@ -773,6 +776,13 @@ class MainActivity : Activity() {
      * layout, because the title logo arriving changes the content height.
      */
     private fun alignToBottom(id: Int) {
+        // The details stay hidden until they sit at the foot of the screen, so they never drop into place.
+        var placed = false
+        fun reveal() {
+            if (placed || id != generation) return
+            placed = true; body.alpha = 1f
+        }
+        body.animate().cancel(); body.alpha = 0f; body.translationY = 0f
         val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             if (id != generation || scroller.height == 0) return@OnLayoutChangeListener
             var content = 0
@@ -781,10 +791,16 @@ class MainActivity : Activity() {
                 if (child.visibility != View.GONE) content += child.height + params.topMargin + params.bottomMargin
             }
             val top = (scroller.height - content - body.paddingBottom - dp(10)).coerceAtLeast(dp(20))
-            if (kotlin.math.abs(top - body.paddingTop) > 2) body.post { if (id == generation) body.setPadding(body.paddingLeft, top, body.paddingRight, body.paddingBottom) }
+            if (kotlin.math.abs(top - body.paddingTop) > 2) body.post {
+                if (id != generation) return@post
+                body.setPadding(body.paddingLeft, top, body.paddingRight, body.paddingBottom)
+                if (!placed) body.post(::reveal)
+            } else body.post(::reveal)
         }
         bottomAligner?.let(body::removeOnLayoutChangeListener)
         bottomAligner = listener; body.addOnLayoutChangeListener(listener); body.requestLayout()
+        // Never leave the page hidden if layout settles without another pass.
+        body.postDelayed(::reveal, 1_200)
     }
 
     private fun streamingHero(item: MediaItemData, showAction: Boolean, rotation: List<MediaItemData> = emptyList(), compact: Boolean = false) {
@@ -920,19 +936,31 @@ class MainActivity : Activity() {
 
     /** Writes a title into the pinned feature copy, preferring its artwork logo once it arrives. */
     private fun renderFeature(frame: View, item: MediaItemData) {
+        val copy = frame.findViewWithTag<LinearLayout>("feature-copy")
         // The image loader owns the logo's view tag, so the logo is found by position.
-        val logo = frame.findViewWithTag<LinearLayout>("feature-copy").getChildAt(0) as ImageView
+        val logo = copy.getChildAt(0) as ImageView
         val title = frame.findViewWithTag<TextView>("feature-title")
-        title.text = item.title; title.visibility = View.VISIBLE; logo.visibility = View.GONE
+        title.text = item.title
         title.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(when { item.title.length > 30 -> 28; item.title.length > 16 -> 36; else -> theme.layout.titleSizeSp }).toFloat())
         logo.setTag(R.id.pov_feature_item, item)
-        image(logo, logoFor(item), feature = true) { loaded -> if (loaded && logo.getTag(R.id.pov_feature_item) == item) { logo.visibility = View.VISIBLE; title.visibility = View.GONE } }
+        // The logo's space is held empty while it loads; plain text appears only if there is no logo,
+        // so the title never flashes as text and then swaps to artwork.
+        fun useText() { if (logo.getTag(R.id.pov_feature_item) == item && logo.visibility != View.VISIBLE) { logo.visibility = View.GONE; title.visibility = View.VISIBLE } }
+        logo.visibility = View.INVISIBLE; title.visibility = View.GONE
+        logo.removeCallbacks(logo.getTag(R.id.pov_logo_fallback) as? Runnable)
+        val fallback = Runnable(::useText).also { logo.setTag(R.id.pov_logo_fallback, it) }
+        image(logo, logoFor(item), feature = true) { loaded ->
+            if (logo.getTag(R.id.pov_feature_item) != item) return@image
+            logo.removeCallbacks(fallback)
+            if (loaded) { logo.visibility = View.VISIBLE; title.visibility = View.GONE } else useText()
+        }
+        if (logo.visibility != View.VISIBLE && title.visibility != View.VISIBLE) logo.postDelayed(fallback, 1_500)
         val rating = item.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" }.orEmpty()
         frame.findViewWithTag<TextView>("feature-meta").text = listOf(rating, item.year, item.genres.take(2).joinToString(" · "), item.runtime)
             .filter(String::isNotBlank).joinToString("   ")
         frame.findViewWithTag<TextView>("feature-description").apply { text = item.description; visibility = if (item.description.isBlank()) View.GONE else View.VISIBLE }
         // A longer description may now reach the shelf above the focused one.
-        if (flixScrollTarget > 0) frame.post { if (flixScrollTarget > 0) fadeShelvesAbove(flixScrollTarget + featureCopyBottom()) }
+        if (isHome && flixScrollTarget > 0) frame.post { if (isHome && flixScrollTarget > 0) fadeShelvesAbove(flixScrollTarget + featureCopyBottom()) }
     }
 
     private fun scheduleFeature(item: MediaItemData) {
@@ -1653,12 +1681,13 @@ class MainActivity : Activity() {
     private fun details(item: MediaItemData) = detailsFor(item, null)
     private fun detailsFor(item: MediaItemData, episode: PlaybackIdentity?) {
         current = { detailsFor(item, episode) }
-        val id = page(item.title, "Loading title…")
-        read(id, { catalog.details(item) }) { result ->
+        fun render(id: Int, result: MediaItemData) {
             body.removeAllViews(); hero(result, false); mediaActions(result, episode)
             if (result.type == "series") seasonPicker(result)
             else if (flix) alignToBottom(id)
         }
+        val id = page(item.title, "Loading title…")
+        read(id, { catalog.details(item) }) { result -> render(id, result) }
     }
 
     private fun mediaActions(result: MediaItemData, episode: PlaybackIdentity? = null) {

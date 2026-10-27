@@ -12,8 +12,8 @@ android {
         applicationId = "dev.pov.tv.rajput"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.2.17-rajput"
+        versionCode = 24
+        versionName = "0.2.18-rajput"
         testInstrumentationRunner = providers.gradleProperty("povTestRunner")
             .orElse("dev.pov.tv.PlaybackAuditInstrumentation").get()
     }
@@ -35,6 +35,7 @@ android {
         debug { providers.gradleProperty("povAppIdSuffix").orNull?.let { applicationIdSuffix = it } }
         release {
             isMinifyEnabled = false
+            providers.gradleProperty("povAppIdSuffix").orNull?.let { applicationIdSuffix = it }
             // Opt-in local sideload release: retain the installed preview certificate and data.
             // Normal release builds remain unsigned for signing with the distributor's own key.
             if (providers.gradleProperty("povPreviewRelease").orNull == "true") {
