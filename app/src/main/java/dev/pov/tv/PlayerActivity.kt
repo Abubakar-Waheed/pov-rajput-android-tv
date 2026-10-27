@@ -58,6 +58,8 @@ class PlayerActivity : Activity() {
     private lateinit var splashTitle: TextView
     private var splashPulse: ValueAnimator? = null
     private var everReady = false
+    /** Until this time, buffering is a decoder catching up after a seek into loaded video, not a network stall. */
+    private var quietSeekUntil = 0L
     private val splashHandler = Handler(Looper.getMainLooper())
     private val showSplashLater = Runnable { setSplash(true) }
     private val rowIds = listOf(androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_play_pause,
@@ -231,7 +233,11 @@ class PlayerActivity : Activity() {
         if (!waiting) { splashHandler.removeCallbacks(showSplashLater); setSplash(false); return }
         // First load shows at once; a rebuffer waits briefly so quick seeks never flash the splash.
         if (!everReady) setSplash(true)
-        else if (splash.visibility != View.VISIBLE) { splashHandler.removeCallbacks(showSplashLater); splashHandler.postDelayed(showSplashLater, 500) }
+        else if (splash.visibility != View.VISIBLE) {
+            splashHandler.removeCallbacks(showSplashLater)
+            val quiet = (quietSeekUntil - android.os.SystemClock.uptimeMillis()).coerceAtLeast(0)
+            splashHandler.postDelayed(showSplashLater, maxOf(500, quiet))
+        }
     }
 
     private val endTimeTicker = object : Runnable {
@@ -420,7 +426,18 @@ class PlayerActivity : Activity() {
         seekLabel.visibility = View.GONE
         seekKey = KeyEvent.KEYCODE_UNKNOWN
         player?.let { exo ->
-            if (target != null) { timeline.setPosition(target); exo.seekTo(target) }
+            if (target != null) {
+                timeline.setPosition(target)
+                val from = exo.currentPosition
+                // Video decodes forward from a keyframe, so an exact spot inside the buffer can take the onn a second
+                // to reach. Landing on a nearby keyframe in the direction of the seek makes it near-instant.
+                val tolerance = SEEK_SNAP_MS * 1000
+                exo.setSeekParameters(if (target >= from) androidx.media3.exoplayer.SeekParameters(0, tolerance)
+                    else androidx.media3.exoplayer.SeekParameters(tolerance, 0))
+                if (target >= from - ReadAheadPreferences.BACK_BUFFER_MS && target <= exo.bufferedPosition)
+                    quietSeekUntil = android.os.SystemClock.uptimeMillis() + QUIET_SEEK_MS
+                exo.seekTo(target)
+            }
             if (restorePlayback && resumeAfterSeek) exo.play()
         }
         controls.show()
@@ -523,6 +540,9 @@ class PlayerActivity : Activity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        /** A seek may land up to this far from its target to reach a keyframe. */
+        const val SEEK_SNAP_MS = 2_000L
+        const val QUIET_SEEK_MS = 4_000L
         fun openCurrent(context: Context): Boolean {
             val intent = InAppPlaybackSession.currentIntent(context) ?: return false
             if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

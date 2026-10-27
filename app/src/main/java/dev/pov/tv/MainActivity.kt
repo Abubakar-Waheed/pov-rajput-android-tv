@@ -482,6 +482,7 @@ class MainActivity : Activity() {
         heroBackdrop.visibility = cached.heroVisibility; heroBackdrop.layoutParams.height = cached.heroHeight
         placeBackdrop(home = cached.home)
         backdropArt.tag = cached.heroAddress; backdropArt.setImageDrawable(cached.heroArt)
+        backdropArt.setTag(R.id.pov_backdrop_key, cached.heroAddress?.let { if (cached.home) "backdrop-corner:$it" else "backdrop:$it" })
         if (cached.heroArt == null) cached.heroAddress?.let { image(backdropArt, it) }
         heroBackdrop.requestLayout(); featureShown = null; backdropArt.alpha = 1f
     }
@@ -3075,15 +3076,21 @@ class MainActivity : Activity() {
         // Home's corner backdrop only needs soft edges; full-screen (details) art needs heavier shading under its text.
         val corner = backdrop && heroBackdrop.layoutParams.width > 0
         val key = if (corner) "backdrop-corner:$address" else if (backdrop) "backdrop:$address" else address
-        bitmapCache.get(key)?.let { view.setImageBitmap(it); loaded?.invoke(true); return }
+        fun show(bitmap: Bitmap) {
+            view.setImageBitmap(bitmap)
+            if (backdrop) { view.setTag(R.id.pov_backdrop_key, key); view.alpha = 1f }
+        }
+        bitmapCache.get(key)?.let { show(it); loaded?.invoke(true); return }
+        // Home's corner art has lighter shading than a details page needs; dim it until the right version is ready.
+        if (backdrop && !corner && (view.getTag(R.id.pov_backdrop_key) as? String)?.startsWith("backdrop-corner:") == true) view.alpha = 0.4f
         // Decode only as large as the slot: cards ~200dp, feature art ~360dp, the backdrop at 1280px.
         val target = when { backdrop -> BACKDROP_WIDTH; feature || view.width >= dp(350) -> dp(360); else -> dp(200) }
         val load = Runnable {
             try {
                 if (view.tag != address) return@Runnable
-                bitmapCache.get(key)?.let { cached -> runOnUiThread { if (!isDestroyed && view.tag == address) { view.setImageBitmap(cached); loaded?.invoke(true) } }; return@Runnable }
+                bitmapCache.get(key)?.let { cached -> runOnUiThread { if (!isDestroyed && view.tag == address) { show(cached); loaded?.invoke(true) } }; return@Runnable }
                 val bitmap = fetchBitmap(address, target)?.let { if (backdrop) shadedBackdrop(it, corner) else it }
-                if (bitmap != null) { bitmapCache.put(key, bitmap); runOnUiThread { if (!isDestroyed && view.tag == address) { view.setImageBitmap(bitmap); loaded?.invoke(true) } } }
+                if (bitmap != null) { bitmapCache.put(key, bitmap); runOnUiThread { if (!isDestroyed && view.tag == address) { show(bitmap); loaded?.invoke(true) } } }
                 else if (loaded != null) runOnUiThread { if (!isDestroyed && view.tag == address) loaded(false) }
             } catch (_: Exception) {
                 /* The title remains usable when artwork is unavailable. */

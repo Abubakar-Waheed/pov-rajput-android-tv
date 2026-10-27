@@ -1,8 +1,6 @@
-# POV Rajput 0.2.18
+# POV Rajput 0.2.19
 
 ## Fixes
 
-- **Movie and show details show their buttons again.** Since 0.2.16, Play, Watchlist and Watched could be missing on the details page.
-- **Short skips no longer reload the video.** The player keeps the last 10 seconds it has played, so seeking a few seconds forward or back plays from memory instead of showing the loading splash.
-- **Titles no longer flash as plain text.** The feature on Home and the details page keep the title's space empty until its logo arrives; the plain title appears only when there is no logo.
-- **Details no longer drop into place.** They appear directly at the foot of the screen instead of starting at the top and falling down.
+- **Skipping into video that has already loaded no longer shows the loading splash.** The player lands on the nearest keyframe within 2 seconds of your target, in the direction you skipped, so the picture appears almost at once. The splash still appears for a real network stall.
+- **Details pages no longer flash a bright backdrop.** Home's lightly shaded artwork is dimmed until the darker details version is ready.
