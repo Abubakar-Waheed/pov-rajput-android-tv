@@ -2477,6 +2477,14 @@ class MainActivity : Activity() {
         }
         settingsToggle(playback, "Auto-play first result", "Play starts the first cached or direct link in your sort order. The full list stays open behind it, so you can pick another link if it fails.",
             store.get(AUTOPLAY_FIRST) == "true") { on -> store.put(AUTOPLAY_FIRST, on.toString()) }
+        val readAhead = ReadAheadPreferences(this)
+        settingsRow(playback, "Read-ahead", readAhead.mode.label,
+            "How far ahead the player downloads, to ride out slow connections. Applies to the next video.") {
+            AlertDialog.Builder(this).setTitle("Read-ahead")
+                .setSingleChoiceItems(ReadAhead.entries.map { it.label }.toTypedArray(), readAhead.mode.ordinal) { dialog, index ->
+                    readAhead.mode = ReadAhead.entries[index]; dialog.dismiss(); refreshSettings()
+                }.setNegativeButton("Cancel", null).show()
+        }
         val videoPreferences = VideoCompatibilityPreferences(this)
         settingsRow(playback, "Dolby Vision", videoPreferences.mode.label,
             "Applies to the next video. Uses a verified Profile 7/8 HDR10 or HLG base picture when supported. Profile 5 needs compatible Dolby Vision decoding.") {
