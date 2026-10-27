@@ -18,8 +18,8 @@ class ThemePreferencesTest {
         context.getSharedPreferences("pov_appearance", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
-    @Test fun `new installs default to Editorial`() {
-        assertEquals(ThemeSpec.EDITORIAL, ThemePreferences(context).selected())
+    @Test fun `new installs default to Flix`() {
+        assertEquals(ThemeSpec.FLIX, ThemePreferences(context).selected())
     }
 
     @Test fun `every theme choice survives creating a new preference owner`() {
@@ -32,7 +32,7 @@ class ThemePreferencesTest {
     @Test fun `unknown stored theme safely falls back without changing other preferences`() {
         val saved = context.getSharedPreferences("pov_appearance", Context.MODE_PRIVATE)
         saved.edit().putString("theme", "removed-future-theme").putString("unrelated", "keep").commit()
-        assertEquals(ThemeSpec.EDITORIAL, ThemePreferences(context).selected())
+        assertEquals(ThemeSpec.FLIX, ThemePreferences(context).selected())
         assertEquals("keep", saved.getString("unrelated", null))
     }
 }

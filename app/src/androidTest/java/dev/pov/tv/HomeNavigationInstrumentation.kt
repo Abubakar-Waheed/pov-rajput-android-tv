@@ -160,7 +160,7 @@ class HomeNavigationInstrumentation : Instrumentation() {
             }
             stage = "open_media"
             main { continueCard().performLongClick() }; dialogItem("Open Media")
-            await { settled() && main { texts().any { it.text.startsWith("Find movie sources") } } }
+            await { settled() && main { texts().any { it.text.contains("Play") } } }
             check(catalogs.get() == before + 1)
             main { activity.onBackPressed() }
             await { main { children() == homeChildren } }
@@ -174,7 +174,7 @@ class HomeNavigationInstrumentation : Instrumentation() {
             stage = "keyboard_search"
             main {
                 MainActivity::class.java.getDeclaredMethod("search", String::class.java).apply { isAccessible = true }.invoke(activity, "Big Buck Bunny")
-                val dialog = field("searchDialog").get(activity) as AlertDialog
+                val dialog = field("searchDialog").get(activity) as android.app.Dialog
                 val edit = views(dialog.window!!.decorView).filterIsInstance<EditText>().single()
                 edit.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH)
             }
@@ -184,9 +184,9 @@ class HomeNavigationInstrumentation : Instrumentation() {
             val searchGeneration = main { field("generation").getInt(activity) }
             main {
                 MainActivity::class.java.getDeclaredMethod("search", String::class.java).apply { isAccessible = true }.invoke(activity, "Big Buck Bunny")
-                val dialog = field("searchDialog").get(activity) as AlertDialog
+                val dialog = field("searchDialog").get(activity) as android.app.Dialog
                 val edit = views(dialog.window!!.decorView).filterIsInstance<EditText>().single()
-                check(dialog.getButton(AlertDialog.BUTTON_NEUTRAL).text.toString().contains("Voice"))
+                check(views(dialog.window!!.decorView).filterIsInstance<TextView>().any { it.text.toString().contains("Voice") })
                 edit.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
                 edit.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
             }

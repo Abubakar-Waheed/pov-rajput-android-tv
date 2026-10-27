@@ -20,10 +20,10 @@ class SubtitlePreferencesTest {
     private val context get() = RuntimeEnvironment.getApplication()
     @Before fun reset() { context.getSharedPreferences("pov_subtitles", Context.MODE_PRIVATE).edit().clear().commit() }
 
-    @Test fun `options default off and persist independently between player instances`() {
+    @Test fun `new installs default to bold transparent subtitles and options persist independently`() {
         val first = SubtitlePreferences(context)
-        assertFalse(first.transparentBackground); assertFalse(first.boldText)
-        first.boldText = true
+        assertTrue(first.transparentBackground); assertTrue(first.boldText)
+        first.transparentBackground = false
         val second = SubtitlePreferences(context)
         assertTrue(second.boldText); assertFalse(second.transparentBackground)
         second.transparentBackground = true
@@ -45,7 +45,7 @@ class SubtitlePreferencesTest {
     }
 
     @Test fun `bold only preserves user caption colors and edge preferences`() {
-        val preferences = SubtitlePreferences(context).apply { boldText = true }
+        val preferences = SubtitlePreferences(context).apply { boldText = true; transparentBackground = false }
         val base = CaptionStyleCompat(Color.YELLOW, Color.BLUE, Color.RED,
             CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW, Color.GREEN, Typeface.SERIF)
         val style = preferences.style(base)
@@ -69,7 +69,9 @@ class SubtitlePreferencesTest {
             .setLine(0.7f, androidx.media3.common.text.Cue.LINE_TYPE_FRACTION).build()
         val image = androidx.media3.common.text.Cue.Builder()
             .setBitmap(android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)).build()
-        assertSame(text, preferences.positionedCues(listOf(text)).single())
+        // New installs sit 3% above the bottom; -1 keeps the authored position.
+        assertEquals(3, preferences.positionPercent)
+        assertEquals(0.97f, preferences.positionedCues(listOf(text)).single().line, 0.001f)
         preferences.positionPercent = 2
         val lower = SubtitlePreferences(context).positionedCues(listOf(text, image))
         assertEquals(0.98f, lower.first().line, 0.001f)
@@ -83,7 +85,7 @@ class SubtitlePreferencesTest {
 
     @Test fun `preferred language persists enables subtitles and preserves audio video settings`() {
         val first = SubtitlePreferences(context)
-        assertEquals("", first.language)
+        assertEquals("en", first.language)
         first.language = "ur"
         val preferences = SubtitlePreferences(context)
         assertEquals("ur", preferences.language)

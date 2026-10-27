@@ -12,8 +12,8 @@ android {
         applicationId = "dev.pov.tv.rajput"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "0.2.13-rajput"
+        versionCode = 20
+        versionName = "0.2.14-rajput"
         testInstrumentationRunner = providers.gradleProperty("povTestRunner")
             .orElse("dev.pov.tv.PlaybackAuditInstrumentation").get()
     }
@@ -31,6 +31,8 @@ android {
         }
     }
     buildTypes {
+        // Optional side-by-side install for UI previews, e.g. -PpovAppIdSuffix=.preview
+        debug { providers.gradleProperty("povAppIdSuffix").orNull?.let { applicationIdSuffix = it } }
         release {
             isMinifyEnabled = false
             // Opt-in local sideload release: retain the installed preview certificate and data.

@@ -110,7 +110,7 @@ class WeTrakrInstrumentation : Instrumentation() {
                 check(likedRequests.get() == 0)
                 check(onMain { views(main.window.decorView).none { it.tag == "wetrakr-home-liked" } })
                 onMain { method("settings").invoke(main) }
-                check(captions().contains("WeTrakr liked lists on Home · Off"))
+                check(onMain { views(main.window.decorView).any { it.contentDescription?.toString() == "WeTrakr liked lists on Home · Off" } })
                 report.putBoolean("home_likes_default_off_without_api_requests", true)
                 for (spec in ThemeSpec.entries) {
                     stage = "tracking_page_${spec.name}"
@@ -130,10 +130,10 @@ class WeTrakrInstrumentation : Instrumentation() {
                         progress.getLocationOnScreen(positions); check(firstY < positions[1])
                         check(views(main.window.decorView).any { it.tag == "wetrakr-section-liked" })
                     }
-                    if (spec == ThemeSpec.CINEMATIC) {
+                    if (spec == ThemeSpec.FLIX) {
                         SystemClock.sleep(300)
                         val bitmap = uiAutomation.takeScreenshot()
-                        java.io.File(targetContext.externalCacheDir, "wetrakr-library-CINEMATIC.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                        java.io.File(targetContext.externalCacheDir, "wetrakr-library-FLIX.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                         bitmap.recycle()
                     }
                     store.put("wetrakr.home_liked_opt_in", "true")
@@ -153,7 +153,7 @@ class WeTrakrInstrumentation : Instrumentation() {
                         MainActivity::class.java.getDeclaredMethod("homeLikedLists", Int::class.javaPrimitiveType).apply { isAccessible = true }.invoke(main, id)
                     }
                     await { captions().contains("Continue Watching · WeTrakr") && captions().contains("Liked lists · WeTrakr") && captions().any { it.contains("Example liked list") } && captions().contains("Example Movie") }
-                    if (spec == ThemeSpec.CINEMATIC || spec == ThemeSpec.EDITORIAL) {
+                    if (spec == ThemeSpec.FLIX || spec == ThemeSpec.EDITORIAL) {
                         SystemClock.sleep(300)
                         val bitmap = uiAutomation.takeScreenshot()
                         java.io.File(targetContext.externalCacheDir, "wetrakr-home-${spec.name}.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
@@ -161,12 +161,12 @@ class WeTrakrInstrumentation : Instrumentation() {
                     }
                     onMain { method("settings").invoke(main) }
                     check(captions().none { it.contains("Trakt") })
-                    val scrobbling = onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "WeTrakr scrobbling · On" } }
+                    val scrobbling = onMain { views(main.window.decorView).first { it.contentDescription?.toString() == "WeTrakr scrobbling · On" } }
                     onMain { scrobbling.performClick() }; check(!client.scrobblingEnabled())
-                    onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "WeTrakr scrobbling · Off" }.performClick() }; check(client.scrobblingEnabled())
-                    onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "WeTrakr liked lists on Home · On" }.performClick() }
+                    onMain { views(main.window.decorView).first { it.contentDescription?.toString() == "WeTrakr scrobbling · Off" }.performClick() }; check(client.scrobblingEnabled())
+                    onMain { views(main.window.decorView).first { it.contentDescription?.toString() == "WeTrakr liked lists on Home · On" }.performClick() }
                     check(store.get("wetrakr.home_liked_opt_in") == "false")
-                    onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.toString() == "WeTrakr liked lists on Home · Off" }.performClick() }
+                    onMain { views(main.window.decorView).first { it.contentDescription?.toString() == "WeTrakr liked lists on Home · Off" }.performClick() }
                     check(store.get("wetrakr.home_liked_opt_in") == "true")
                     onMain { method("weTrakrLists").invoke(main) }
                     await { captions().contains("Example list") }

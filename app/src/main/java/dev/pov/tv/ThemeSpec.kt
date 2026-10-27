@@ -3,10 +3,8 @@ package dev.pov.tv
 import android.content.Context
 
 /**
- * The five visual directions in design/01-cinematic.png through 05-dashboard.png.
- *
- * Dimensions reproduce the concepts on a 960 x 540 logical canvas. Layout code can
- * scale these values together for other TV sizes while retaining their proportions.
+ * The two layouts: Flix (living backdrop, left menu, landscape shelves) and Editorial (light canvas,
+ * split feature, poster collection). Dimensions use a 960 x 540 logical canvas scaled to the screen.
  * Theme changes contain presentation only; account and playback state are separate.
  */
 enum class ThemeSpec(
@@ -16,24 +14,25 @@ enum class ThemeSpec(
     val palette: ThemePalette,
     val layout: ThemeLayout,
 ) {
-    CINEMATIC(
-        id = "cinematic",
-        displayName = "Cinematic",
-        description = "Full-screen artwork, a slim left rail, and cyan focus.",
+    FLIX(
+        id = "flix",
+        displayName = "Flix",
+        description = "Living backdrop, rotating Top 10 feature, title logos, and a hidden menu.",
         palette = ThemePalette(
-            background = 0xFF020811.toInt(), panel = 0xFF0C1929.toInt(),
-            text = 0xFFF5F8FD.toInt(), muted = 0xFFBAC4D5.toInt(),
-            accent = 0xFF00D5ED.toInt(), secondaryAccent = 0xFFAA61EA.toInt(),
-            buttonText = 0xFF00101A.toInt(), border = 0xFF1D3041.toInt(),
-            navSelected = 0xFF032037.toInt(), progress = 0xFF20C9EC.toInt(),
+            background = 0xFF141414.toInt(), panel = 0xFF232323.toInt(),
+            text = 0xFFFFFFFF.toInt(), muted = 0xFFB3B3B3.toInt(),
+            accent = 0xFFE50914.toInt(), secondaryAccent = 0xFFB20710.toInt(),
+            buttonText = 0xFF000000.toInt(), border = 0xFF2F2F2F.toInt(),
+            navSelected = 0x33FFFFFF, progress = 0xFFE50914.toInt(),
+            primaryButton = 0xFFFFFFFF.toInt(),
         ),
         layout = ThemeLayout(
             navigation = NavigationPlacement.LEFT_RAIL, hero = HeroComposition.FULL_BLEED,
-            cards = CardFormat.LANDSCAPE, contentInsetDp = 14, railWidthDp = 104,
-            headerHeightDp = 0, heroHeightDp = 297, cardWidthDp = 202, cardHeightDp = 110,
-            cardGapDp = 10, cornerRadiusDp = 5, titleSizeSp = 43,
-            titleTypeface = "sans-serif-thin", titleLetterSpacing = 0.16f,
-            sectionTitleSizeSp = 15, focusScale = 1.018f,
+            cards = CardFormat.LANDSCAPE, contentInsetDp = 36, railWidthDp = 0,
+            headerHeightDp = 0, heroHeightDp = 300, cardWidthDp = 190, cardHeightDp = 107,
+            cardGapDp = 9, cornerRadiusDp = 4, titleSizeSp = 46,
+            titleTypeface = "sans-serif-black", titleLetterSpacing = 0f,
+            sectionTitleSizeSp = 15, focusScale = 1.09f,
         ),
     ),
     EDITORIAL(
@@ -56,72 +55,11 @@ enum class ThemeSpec(
             titleTypeface = "sans-serif-condensed", titleLetterSpacing = 0.12f,
             sectionTitleSizeSp = 17, focusScale = 1.018f,
         ),
-    ),
-    NEON(
-        id = "neon",
-        displayName = "Neon",
-        description = "True black, a framed hero, and electric cyan and magenta.",
-        palette = ThemePalette(
-            background = 0xFF000000.toInt(), panel = 0xFF0A0A13.toInt(),
-            text = 0xFFFFFFFF.toInt(), muted = 0xFFCBCBD4.toInt(),
-            accent = 0xFF00E7F3.toInt(), secondaryAccent = 0xFFE700EE.toInt(),
-            buttonText = 0xFFFFFFFF.toInt(), border = 0xFF283039.toInt(),
-            navSelected = 0xFF10232B.toInt(), progress = 0xFFE500DB.toInt(),
-            primaryButton = 0xFF8600F7.toInt(),
-        ),
-        layout = ThemeLayout(
-            navigation = NavigationPlacement.TOP_BAR, hero = HeroComposition.FRAMED,
-            cards = CardFormat.LANDSCAPE, contentInsetDp = 21, railWidthDp = 0,
-            headerHeightDp = 65, heroHeightDp = 207, cardWidthDp = 178, cardHeightDp = 98,
-            cardGapDp = 10, cornerRadiusDp = 8, titleSizeSp = 58,
-            titleTypeface = "sans-serif-condensed", titleLetterSpacing = 0.035f,
-            sectionTitleSizeSp = 17, focusScale = 1.025f,
-        ),
-    ),
-    CINEMA(
-        id = "cinema",
-        displayName = "Cinema",
-        description = "Warm charcoal, elegant serif titles, and an amber glow.",
-        palette = ThemePalette(
-            background = 0xFF100D0B.toInt(), panel = 0xFF221A15.toInt(),
-            text = 0xFFFFEAC3.toInt(), muted = 0xFFD8CCBA.toInt(),
-            accent = 0xFFFFBB50.toInt(), secondaryAccent = 0xFFE58C32.toInt(),
-            buttonText = 0xFF1B1104.toInt(), border = 0xFF3B3027.toInt(),
-            navSelected = 0xFF3A2B16.toInt(), progress = 0xFFFFB54D.toInt(),
-        ),
-        layout = ThemeLayout(
-            navigation = NavigationPlacement.TOP_BAR, hero = HeroComposition.FULL_BLEED,
-            cards = CardFormat.POSTER, contentInsetDp = 39, railWidthDp = 0,
-            headerHeightDp = 66, heroHeightDp = 229, cardWidthDp = 170, cardHeightDp = 194,
-            cardGapDp = 11, cornerRadiusDp = 7, titleSizeSp = 48,
-            titleTypeface = "serif", titleLetterSpacing = 0.015f,
-            sectionTitleSizeSp = 17, focusScale = 1.025f,
-        ),
-    ),
-    DASHBOARD(
-        id = "dashboard",
-        displayName = "Dashboard",
-        description = "Large resume tiles, next episodes, and quick library access.",
-        palette = ThemePalette(
-            background = 0xFF041019.toInt(), panel = 0xFF0F2330.toInt(),
-            text = 0xFFF4F8FD.toInt(), muted = 0xFFA5BCD3.toInt(),
-            accent = 0xFF00E6EE.toInt(), secondaryAccent = 0xFF48BDE7.toInt(),
-            buttonText = 0xFF001217.toInt(), border = 0xFF203D4D.toInt(),
-            navSelected = 0xFF00313B.toInt(), progress = 0xFF00DCE7.toInt(),
-        ),
-        layout = ThemeLayout(
-            navigation = NavigationPlacement.TOP_BAR, hero = HeroComposition.RESUME_GRID,
-            cards = CardFormat.LANDSCAPE, contentInsetDp = 35, railWidthDp = 0,
-            headerHeightDp = 72, heroHeightDp = 222, cardWidthDp = 281, cardHeightDp = 185,
-            cardGapDp = 11, cornerRadiusDp = 11, titleSizeSp = 27,
-            titleTypeface = "sans-serif", titleLetterSpacing = 0f,
-            sectionTitleSizeSp = 22, focusScale = 1.018f,
-        ),
     );
 
     companion object {
-        /** Unknown or old preferences fall back to the user's selected concept. */
-        fun fromId(id: String?): ThemeSpec = entries.firstOrNull { it.id == id } ?: EDITORIAL
+        /** Unknown, retired or older preferences (including "streaming") fall back to Flix. */
+        fun fromId(id: String?): ThemeSpec = entries.firstOrNull { it.id == id } ?: FLIX
     }
 }
 
@@ -160,7 +98,7 @@ data class ThemeLayout(
 )
 
 enum class NavigationPlacement { LEFT_RAIL, TOP_BAR }
-enum class HeroComposition { FULL_BLEED, SPLIT, FRAMED, RESUME_GRID }
+enum class HeroComposition { FULL_BLEED, SPLIT }
 enum class CardFormat { LANDSCAPE, POSTER }
 
 /** Appearance is a non-secret device preference and survives app updates. */

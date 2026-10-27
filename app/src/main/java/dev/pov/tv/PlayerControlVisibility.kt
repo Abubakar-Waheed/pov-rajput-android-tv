@@ -41,8 +41,6 @@ internal object PlayerControlVisibility {
         }
 
         fun refreshPlaybackState() {
-            view.findViewById<View>(R.id.pov_buffering_status)?.visibility =
-                if (view.player?.playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
             // This timeout is independent of focused descendants. Merely focusing Audio/Boost must not pin chrome.
             schedule()
         }

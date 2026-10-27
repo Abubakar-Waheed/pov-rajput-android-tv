@@ -24,7 +24,7 @@ class AudioPreferencesTest {
 
     @Test fun `saved audio language enables audio without changing text or video preferences`() {
         val preferences = AudioPreferences(context)
-        assertEquals("", preferences.language)
+        assertEquals("en", preferences.language)
         preferences.language = "hi"
         val fresh = AudioPreferences(context)
         assertEquals("Hindi", fresh.languageLabel)

@@ -1,5 +1,6 @@
 package dev.pov.tv
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
@@ -53,10 +54,23 @@ class MainActivity : Activity() {
     private var publicPreview = false
     private lateinit var anime: AnimeCatalogApi
     private val worker = Executors.newFixedThreadPool(4)
-    private val images = Executors.newFixedThreadPool(3)
+    // Artwork decodes at background priority so the UI thread always wins the CPU while scrolling.
+    private val backgroundThreads = java.util.concurrent.ThreadFactory { work ->
+        Thread { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); work.run() }
+    }
+    /** Artwork for the page in front of the viewer loads first, top to bottom; older pages wait. */
+    private class ImageTask(val page: Int, val order: Long, val work: Runnable) : Runnable, Comparable<ImageTask> {
+        override fun run() = work.run()
+        override fun compareTo(other: ImageTask) = if (page != other.page) other.page.compareTo(page) else order.compareTo(other.order)
+    }
+    private var imageOrder = 0L
+    private val images = java.util.concurrent.ThreadPoolExecutor(3, 3, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+        java.util.concurrent.PriorityBlockingQueue<Runnable>(), backgroundThreads)
+    // Feature artwork never waits behind a page full of shelf thumbnails.
+    private val featureImages = Executors.newFixedThreadPool(2, backgroundThreads)
     private val metadataWorker = Executors.newSingleThreadExecutor()
     private val cloudArtwork = mutableMapOf<String, MediaItemData?>()
-    private val bitmapCache = object : LruCache<String, Bitmap>(18 * 1024 * 1024) {
+    private val bitmapCache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 6).toInt().coerceIn(18 * 1024 * 1024, 64 * 1024 * 1024)) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
     private var authorization: DeviceAuthorizationDialog? = null
@@ -64,6 +78,8 @@ class MainActivity : Activity() {
     private lateinit var focusController: TvFocusController
     private val contentFocusChanged = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, _ ->
         if (::focusController.isInitialized) focusController.revealCurrent()
+        if (flix && android.os.SystemClock.uptimeMillis() < menuHoldUntil && destination == "home" && navigationViews.values.none { it.hasFocus() }) body.post { openMenu() }
+        else if (flix) setRailExpanded(navigationViews.values.any { it.hasFocus() })
     }
     private data class RetainedPage(val children: List<View>, val padding: IntArray, val home: Boolean, val generation: Int,
         val heroVisibility: Int, val heroHeight: Int, val heroArt: android.graphics.drawable.Drawable?, val heroAddress: String?, val revision: String)
@@ -71,7 +87,7 @@ class MainActivity : Activity() {
     private var pageSequence = 0
     private val pendingLoads = mutableMapOf<Int, Int>()
     private var cachedPlayback: PlaybackIdentity? = null
-    private var searchDialog: AlertDialog? = null
+    private var searchDialog: android.app.Dialog? = null
     private var pendingFocus: TvFocusSnapshot? = null
     private var wantsContentFocus = false
     private var resumed = false
@@ -95,6 +111,15 @@ class MainActivity : Activity() {
     private val muted get() = theme.palette.muted
     private val accent get() = theme.palette.accent
     private val ink get() = theme.palette.text
+    private val flix get() = theme == ThemeSpec.FLIX
+    private var rail: LinearLayout? = null
+    private var railExpanded = false
+    private var railAnimator: ValueAnimator? = null
+    private val railLabels = mutableListOf<View>()
+    private var featureShown: MediaItemData? = null
+    private val featureHandler = Handler(Looper.getMainLooper())
+    private val rotationHandler = Handler(Looper.getMainLooper())
+    private var heroRotation: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,6 +138,7 @@ class MainActivity : Activity() {
         anime = AnimeCatalogApi()
         InAppPlaybackSession.initialize(this)
         InAppPlaybackSession.addListener(playbackChanged)
+        if (savedInstanceState == null && !publicPreview && !sourcePreview) showSplash()
         shell(); if (sourcePreview) sourceChoiceAudit() else home(); if (!publicPreview) { retrySync(); checkStartupUpdate() }
         window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener(contentFocusChanged)
     }
@@ -120,6 +146,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume(); resumed = true; launchingPlayer = false
         if (::shellRoot.isInitialized) updateMiniPlayer()
+        if (BackHoldGesture.settingsRequested && ::shellRoot.isInitialized) { BackHoldGesture.settingsRequested = false; openSettingsAnywhere() }
     }
     override fun onPause() {
         // Keep the outgoing target until the incoming fullscreen view can attach first.
@@ -135,23 +162,23 @@ class MainActivity : Activity() {
         currentPlaybackOptionsDialog?.dismiss(); currentPlaybackOptionsDialog = null
         searchDialog?.dismiss(); authorization?.dismiss(); miniPlayer?.let(InAppPlaybackSession::detachPlayerView)
         InAppPlaybackSession.removeListener(playbackChanged)
-        worker.shutdownNow(); metadataWorker.shutdownNow(); images.shutdownNow(); authWorker.shutdownNow(); bitmapCache.evictAll()
+        rotationHandler.removeCallbacksAndMessages(null); featureHandler.removeCallbacksAndMessages(null)
+        worker.shutdownNow(); metadataWorker.shutdownNow(); images.shutdownNow(); featureImages.shutdownNow(); authWorker.shutdownNow(); bitmapCache.evictAll()
         super.onDestroy()
     }
     @Deprecated("Android TV Back handling") override fun onBackPressed() {
+        // Flix: content → menu → exit; other top-level pages return straight to Home.
+        if (flix && backStack.isEmpty()) {
+            val inMenu = navigationViews.values.any { it.hasFocus() }
+            if (destination != "home") { openHomeMenu(); return }
+            if (!inMenu && openMenu()) return
+        }
         if (backStack.isNotEmpty()) {
             val saved = backStack.removeLast(); current = saved.screen; destination = saved.destination
             pendingFocus = saved.focus
             val cached = saved.retained
             if (cached != null && cached.revision == pageRevision()) {
-                generation = cached.generation; resolvingGeneration = null; isHome = cached.home
-                focusController.reset(); body.removeAllViews()
-                body.setPadding(cached.padding[0], cached.padding[1], cached.padding[2], cached.padding[3])
-                cached.children.forEach { (it.parent as? ViewGroup)?.removeView(it); body.addView(it) }
-                heroBackdrop.visibility = cached.heroVisibility; heroBackdrop.layoutParams.height = cached.heroHeight
-                backdropArt.tag = cached.heroAddress; backdropArt.setImageDrawable(cached.heroArt)
-                if (cached.heroArt == null) cached.heroAddress?.let { image(backdropArt, it) }
-                heroBackdrop.requestLayout()
+                restorePage(cached)
                 wantsContentFocus = true; focusAfterRender(generation)
             } else current()
             refreshNavigation()
@@ -159,7 +186,106 @@ class MainActivity : Activity() {
             .setPositiveButton(if (InAppPlaybackSession.hasActive()) "Stop and leave" else "Leave") { _, _ -> InAppPlaybackSession.stop(); finish() }
             .setNegativeButton("Stay", null).show()
     }
+    private var splash: View? = null
+    private var splashShownAt = 0L
+    /**
+     * Launch splash: the POV logo, continuing the system launch screen, held until Home's shelves are on
+     * screen. It sits on the window itself, above every page, so theme rebuilds never cover it.
+     */
+    private fun showSplash() {
+        val root = window.decorView as? FrameLayout ?: return
+        val overlay = FrameLayout(this).apply { setBackgroundColor(0xFF141414.toInt()); isClickable = true; elevation = 100f }
+        val size = (resources.displayMetrics.widthPixels * 0.11f).roundToInt()
+        // A neon glow in the logo's own cyan and magenta, breathing behind it.
+        val glow = View(this).apply {
+            background = GradientDrawable().apply {
+                gradientType = GradientDrawable.RADIAL_GRADIENT; gradientRadius = size * 1.1f
+                colors = intArrayOf(0x66C23CFF, 0x3322D3EE, 0x00141414)
+            }
+            alpha = 0f
+        }
+        overlay.addView(glow, FrameLayout.LayoutParams(size * 3, size * 3, Gravity.CENTER))
+        // The logo sits in a clipped frame so a light sweep can glide across it.
+        val badge = FrameLayout(this).apply {
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) = outline.setRoundRect(0, 0, view.width, view.height, view.width * 0.06f)
+            }
+        }
+        badge.addView(ImageView(this).apply { setImageResource(R.drawable.pov_icon); scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = "POV" }, FrameLayout.LayoutParams(-1, -1))
+        val shine = View(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x00FFFFFF, 0x55FFFFFF, 0x00FFFFFF))
+            rotation = 20f; translationX = -size * 1.2f
+        }
+        badge.addView(shine, FrameLayout.LayoutParams(size / 3, size * 2, Gravity.CENTER))
+        overlay.addView(badge, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
+        root.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+        splash = overlay; splashShownAt = android.os.SystemClock.uptimeMillis()
+
+        val running = mutableListOf<android.animation.Animator>()
+        overlay.tag = running
+        fun loop(animator: ValueAnimator) = animator.apply { repeatCount = ValueAnimator.INFINITE; start() }.also(running::add)
+        // Spring in: from small and slightly tilted to upright, overshooting a touch.
+        badge.alpha = 0f; badge.scaleX = 0.55f; badge.scaleY = 0.55f; badge.rotation = -10f
+        badge.animate().alpha(1f).scaleX(1f).scaleY(1f).rotation(0f).setDuration(650)
+            .setInterpolator(android.view.animation.OvershootInterpolator(1.8f)).withEndAction {
+                if (splash !== overlay) return@withEndAction
+                loop(ValueAnimator.ofFloat(1f, 1.05f).apply {
+                    duration = 1_100; repeatMode = ValueAnimator.REVERSE
+                    interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                    addUpdateListener { badge.scaleX = it.animatedValue as Float; badge.scaleY = badge.scaleX }
+                })
+                loop(ValueAnimator.ofFloat(-size * 1.2f, size * 1.2f).apply {
+                    duration = 1_400; startDelay = 200; repeatMode = ValueAnimator.RESTART
+                    interpolator = android.view.animation.DecelerateInterpolator()
+                    addUpdateListener { shine.translationX = it.animatedValue as Float }
+                })
+            }.start()
+        glow.animate().alpha(1f).setDuration(700).withEndAction {
+            if (splash !== overlay) return@withEndAction
+            loop(ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 1_300; repeatMode = ValueAnimator.REVERSE
+                addUpdateListener { val f = it.animatedValue as Float; glow.scaleX = 0.9f + f * 0.25f; glow.scaleY = glow.scaleX; glow.alpha = 0.55f + f * 0.45f }
+            })
+        }.start()
+        // Normally Home's first shelves dismiss it; this only guards against a load that never returns.
+        overlay.postDelayed({ dismissSplash() }, 10_000)
+    }
+
+    private fun dismissSplash() {
+        val overlay = splash ?: return
+        // Never flash: keep the logo up long enough to finish its entrance.
+        val wait = 1_200 - (android.os.SystemClock.uptimeMillis() - splashShownAt)
+        if (wait > 0) { overlay.postDelayed({ dismissSplash() }, wait); return }
+        splash = null
+        @Suppress("UNCHECKED_CAST") (overlay.tag as? List<android.animation.Animator>)?.forEach { it.cancel() }
+        // Exit: the logo pushes forward as the splash dissolves into Home.
+        (overlay as? ViewGroup)?.let { group -> (0 until group.childCount).map(group::getChildAt).forEach {
+            it.animate().scaleX(it.scaleX * 1.18f).scaleY(it.scaleY * 1.18f).setDuration(380).start()
+        } }
+        overlay.animate().alpha(0f).setDuration(380).withEndAction { (overlay.parent as? ViewGroup)?.removeView(overlay) }.start()
+    }
+
+    private var lastRepeatAt = 0L
+    private val backHold = BackHoldGesture { openSettingsAnywhere() }
+    /** Hold Back for one second: Settings, from whatever page is open. */
+    private fun openSettingsAnywhere() {
+        searchDialog?.dismiss()
+        retainHome()
+        destination = "settings"; backStack.clear(); current = { settings() }
+        settings(); refreshNavigation()
+        if (flix) body.post { if (!focusController.first()) wantsContentFocus = true }
+    }
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (backHold.intercept(event)) return true
+        // Holding the D-pad on Home moves at a readable pace instead of racing ahead of the scroll.
+        if (flix && isHome && event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0 && ::body.isInitialized && body.hasFocus() && event.keyCode in setOf(
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            val now = android.os.SystemClock.uptimeMillis()
+            val gap = if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 260 else 140
+            if (now - lastRepeatAt < gap) return true
+            lastRepeatAt = now
+        }
         if (event.keyCode == KeyEvent.KEYCODE_MENU && InAppPlaybackSession.hasActive()) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) playbackOptions()
             return true
@@ -173,10 +299,21 @@ class MainActivity : Activity() {
                 else -> null
             }
             if (direction != null && miniFocus?.route(direction, currentFocus) == true) return true
+            if (flix && (direction == View.FOCUS_UP || direction == View.FOCUS_DOWN)) {
+                // The menu stops at its first and last entries instead of leaving for the content.
+                val menu = navigationViews.values.filter { it.isShown }.sortedBy { it.top }
+                val index = menu.indexOfFirst { it.hasFocus() }
+                if (index >= 0) {
+                    val next = menu.getOrNull(index + if (direction == View.FOCUS_DOWN) 1 else -1) ?: return true
+                    next.requestFocus(); return true
+                }
+            }
+            // A shelf ends at its last card ("See all") rather than wrapping elsewhere.
+            if (flix && direction == View.FOCUS_RIGHT && body.hasFocus() && focusController.next(direction) == null) return true
             if (body.hasFocus() && direction != null && focusController.next(direction) == null) {
                 val leaving = (theme.layout.navigation == NavigationPlacement.TOP_BAR && direction == View.FOCUS_UP) ||
                     (theme.layout.navigation == NavigationPlacement.LEFT_RAIL && direction == View.FOCUS_LEFT)
-                if (leaving && navigationViews[destination]?.requestFocus() == true) {
+                if (leaving && (if (flix) openMenu() else navigationViews[destination]?.requestFocus() == true)) {
                     if (direction == View.FOCUS_UP) scroller.scrollTo(0, 0)
                     return true
                 }
@@ -201,24 +338,33 @@ class MainActivity : Activity() {
     private fun shell() {
         miniPlayer?.let(InAppPlaybackSession::detachPlayerView)
         miniPlayer = null; miniFrame = null; miniLabel = null; miniFocus = null
-        navigationViews.clear()
+        navigationViews.clear(); rail = null; railExpanded = false; railLabels.clear(); notice = null
         shellRoot = FrameLayout(this).apply { setBackgroundColor(bg); clipChildren = false }
+        // Flix draws the page colour once from the window, and the backdrop as one pre-shaded image.
+        if (flix) { window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(bg)); shellRoot.background = null }
         heroBackdrop = FrameLayout(this).apply { visibility = View.GONE }
-        backdropArt = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+        backdropArt = FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         heroBackdrop.addView(backdropArt, FrameLayout.LayoutParams(-1, -1))
-        heroBackdrop.addView(View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(bg, withAlpha(bg, 180), Color.TRANSPARENT)) }, FrameLayout.LayoutParams(-1, -1))
-        heroBackdrop.addView(View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-            intArrayOf(bg, Color.TRANSPARENT, Color.TRANSPARENT)) }, FrameLayout.LayoutParams(-1, -1))
-        shellRoot.addView(heroBackdrop, FrameLayout.LayoutParams(-1, dp(325)))
-        scroller = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false; clipChildren = false; clipToPadding = false }
-        body = column().apply { clipChildren = false; clipToPadding = false }
+        if (!flix) {
+            heroBackdrop.addView(View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(bg, withAlpha(bg, 180), Color.TRANSPARENT)) }, FrameLayout.LayoutParams(-1, -1))
+            heroBackdrop.addView(View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+                intArrayOf(bg, Color.TRANSPARENT, Color.TRANSPARENT)) }, FrameLayout.LayoutParams(-1, -1))
+        }
+        // The flix layout keeps a full-screen living backdrop behind every row.
+        shellRoot.addView(heroBackdrop, FrameLayout.LayoutParams(-1, if (flix) -1 else dp(325)))
+        scroller = TvScrollView(this) { !(flix && isHome) }.apply { isFillViewport = true; isVerticalScrollBarEnabled = false; clipChildren = false; clipToPadding = false }
+        body = CullingLinearLayout(this, resources.displayMetrics.heightPixels / 2).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
         scroller.addView(body)
-        focusController = TvFocusController(body, scroller) {
+        focusController = TvFocusController(body, scroller, ::placeFlixRow) {
             val rect = android.graphics.Rect()
             miniFrame?.takeIf { it.isShown && it.getGlobalVisibleRect(rect) }?.let { rect }
         }
-        scroller.setOnScrollChangeListener { _, _, y, _, _ -> heroBackdrop.translationY = -y.toFloat() }
+        scroller.setOnScrollChangeListener { _, _, y, _, _ ->
+            // The feature copy stays pinned while rows slide beneath it.
+            if (flix) featureHero()?.translationY = y.toFloat() else heroBackdrop.translationY = -y.toFloat()
+            body.invalidate()
+        }
         val layout = theme.layout
         shellRoot.addView(scroller, FrameLayout.LayoutParams(-1, -1).apply {
             leftMargin = dp(layout.railWidthDp + layout.contentInsetDp)
@@ -230,8 +376,14 @@ class MainActivity : Activity() {
                 setPadding(dp(12), dp(22), dp(1), dp(13))
                 background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(bg, withAlpha(bg, 235)))
             }
+            if (flix) {
+                // Hidden until Back or Left from the first column; it then slides in over the content.
+                rail.setPadding(dp(14), dp(20), dp(8), dp(13)); rail.background = railBackground(false); this.rail = rail
+                rail.visibility = View.VISIBLE; rail.clipChildren = true
+            }
             shellRoot.addView(rail, FrameLayout.LayoutParams(dp(layout.railWidthDp), -1))
-            rail.addView(logo(), margin(61, 58, bottom = 24).apply { leftMargin = dp(10) })
+            if (flix) rail.addView(logo(), margin(40, 40, bottom = 34).apply { leftMargin = dp(10) })
+            else rail.addView(logo(), margin(61, 58, bottom = 24).apply { leftMargin = dp(10) })
             destinations().forEach { target -> rail.addView(navigation(target, false), margin(-1, 35, bottom = 4)) }
             rail.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
         } else {
@@ -262,7 +414,10 @@ class MainActivity : Activity() {
             line.setPadding(dp(11), 0, 0, 0)
         } else line.gravity = Gravity.CENTER
         val label = text(target.label, if (top) 12 else 12, muted)
-        if (target.key == "wetrakr") {
+        if (flix && !top) {
+            label.visibility = if (railExpanded) View.VISIBLE else View.GONE; label.maxLines = 1; railLabels += label
+        }
+        if (target.key == "wetrakr" && !(flix && !top)) {
             if (!top && line.childCount > 0) line.removeViewAt(0)
             line.addView(ImageView(this).apply {
                 setImageResource(if (theme == ThemeSpec.EDITORIAL) R.drawable.wetrakr_logo_dark else R.drawable.wetrakr_logo)
@@ -280,13 +435,23 @@ class MainActivity : Activity() {
             for (index in 0 until line.childCount) (line.getChildAt(index) as? NavigationIconView)?.tint = color
             indicator.visibility = if (selected) View.VISIBLE else View.INVISIBLE
             if (selected && theme == ThemeSpec.EDITORIAL) indicator.background = rounded(theme.palette.secondaryAccent, 2)
-            frame.background = rounded(if (focused || (!top && selected) || (theme == ThemeSpec.DASHBOARD && selected)) theme.palette.navSelected else Color.TRANSPARENT, if (theme == ThemeSpec.DASHBOARD) 24 else 7)
-            frame.foreground = if (focused) FocusRingDrawable(accent, dp(if (theme == ThemeSpec.DASHBOARD) 24 else 7).toFloat(), true, dp(1).toFloat()) else null
+            if (flix) {
+                frame.background = rounded(if (focused) theme.palette.navSelected else Color.TRANSPARENT, 4)
+                frame.foreground = null
+                return
+            }
+            frame.background = rounded(if (focused || (!top && selected)) theme.palette.navSelected else Color.TRANSPARENT, 7)
+            frame.foreground = if (focused) FocusRingDrawable(accent, dp(7).toFloat(), true, dp(1).toFloat()) else null
         }
         frame.setOnFocusChangeListener { _, focused -> paint(focused) }
         frame.setOnClickListener {
             if (target.key == "search" || target.key == "nowplaying") target.screen()
-            else { destination = target.key; backStack.clear(); current = target.screen; current(); refreshNavigation() }
+            else {
+                if (target.key != "home") retainHome()
+                destination = target.key; backStack.clear(); current = target.screen; current(); refreshNavigation()
+                // The chosen page takes focus and the menu tucks away; pages still loading claim it when ready.
+                if (flix) body.post { if (!focusController.first()) wantsContentFocus = true }
+            }
         }
         navigationViews[target.key] = frame
         paint(false)
@@ -298,10 +463,30 @@ class MainActivity : Activity() {
         navigationViews.values.forEach { view -> view.onFocusChangeListener?.onFocusChange(view, view.hasFocus()) }
     }
 
+    private var retainedHome: RetainedPage? = null
+    private var retainedHomeAt = 0L
+    /** Keeps the built Home page (from screen or from the back stack) when the menu leads elsewhere. */
+    private fun retainHome() {
+        val page = if (isHome && pendingLoads[generation].orZero() == 0) retainPage() else backStack.firstOrNull { it.retained?.home == true }?.retained
+        if (page != null) { retainedHome = page; retainedHomeAt = android.os.SystemClock.elapsedRealtime() }
+    }
+    private fun retainPage() = RetainedPage(
+        (0 until body.childCount).map(body::getChildAt), intArrayOf(body.paddingLeft, body.paddingTop, body.paddingRight, body.paddingBottom),
+        isHome, generation, heroBackdrop.visibility, heroBackdrop.layoutParams.height, backdropArt.drawable, backdropArt.tag as? String, pageRevision())
+    private fun restorePage(cached: RetainedPage) {
+        generation = cached.generation; resolvingGeneration = null; isHome = cached.home
+        focusController.reset(); body.removeAllViews()
+        body.setPadding(cached.padding[0], cached.padding[1], cached.padding[2], cached.padding[3])
+        cached.children.forEach { (it.parent as? ViewGroup)?.removeView(it); body.addView(it) }
+        heroBackdrop.visibility = cached.heroVisibility; heroBackdrop.layoutParams.height = cached.heroHeight
+        placeBackdrop(home = cached.home)
+        backdropArt.tag = cached.heroAddress; backdropArt.setImageDrawable(cached.heroArt)
+        if (cached.heroArt == null) cached.heroAddress?.let { image(backdropArt, it) }
+        heroBackdrop.requestLayout(); featureShown = null; backdropArt.alpha = 1f
+    }
+
     private fun navigate(screen: () -> Unit) {
-        val retained = if (pendingLoads[generation].orZero() == 0) RetainedPage(
-            (0 until body.childCount).map(body::getChildAt), intArrayOf(body.paddingLeft, body.paddingTop, body.paddingRight, body.paddingBottom),
-            isHome, generation, heroBackdrop.visibility, heroBackdrop.layoutParams.height, backdropArt.drawable, backdropArt.tag as? String, pageRevision()) else null
+        val retained = if (pendingLoads[generation].orZero() == 0) retainPage() else null
         backStack.addLast(NavigationSnapshot(current, focusController.capture(), destination, retained))
         while (backStack.count { it.retained != null } > 4) {
             val oldest = backStack.indexOfFirst { it.retained != null }; backStack[oldest] = backStack[oldest].copy(retained = null)
@@ -310,7 +495,7 @@ class MainActivity : Activity() {
     }
     private fun Int?.orZero() = this ?: 0
     private fun pageRevision() = java.security.MessageDigest.getInstance("SHA-256").digest(
-        listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint"), store.get(SourceProviders.KEY)).joinToString("\u0000").toByteArray()
+        listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint"), store.get(SourceProviders.KEY), store.get(TMDB_KEY), store.get(TMDB_REGION)).joinToString("\u0000").toByteArray()
     ).joinToString("") { "%02x".format(it.toInt() and 255) }
     private fun focusAfterRender(id: Int) {
         body.post {
@@ -325,6 +510,8 @@ class MainActivity : Activity() {
     }
     private fun page(title: String, subtitle: String = ""): Int {
         generation = ++pageSequence; resolvingGeneration = null; isHome = false; wantsContentFocus = true
+        featureHandler.removeCallbacksAndMessages(null); featureShown = null; backdropArt.alpha = 1f
+        bottomAligner?.let(body::removeOnLayoutChangeListener); bottomAligner = null
         focusController.reset(); body.removeAllViews(); heroBackdrop.visibility = View.GONE
         body.setPadding(0, dp(if (theme.layout.navigation == NavigationPlacement.LEFT_RAIL) 63 else 15), 0, contentBottomPadding())
         scroller.scrollTo(0, 0); heroBackdrop.translationY = 0f
@@ -336,18 +523,31 @@ class MainActivity : Activity() {
     private fun home() {
         current = { home() }
         destination = "home"; refreshNavigation()
+        val kept = retainedHome; retainedHome = null
+        if (kept != null && kept.revision == pageRevision() && android.os.SystemClock.elapsedRealtime() - retainedHomeAt < HOME_KEEP_MS) {
+            // Coming back through the menu shows the same Home at once, from the top.
+            restorePage(kept)
+            scroller.scrollTo(0, 0)
+            if (flix) {
+                featureHero()?.let { hero -> hero.translationY = 0f; hero.findViewWithTag<View>("feature-actions")?.alpha = 1f }
+                for (index in 0 until body.childCount) body.getChildAt(index).let { it.animate().cancel(); it.alpha = 1f }
+            }
+            if (homeMenuFocus) { homeMenuFocus = false; wantsContentFocus = false; openMenu() }
+            else { wantsContentFocus = true; focusAfterRender(generation) }
+            return
+        }
         val id = page(""); isHome = true; body.setPadding(0, 0, 0, contentBottomPadding())
         val remoteHome = !publicPreview && wetrakr.connected()
         val recent = if (publicPreview || remoteHome) emptyList() else history.continueWatching()
-        read(id, { catalog.homeShelves() }) { shelves ->
+        read(id, { homeShelves() }) { shelves ->
             val movies = shelves.first { it.title == "Popular Movies" }.items
             val series = shelves.first { it.title == "Popular Shows" }.items
-            if (theme == ThemeSpec.DASHBOARD) {
-                dashboard(recent, movies, series)
-                if (remoteHome) homeContinueWatching(id)
-            } else {
-                (movies.firstOrNull() ?: shelves.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull())?.let { hero(it) }
-                if (remoteHome) homeContinueWatching(id) else if (recent.isNotEmpty()) resumeRow(recent)
+            val rotation = if (flix) (0 until 10).flatMap { listOfNotNull(movies.getOrNull(it), series.getOrNull(it)) } else emptyList()
+            (movies.firstOrNull() ?: shelves.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull())?.let { if (flix) streamingHero(it, true, rotation) else hero(it) }
+            if (remoteHome) homeContinueWatching(id) else if (recent.isNotEmpty()) resumeRow(recent)
+            if (flix) {
+                rankedRow("Top 10 Movies", movies)
+                rankedRow("Top 10 Shows", series)
             }
             shelves.forEach { shelf ->
                 if (shelf.items.isNotEmpty()) mediaRow(shelf.title, shelf.items) else {
@@ -358,20 +558,41 @@ class MainActivity : Activity() {
                 }
             }
             if (!publicPreview && wetrakr.connected() && store.get("wetrakr.home_liked_opt_in") == "true") homeLikedLists(id)
-            homeCredit()
+            // Credits live in Settings → About; Home ends at its last shelf. The feature's Play starts focused.
+            if (!flix) homeCredit()
+            body.post { dismissSplash() }
+            if (flix) {
+                if (homeMenuFocus) { homeMenuFocus = false; wantsContentFocus = false; if (navigationViews.values.none { it.hasFocus() }) openMenu() } else focusAfterRender(id)
+            }
         }
     }
+
+    /** TMDB shelves when the viewer has added a key; Cinemeta otherwise, or if TMDB cannot be reached. */
+    private fun homeShelves(): List<CatalogApi.HomeShelf> {
+        val key = if (publicPreview) "" else store.get(TMDB_KEY)
+        if (key.isNotBlank()) {
+            val shelves = TmdbCatalog(this, key, tmdbRegion()).homeShelves()
+            if (shelves.any { !it.unavailable && it.items.isNotEmpty() }) return shelves
+            runOnUiThread { toast("TMDB is unavailable. Showing Cinemeta catalogs instead.") }
+        }
+        return catalog.homeShelves()
+    }
+    private fun tmdbRegion() = store.get(TMDB_REGION).ifBlank { java.util.Locale.getDefault().country.ifBlank { "US" } }
+    private fun countryName(code: String) = java.util.Locale("", code).getDisplayCountry(java.util.Locale.ENGLISH).ifBlank { code }
 
     private fun homeContinueWatching(id: Int) {
         val host = column().apply { tag = "wetrakr-home-continue" }
         body.addView(host, margin(-1, -2, top = 10))
-        host.addView(text("Continue Watching · WeTrakr", 20, ink, true), margin(-1, -2, bottom = 8))
-        val row = LinearLayout(this).apply { setPadding(dp(3), dp(4), dp(10), dp(4)); clipChildren = false }
-        val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; clipChildren = false; isFocusable = false }
-        scroll.addView(row); host.addView(scroll)
-        read(id, { wetrakr.continueWatching() }) { progress ->
+        host.addView(text("Continue Watching · WeTrakr", if (flix) theme.layout.sectionTitleSizeSp else 20, ink, true), margin(-1, -2, bottom = if (flix) 6 else 8))
+        val row = if (flix) horizontalRow(host) else LinearLayout(this).apply { setPadding(dp(3), dp(4), dp(10), dp(4)); clipChildren = false }
+        if (!flix) {
+            val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; clipChildren = false; isFocusable = false }
+            scroll.addView(row); host.addView(scroll)
+        }
+        fun fill(progress: List<Pair<PlaybackIdentity, Double>>) {
+            row.removeAllViews(); host.findViewWithTag<View>("wetrakr-empty")?.let(host::removeView)
             // WeTrakr is authoritative here, including progress made on other devices.
-            if (progress.isEmpty()) host.addView(text("Nothing in progress on WeTrakr.", 13, muted))
+            if (progress.isEmpty()) host.addView(text("Nothing in progress on WeTrakr.", 13, muted).apply { tag = "wetrakr-empty" })
             progress.forEach { (identity, percent) ->
                 remoteProgress[identityKey(identity)] = percent
                 val caption = listOf(if (identity.type == "series") "S${identity.season} E${identity.episode}" else "", "${percent.toInt()}%").filter { it.isNotBlank() }.joinToString(" · ")
@@ -379,6 +600,20 @@ class MainActivity : Activity() {
                     continuePlayback(identity)
                 }.apply { continueOptions(this, "", identity, identity.title) }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
             }
+        }
+        // The last list is kept encrypted with the account revision, so the row shows instantly on launch.
+        val revision = wetrakr.accountRevision()
+        val cached = try {
+            org.json.JSONObject(store.get(CONTINUE_CACHE)).takeIf { it.optString("revision") == revision }?.optJSONArray("items")?.let { items ->
+                (0 until items.length()).map { index -> items.getJSONObject(index).let { PlaybackIdentity.fromJson(it.getJSONObject("id")) to it.getDouble("percent") } }
+            }
+        } catch (_: Exception) { null }
+        cached?.let(::fill)
+        read(id, { wetrakr.continueWatching() }) { progress ->
+            store.put(CONTINUE_CACHE, org.json.JSONObject().put("revision", revision).put("items", org.json.JSONArray(progress.map { (identity, percent) ->
+                org.json.JSONObject().put("id", identity.toJson()).put("percent", percent) })).toString())
+            // Refreshing never pulls the row out from under a viewer who is browsing it.
+            if (progress != cached && !row.hasFocus()) fill(progress)
         }
     }
 
@@ -409,10 +644,10 @@ class MainActivity : Activity() {
     }
 
     private fun hero(item: MediaItemData, showAction: Boolean = true) {
+        if (flix) { streamingHero(item, showAction); return }
         val layout = theme.layout
         val split = layout.hero == HeroComposition.SPLIT
-        val framed = layout.hero == HeroComposition.FRAMED
-        val full = layout.hero == HeroComposition.FULL_BLEED || layout.hero == HeroComposition.RESUME_GRID
+        val full = layout.hero == HeroComposition.FULL_BLEED
         val height = if (!showAction) 262 else layout.heroHeightDp
         val frame = FrameLayout(this).apply { clipChildren = false; tag = "featured-hero" }
         val art = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
@@ -428,30 +663,27 @@ class MainActivity : Activity() {
             if (!split) artFrame.addView(View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 intArrayOf(Color.BLACK, withAlpha(Color.BLACK, 130), Color.TRANSPARENT)) }, FrameLayout.LayoutParams(-1, -1))
             frame.addView(artFrame, FrameLayout.LayoutParams(if (split) dp(577) else -1, -1, Gravity.END))
-            if (framed) frame.foreground = rounded(Color.TRANSPARENT, 8, accent)
         }
         val copy = column()
-        val copyWidth = if (split) 311 else if (theme == ThemeSpec.CINEMA) 330 else 410
-        val title = text(item.title.uppercase(), layout.titleSizeSp, ink, theme == ThemeSpec.NEON).apply {
-            typeface = Typeface.create(layout.titleTypeface, if (theme == ThemeSpec.NEON) Typeface.BOLD else Typeface.NORMAL)
+        val copyWidth = if (split) 311 else 410
+        val title = text(item.title.uppercase(), layout.titleSizeSp, ink).apply {
+            typeface = Typeface.create(layout.titleTypeface, Typeface.NORMAL)
             letterSpacing = layout.titleLetterSpacing; maxLines = 2; ellipsize = TextUtils.TruncateAt.END
-            if (theme != ThemeSpec.CINEMA) {
-                val measured = paint.measureText(text.toString()) + (text.length - 1).coerceAtLeast(0) * letterSpacing * textSize
-                val ratio = (dp(copyWidth).toFloat() / measured.coerceAtLeast(1f)).coerceIn(0.58f, 1f)
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize * ratio)
-            } else if (item.title.length > 22) setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(36).toFloat())
+            val measured = paint.measureText(text.toString()) + (text.length - 1).coerceAtLeast(0) * letterSpacing * textSize
+            val ratio = (dp(copyWidth).toFloat() / measured.coerceAtLeast(1f)).coerceIn(0.58f, 1f)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize * ratio)
         }
         if (split && showAction) copy.addView(text(greeting(), 16, ink), margin(-1, -2, bottom = 6))
         copy.addView(title, margin(-1, -2))
         copy.addView(text(listOf(item.year, item.genres.firstOrNull().orEmpty(), item.runtime).filter(String::isNotBlank).joinToString("  ·  "), 13, muted), margin(-1, -2, top = 5))
         val description = text(item.description, 13, muted).apply {
-            maxLines = if (theme == ThemeSpec.CINEMA || theme == ThemeSpec.NEON) 2 else 3
+            maxLines = 3
             ellipsize = TextUtils.TruncateAt.END; setLineSpacing(dp(2).toFloat(), 1f)
         }
         if (item.description.isNotBlank()) copy.addView(description, margin(if (split) -1 else 345, -2, top = 10))
-        val left = if (theme == ThemeSpec.CINEMATIC) 20 else if (framed) 25 else 0
-        val copyTop = if (!showAction) 15 else when (theme) { ThemeSpec.CINEMATIC -> 90; ThemeSpec.EDITORIAL -> 15; ThemeSpec.NEON -> 21; else -> 8 }
-        val actionBottom = if (theme == ThemeSpec.CINEMATIC) 20 else if (split) 10 else 16
+        val left = 0
+        val copyTop = if (!showAction) 15 else if (theme == ThemeSpec.EDITORIAL) 15 else 8
+        val actionBottom = if (split) 10 else 16
         val availableCopy = dp(if (showAction) height - actionBottom - 38 - copyTop - 8 else height - copyTop - 10)
         repeat(10) {
             copy.measure(View.MeasureSpec.makeMeasureSpec(dp(copyWidth), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
@@ -464,10 +696,10 @@ class MainActivity : Activity() {
         if (showAction) {
             val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             val saved = if (publicPreview) null else history.continueWatching().firstOrNull { it.identity?.imdbId == item.imdbId }
-            actions.addView(primaryButton(if (saved != null) "▶  Resume" else "▶  Explore") {
-                if (saved?.identity != null) continuePlayback(saved.identity) else navigate { details(item) }
+            actions.addView(primaryButton(if (saved != null) "▶  Play" else "▶  Explore") {
+                if (saved?.identity != null) navigate { showSources(saved.identity) } else navigate { details(item) }
             }, margin(160, 38, right = 17))
-            if (!split && theme != ThemeSpec.CINEMA && theme != ThemeSpec.NEON) actions.addView(button("＋  Add to Library") {
+            if (!split) actions.addView(button("＋  Add to Library") {
                 val tracker = weTrakrClient()
                 if (tracker.connected()) load(generation, { tracker.setWatchlist(PlaybackIdentity(item.imdbId, item.type, item.title), true) }) { toast("Added to your ${tracker.name} watchlist") }
                 else { toast("Connect a tracker to save titles to your library"); navigate { weTrakrPage() } }
@@ -477,6 +709,319 @@ class MainActivity : Activity() {
             })
         }
         body.addView(frame, margin(-1, height, bottom = if (split) 10 else 0))
+    }
+
+    private var homeMenuFocus = false
+    private var menuHoldUntil = 0L
+    private fun openHomeMenu() {
+        if (retainedHome == null) retainHome()
+        homeMenuFocus = true; destination = "home"; backStack.clear(); current = { home() }
+        home(); refreshNavigation(); openMenu()
+        // Swapping pages lets Android restore "default focus" to the first control it finds; the menu keeps it briefly.
+        menuHoldUntil = android.os.SystemClock.uptimeMillis() + 1_200
+    }
+
+    /** Android refuses focus to zero-width views, so the hidden menu opens before taking focus. */
+    private fun openMenu(): Boolean {
+        val view = rail ?: return false
+        val target = navigationViews[destination] ?: navigationViews["home"] ?: return false
+        setRailExpanded(true, animate = false)
+        fun attempt() { if (!target.requestFocus()) setRailExpanded(false) }
+        // Focus only once the widened menu has been laid out; until then its items have no size.
+        if (!view.isLayoutRequested && view.width > 0) view.post(::attempt)
+        else view.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+                v.removeOnLayoutChangeListener(this); v.post(::attempt)
+            }
+        })
+        return true
+    }
+
+    private var bottomAligner: View.OnLayoutChangeListener? = null
+    /**
+     * Movie details sit at the foot of the screen so the backdrop stays open above them. Re-applied on
+     * layout, because the title logo arriving changes the content height.
+     */
+    private fun alignToBottom(id: Int) {
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (id != generation || scroller.height == 0) return@OnLayoutChangeListener
+            var content = 0
+            for (index in 0 until body.childCount) {
+                val child = body.getChildAt(index); val params = child.layoutParams as ViewGroup.MarginLayoutParams
+                if (child.visibility != View.GONE) content += child.height + params.topMargin + params.bottomMargin
+            }
+            val top = (scroller.height - content - body.paddingBottom - dp(10)).coerceAtLeast(dp(20))
+            if (kotlin.math.abs(top - body.paddingTop) > 2) body.post { if (id == generation) body.setPadding(body.paddingLeft, top, body.paddingRight, body.paddingBottom) }
+        }
+        bottomAligner?.let(body::removeOnLayoutChangeListener)
+        bottomAligner = listener; body.addOnLayoutChangeListener(listener); body.requestLayout()
+    }
+
+    private fun streamingHero(item: MediaItemData, showAction: Boolean, rotation: List<MediaItemData> = emptyList()) {
+        val layout = theme.layout
+        val height = if (showAction) layout.heroHeightDp else 250
+        val frame = (if (showAction) LayoutBoundaryFrame(this) else FrameLayout(this)).apply { clipChildren = false; tag = "featured-hero"; setTag(R.id.pov_feature_item, item) }
+        placeBackdrop(home = showAction)
+        heroBackdrop.visibility = View.VISIBLE
+        image(backdropArt, backdropFor(item), feature = true)
+        // Shadowed display text is rasterized into one layer, redrawn only when the feature changes.
+        val copy = column().apply { tag = "feature-copy"; setLayerType(View.LAYER_TYPE_HARDWARE, null) }
+        copy.addView(FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START; visibility = View.GONE }, margin(350, 88))
+        copy.addView(text("", layout.titleSizeSp, ink, true).apply {
+            tag = "feature-title"; typeface = Typeface.create(layout.titleTypeface, Typeface.BOLD); maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+            setShadowLayer(dp(8).toFloat(), 0f, dp(1).toFloat(), 0xB0000000.toInt())
+        }, margin(-1, -2))
+        copy.addView(text("", 12, Color.WHITE, true).apply { tag = "feature-meta" }, margin(-1, -2, top = 10))
+        copy.addView(text("", 13, 0xFFE6E6E6.toInt()).apply {
+            tag = "feature-description"; setLineSpacing(dp(2).toFloat(), 1f)
+            if (showAction) { maxLines = 3; ellipsize = TextUtils.TruncateAt.END }
+            setShadowLayer(dp(4).toFloat(), 0f, 0f, 0xB0000000.toInt())
+        }, margin(-1, -2, top = 8))
+        frame.addView(copy, FrameLayout.LayoutParams(dp(if (showAction) 420 else 560), -2).apply { topMargin = dp(if (showAction) 30 else 12) })
+        if (showAction) {
+            val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; tag = "feature-actions"; clipChildren = false }
+            // Actions follow whichever title the rotating feature currently shows.
+            fun shown() = frame.getTag(R.id.pov_feature_item) as? MediaItemData ?: item
+            actions.addView(primaryButton(playLabel(item)) {
+                val current = shown()
+                val saved = savedFor(current)
+                when {
+                    // Only Continue Watching reuses the saved link; Play always finds fresh links (and still resumes).
+                    saved?.identity != null -> navigate { showSources(saved.identity) }
+                    current.type == "movie" -> navigate { showSources(PlaybackIdentity(current.imdbId, current.type, current.title)) }
+                    else -> navigate { details(current) }
+                }
+            }, margin(122, 38, right = 12))
+            actions.addView(button("ⓘ  More Info") { val current = shown(); navigate { details(current) } }.apply { gravity = Gravity.CENTER }, margin(136, 38, right = 12))
+            actions.addView(button("＋  My List") {
+                val item = shown()
+                val tracker = weTrakrClient()
+                if (tracker.connected()) load(generation, { tracker.setWatchlist(PlaybackIdentity(item.imdbId, item.type, item.title), true) }) { toast("Added to your ${tracker.name} watchlist") }
+                else { toast("Connect a tracker to save titles to your library"); navigate { weTrakrPage() } }
+            }.apply { gravity = Gravity.CENTER }, margin(122, 38))
+            frame.addView(actions, FrameLayout.LayoutParams(-2, dp(38), Gravity.BOTTOM or Gravity.START).apply { bottomMargin = dp(26) })
+        }
+        // Details pages grow to fit the complete synopsis.
+        body.addView(frame, margin(-1, if (showAction) height else -2).apply { if (!showAction) bottomMargin = dp(14) })
+        renderFeature(frame, item)
+        if (!showAction) {
+            val meta = frame.findViewWithTag<TextView>("feature-meta")
+            meta.visibility = View.GONE
+            copy.addView(metaChips(item), copy.indexOfChild(meta), margin(-1, -2, top = 12))
+        }
+        if (showAction && rotation.size > 1) rotateFeature(frame, rotation)
+    }
+
+    private fun savedFor(item: MediaItemData) = if (publicPreview) null else history.continueWatching().firstOrNull { it.identity?.imdbId == item.imdbId }
+    /** Outside Continue Watching the action is always Play: a fresh link search that still resumes the saved position. */
+    private fun playLabel(@Suppress("UNUSED_PARAMETER") item: MediaItemData) = "▶  Play"
+
+    /** Cycles the billboard through the Top 10 titles every five seconds while no shelf is in use. */
+    private fun rotateFeature(frame: FrameLayout, rotation: List<MediaItemData>) {
+        heroRotation?.let(rotationHandler::removeCallbacks)
+        var index = rotation.indexOfFirst { it.imdbId == (frame.getTag(R.id.pov_feature_item) as? MediaItemData)?.imdbId }.coerceAtLeast(0)
+        val step = object : Runnable {
+            override fun run() {
+                if (heroRotation !== this || isDestroyed) return
+                rotationHandler.postDelayed(this, FEATURE_INTERVAL_MS)
+                val focus = currentFocus
+                val inShelves = focus != null && within(focus, body) && !within(focus, frame)
+                if (!resumed || !flix || featureHero() !== frame || inShelves) return
+                index = (index + 1) % rotation.size
+                val next = rotation[index]
+                rotation[(index + 1) % rotation.size].let { prefetch(backdropFor(it), backdrop = true); prefetch(logoFor(it)) }
+                frame.setTag(R.id.pov_feature_item, next)
+                (frame.findViewWithTag<LinearLayout>("feature-actions")?.getChildAt(0) as? TextView)?.text = playLabel(next)
+                val copy = frame.findViewWithTag<View>("feature-copy")
+                copy.animate().alpha(0f).setDuration(180).withEndAction {
+                    showFeature(next); copy.animate().alpha(1f).setDuration(260).start()
+                }.start()
+            }
+        }
+        heroRotation = step
+        rotation.getOrNull(1)?.let { prefetch(backdropFor(it), backdrop = true); prefetch(logoFor(it)) }
+        rotationHandler.postDelayed(step, FEATURE_INTERVAL_MS)
+    }
+
+    /** Details badges: an IMDb-style rating, year, runtime and type chips, then genre pills. */
+    private fun metaChips(item: MediaItemData): View {
+        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        fun chip(label: String, fill: Int, ink: Int, outline: Int = Color.TRANSPARENT) = text(label, 11, ink, true).apply {
+            gravity = Gravity.CENTER; setPadding(dp(9), dp(4), dp(9), dp(4)); background = rounded(fill, 4, outline)
+        }
+        item.rating.takeIf { it.isNotBlank() && it != "0" }?.let { row.addView(chip("IMDb  $it", 0xFFF5C518.toInt(), Color.BLACK), margin(-2, -2, right = 8)) }
+        listOf(item.year, item.runtime, if (item.type == "series") "Series" else "Movie").filter(String::isNotBlank).forEach {
+            row.addView(chip(it, Color.TRANSPARENT, ink, withAlpha(Color.WHITE, 90)), margin(-2, -2, right = 8))
+        }
+        item.genres.take(3).forEach { row.addView(chip(it, withAlpha(Color.WHITE, 30), ink), margin(-2, -2, right = 8)) }
+        return row
+    }
+
+    /** Where Play should start on a show: the episode in progress, else the first released episode of the chosen season. */
+    private fun playTarget(result: MediaItemData): Pair<PlaybackIdentity, Boolean>? {
+        if (result.type != "series") return null
+        savedFor(result)?.identity?.takeIf { it.season > 0 || it.episode > 0 }?.let { return it to true }
+        val season = EpisodePresentation.selectedSeason(result.episodes, selectedSeasons[result.imdbId]) ?: return null
+        val first = result.episodes.filter { it.season == season }.sortedBy { it.episode }.firstOrNull { !EpisodePresentation.future(it.released) } ?: return null
+        return PlaybackIdentity(result.imdbId, "series", result.title, first.season, first.episode) to false
+    }
+
+    /**
+     * Home's backdrop sits in the top-right 70% of the screen, its baked-in shading fading into the page,
+     * leaving the left and lower area darker for the copy and rows; details pages keep it full-screen.
+     */
+    private fun placeBackdrop(home: Boolean) {
+        if (!flix) return
+        val params = heroBackdrop.layoutParams as FrameLayout.LayoutParams
+        val width = if (home) (resources.displayMetrics.widthPixels * HOME_BACKDROP_SCALE).toInt() else -1
+        val height = if (home) width * 9 / 16 else -1
+        if (params.width != width || params.height != height) {
+            params.width = width; params.height = height; params.gravity = Gravity.TOP or Gravity.END
+            heroBackdrop.layoutParams = params
+        }
+    }
+
+    private fun featureHero(): FrameLayout? = if (isHome) body.findViewWithTag("featured-hero") else null
+    private fun backdropFor(item: MediaItemData) = item.background.ifBlank {
+        if (item.imdbId.matches(Regex("tt\\d+"))) "https://images.metahub.space/background/medium/${item.imdbId}/img" else item.poster
+    }
+    private fun logoFor(item: MediaItemData) =
+        if (item.imdbId.matches(Regex("tt\\d+"))) "https://images.metahub.space/logo/medium/${item.imdbId}/img" else ""
+
+    /** Writes a title into the pinned feature copy, preferring its artwork logo once it arrives. */
+    private fun renderFeature(frame: View, item: MediaItemData) {
+        // The image loader owns the logo's view tag, so the logo is found by position.
+        val logo = frame.findViewWithTag<LinearLayout>("feature-copy").getChildAt(0) as ImageView
+        val title = frame.findViewWithTag<TextView>("feature-title")
+        title.text = item.title; title.visibility = View.VISIBLE; logo.visibility = View.GONE
+        title.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(when { item.title.length > 30 -> 28; item.title.length > 16 -> 36; else -> theme.layout.titleSizeSp }).toFloat())
+        logo.setTag(R.id.pov_feature_item, item)
+        image(logo, logoFor(item), feature = true) { loaded -> if (loaded && logo.getTag(R.id.pov_feature_item) == item) { logo.visibility = View.VISIBLE; title.visibility = View.GONE } }
+        val rating = item.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" }.orEmpty()
+        frame.findViewWithTag<TextView>("feature-meta").text = listOf(rating, item.year, item.genres.take(2).joinToString(" · "), item.runtime)
+            .filter(String::isNotBlank).joinToString("   ")
+        frame.findViewWithTag<TextView>("feature-description").apply { text = item.description; visibility = if (item.description.isBlank()) View.GONE else View.VISIBLE }
+    }
+
+    private fun scheduleFeature(item: MediaItemData) {
+        if (!flix || !isHome) return
+        featureHandler.removeCallbacksAndMessages(null)
+        featureHandler.postDelayed({ showFeature(item) }, 280)
+    }
+
+    private fun showFeature(item: MediaItemData) {
+        if (item == featureShown || isDestroyed) return
+        featureShown = item
+        featureHero()?.let { renderFeature(it, item) }
+        val address = backdropFor(item)
+        if (address.isBlank() || backdropArt.tag == address) return
+        // The previous artwork stays until the next arrives, then dissolves in.
+        fun reveal(loaded: Boolean) {
+            if (!loaded || featureShown != item) return
+            backdropArt.animate().cancel(); backdropArt.alpha = 0.35f
+            backdropArt.animate().alpha(1f).setDuration(300).start()
+        }
+        image(backdropArt, address, keep = true, feature = true) { loaded ->
+            if (loaded) reveal(true)
+            else if (featureShown == item && item.poster.startsWith("https://")) image(backdropArt, item.poster, keep = true, feature = true, loaded = ::reveal)
+        }
+    }
+
+    /** Flix home: focused shelves rise to a fixed line beneath the pinned feature copy. */
+    private fun placeFlixRow(view: View): Boolean {
+        if (!flix || !isHome) return false
+        val hero = featureHero() ?: return false
+        val actions = hero.findViewWithTag<View>("feature-actions")
+        if (within(view, hero)) {
+            actions?.animate()?.alpha(1f)?.setDuration(160)?.start()
+            fadeShelvesAbove(Int.MIN_VALUE)
+            scroller.smoothScrollTo(0, 0)
+            featureHandler.removeCallbacksAndMessages(null)
+            (hero.getTag(R.id.pov_feature_item) as? MediaItemData)?.let(::showFeature)
+            return true
+        }
+        var strip: View? = view
+        while (strip != null && strip !is HorizontalScrollView) strip = strip.parent as? View
+        if (strip !is HorizontalScrollView) return false
+        val row = strip.getChildAt(0) as? ViewGroup ?: return false
+        var card = view
+        while (card.parent !== row) card = card.parent as? View ?: return false
+        // Rows read left to right from the focused title.
+        strip.smoothScrollTo((card.left - row.paddingLeft).coerceAtLeast(0), 0)
+        val parent = strip.parent as ViewGroup
+        val header = parent.getChildAt(parent.indexOfChild(strip) - 1)?.takeIf { it !is HorizontalScrollView }
+        val top = topInBody(header ?: strip)
+        actions?.animate()?.alpha(0f)?.setDuration(160)?.start()
+        // The last shelves cannot rise all the way to the line, so hide only what would really sit under the feature copy.
+        val target = (top - dp(FLIX_ROW_LINE)).coerceIn(0, (body.height - scroller.height).coerceAtLeast(0))
+        fadeShelvesAbove(target + dp(FLIX_ROW_LINE) - dp(8))
+        scroller.smoothScrollTo(0, target)
+        return true
+    }
+
+    /** Hides every shelf that starts above [cutoff] (body coordinates), i.e. that would overlap the pinned feature copy. */
+    private fun fadeShelvesAbove(cutoff: Int) {
+        for (index in 0 until body.childCount) {
+            val child = body.getChildAt(index)
+            if (child.tag == "featured-hero") continue
+            val target = if (child.top < cutoff) 0f else 1f
+            if (child.alpha != target) child.animate().alpha(target).setDuration(160).withLayer().start()
+        }
+    }
+    private fun within(view: View, parent: View): Boolean {
+        var node: View? = view
+        while (node != null) { if (node === parent) return true; node = node.parent as? View }
+        return false
+    }
+    private fun topInBody(view: View): Int {
+        var y = 0; var node: View? = view
+        while (node != null && node !== body) { y += node.top; node = node.parent as? View }
+        return y
+    }
+
+    private fun railBackground(expanded: Boolean) = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+        if (expanded) intArrayOf(Color.BLACK, withAlpha(Color.BLACK, 235), withAlpha(Color.BLACK, 0)) else intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT))
+
+    private fun setRailExpanded(expanded: Boolean, animate: Boolean = true) {
+        val view = rail ?: return
+        if (railExpanded == expanded) return
+        railExpanded = expanded
+        railLabels.forEach { it.visibility = if (expanded) View.VISIBLE else View.GONE }
+        view.background = railBackground(expanded)
+        railAnimator?.cancel(); railAnimator = null
+        if (!animate) { view.layoutParams = view.layoutParams.apply { width = if (expanded) dp(270) else 0 }; return }
+        railAnimator = ValueAnimator.ofInt(view.layoutParams.width, if (expanded) dp(270) else 0).apply {
+            duration = 170
+            addUpdateListener { view.layoutParams = view.layoutParams.apply { width = it.animatedValue as Int } }
+        }.also { it.start() }
+    }
+
+    private fun rankedRow(title: String, items: List<MediaItemData>) {
+        if (items.isEmpty()) return
+        body.addView(text(title, theme.layout.sectionTitleSizeSp, ink, true), margin(-1, -2, top = 14, bottom = 6))
+        val row = horizontalRow()
+        items.take(10).forEachIndexed { index, item -> row.addView(rankTile(item, index + 1), margin(if (index == 9) 200 else 170, 144, right = 4)) }
+    }
+
+    private fun rankTile(item: MediaItemData, rank: Int): View {
+        val frame = FrameLayout(this).apply {
+            isFocusable = true; isFocusableInTouchMode = true; isClickable = true; clipChildren = false
+            tag = "top10:${item.type}:${item.imdbId}"; contentDescription = "Number $rank, ${item.title}"
+        }
+        val posterWidth = dp(96)
+        frame.addView(RankNumberView(this, rank.toString(), bg, 0xFF8C8C8C.toInt()).apply { posterInset = posterWidth - dp(16).toFloat() }, FrameLayout.LayoutParams(-1, -1))
+        val poster = FrameLayout(this).apply { background = rounded(panel, 4); clipToOutline = true }
+        val art = FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+        poster.addView(art, FrameLayout.LayoutParams(-1, -1))
+        image(art, thumbnail(item.poster.ifBlank { if (item.imdbId.matches(Regex("tt\\d+"))) "https://images.metahub.space/poster/medium/${item.imdbId}/img" else "" }))
+        frame.addView(poster, FrameLayout.LayoutParams(posterWidth, -1, Gravity.END))
+        frame.setOnFocusChangeListener { view, focused ->
+            poster.foreground = if (focused) FocusRingDrawable(Color.WHITE, dp(4).toFloat(), true, dp(1).toFloat()) else null
+            view.animate().scaleX(if (focused) 1.07f else 1f).scaleY(if (focused) 1.07f else 1f).setDuration(140).start()
+            if (focused) scheduleFeature(item)
+        }
+        frame.setOnClickListener { navigate { details(item) } }
+        return frame
     }
 
     private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
@@ -556,70 +1101,10 @@ class MainActivity : Activity() {
             val action: () -> Unit = {
                 resumeSaved(saved)
             }
-            if (theme == ThemeSpec.CINEMATIC) {
-                val group = column().apply { setTag(R.id.pov_continue_identity, saved.identity?.let(::identityKey) ?: saved.key) }
-                group.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), action = action).apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, margin(-1, theme.layout.cardHeightDp))
-                group.addView(text(remaining, 10, muted), margin(-1, -2, top = 4))
-                row.addView(group, margin(cardWidth(), theme.layout.cardHeightDp + 20, right = theme.layout.cardGapDp))
-            } else row.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), remaining, action).apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
+            row.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), remaining, action).apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
         }
     }
 
-    private fun dashboard(recent: List<PlaybackStore.Recent>, movies: List<MediaItemData>, series: List<MediaItemData>) {
-        section(if (recent.isNotEmpty()) "Continue Watching" else "Discover")
-        val rowTop = horizontalRow()
-        val entries = if (recent.isNotEmpty()) recent.take(3).map { saved ->
-            MediaItemData(saved.identity?.imdbId.orEmpty(), saved.identity?.type ?: "movie", saved.title,
-                background = saved.identity?.imdbId?.let { "https://images.metahub.space/background/medium/$it/img" }.orEmpty()) to saved
-        } else movies.take(3).map { it to null }
-        val available = 960 - theme.layout.contentInsetDp * 2 - 13
-        val firstWidth = (available * 0.37).toInt()
-        val otherWidth = (available - firstWidth - 2 * theme.layout.cardGapDp) / 2
-        entries.forEachIndexed { index, (item, saved) ->
-            val action: () -> Unit = {
-                if (saved != null) resumeSaved(saved) else navigate { details(item) }
-            }
-            val progress = saved?.let { it.position.toDouble() / it.duration.coerceAtLeast(1) }
-            val caption = saved?.let { "${((it.duration - it.position).coerceAtLeast(0) / 60000)}m left" } ?: listOf(item.year, item.genres.firstOrNull().orEmpty()).filter(String::isNotBlank).joinToString(" · ")
-            val frame = tile(item, progress, caption, action) as FrameLayout
-            frame.tag = "dashboard:${saved?.key ?: item.imdbId}"
-            if (saved != null) continueOptions(frame, saved.key, saved.identity, saved.title)
-            if (index == 0) frame.addView(primaryButton(if (saved != null) "▶ Resume" else "▶ Explore", action).apply {
-                if (saved != null) continueOptions(this, saved.key, saved.identity, saved.title)
-            },
-                FrameLayout.LayoutParams(dp(104), dp(31), Gravity.BOTTOM or Gravity.END).apply { rightMargin = dp(12); bottomMargin = dp(33) })
-            rowTop.addView(frame, margin(if (index == 0) firstWidth else otherWidth, 185, right = theme.layout.cardGapDp))
-        }
-        val lower = LinearLayout(this)
-        val next = column()
-        val nextHeading = text("Discover Shows", 22, ink, true)
-        next.addView(nextHeading, margin(-1, -2, top = 12, bottom = 9))
-        val row = LinearLayout(this)
-        series.take(3).forEach { item -> row.addView(tile(item, caption = "TV show") { navigate { details(item) } }, margin(204, 139, right = 8)) }
-        next.addView(row)
-        val request = generation
-        val tracker = weTrakrClient()
-        if (!publicPreview && tracker.connected()) worker.execute {
-            val upcoming = try { tracker.nextEpisodes() } catch (_: Exception) { emptyList() }
-            runOnUiThread {
-                if (request == generation && upcoming.isNotEmpty() && !isDestroyed) {
-                    nextHeading.text = "Up Next"; row.removeAllViews()
-                    upcoming.take(3).forEach { identity ->
-                        val item = MediaItemData(identity.imdbId, identity.type, identity.title)
-                        row.addView(tile(item, caption = "S${identity.season} E${identity.episode}") { navigate { showSources(identity) } }, margin(204, 139, right = 8))
-                    }
-                }
-            }
-        }
-        lower.addView(next, LinearLayout.LayoutParams(0, -2, 1f))
-        val library = column().apply { setPadding(dp(17), 0, 0, 0) }
-        library.addView(text("My Library", 22, ink, true), margin(-1, -2, top = 12, bottom = 9))
-        library.addView(button("▤   Movies    ›") { navigate { catalogPage("movie") } }, margin(-1, 44, bottom = 6))
-        library.addView(button("▣   Shows     ›") { navigate { catalogPage("series") } }, margin(-1, 44, bottom = 6))
-        library.addView(button("☁   Cloud library  ›") { navigate { selectedCloud() } }, margin(-1, 44))
-        lower.addView(library, margin(247, -2)); body.addView(lower)
-
-    }
 
     private fun resumeSaved(saved: PlaybackStore.Recent) {
         if (saved.key.startsWith("cloud:")) {
@@ -685,8 +1170,9 @@ class MainActivity : Activity() {
             frame.addView(caption, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
             frame.setOnFocusChangeListener { view, focused ->
                 if (focused) { pendingFocus = null; wantsContentFocus = false }
-                view.foreground = if (focused) FocusRingDrawable(accent, dp(8).toFloat(), true, dp(2).toFloat()) else null
-                caption.setBackgroundColor(if (focused) 0xF0091824.toInt() else 0xB0000000.toInt())
+                // Flix: a white ring and a neutral caption, matching the app's other focused controls.
+                view.foreground = if (!focused) null else if (flix) crispOutline(8) else FocusRingDrawable(accent, dp(8).toFloat(), true, dp(2).toFloat())
+                caption.setBackgroundColor(if (focused) (if (flix) 0xE6000000.toInt() else 0xF0091824.toInt()) else 0xB0000000.toInt())
             }
             frame.setOnClickListener { returnToVideo() }
             frame.setOnLongClickListener { playbackOptions(); true }
@@ -763,10 +1249,10 @@ class MainActivity : Activity() {
     }
 
     private fun searchAnime(type: String = "series") {
-        val input = EditText(this).apply { hint = "Anime title"; setSingleLine() }
+        val input = TvEditText(this).apply { hint = "Anime title"; setSingleLine() }
         AlertDialog.Builder(this).setTitle("Search anime").setView(input)
             .setPositiveButton("Search") { _, _ -> input.text.toString().trim().takeIf(String::isNotBlank)?.let { query -> navigate { animePage(type, query) } } }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).show().submitOnEnter(input)
     }
 
     private fun animeFormat(title: AnimeTitle): String = when (title.category) {
@@ -851,7 +1337,10 @@ class MainActivity : Activity() {
                     choice.absoluteEpisode?.let { add("Overall episode $it") }
                     if (choice.released.isNotBlank()) add(choice.released.take(10))
                 }.joinToString(" · ")
-                host.addView(episodeButton(identity, choice.title, choice.released, extra), margin(-1, 62, bottom = 7))
+                // Flix shows each anime episode with its still, like regular series.
+                if (flix) host.addView(episodeRow(identity, EpisodeData(identity.season, identity.episode, choice.title, choice.released, choice.thumbnail),
+                    result.media, "Episode ${choice.catalogEpisode}", extra), margin(-1, 108, bottom = 8))
+                else host.addView(episodeButton(identity, choice.title, choice.released, extra), margin(-1, 62, bottom = 7))
             }
             focusAfterRender(generation)
         }
@@ -865,7 +1354,7 @@ class MainActivity : Activity() {
     }
 
     private fun matchAnime(title: AnimeTitle) {
-        val input = EditText(this).apply { setText(title.title); hint = "Title to search"; setSingleLine() }
+        val input = TvEditText(this).apply { setText(title.title); hint = "Title to search"; setSingleLine() }
         AlertDialog.Builder(this).setTitle("Find the correct ${if (title.type == "movie") "film" else "show"}")
             .setMessage("Choose the matching catalog title. For sequels and split seasons, check the show's season and episode list before playing.")
             .setView(input).setPositiveButton("Search") { _, _ ->
@@ -876,13 +1365,13 @@ class MainActivity : Activity() {
                         .setItems(matches.map { "${it.title} · ${it.year}" }.toTypedArray()) { _, index -> navigate { details(matches[index]) } }
                         .setNegativeButton("Cancel", null).show()
                 }
-            }.setNegativeButton("Cancel", null).show()
+            }.setNegativeButton("Cancel", null).show().submitOnEnter(input)
     }
 
     private fun appearance() {
         current = { appearance() }
         destination = "settings"; refreshNavigation()
-        page("Appearance", "Choose your view. All five original designs are included.")
+        page("Appearance", "Choose your view.")
         val width = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2
         val tileWidth = (width - 20) / 2
         ThemeSpec.entries.chunked(2).forEach { choices ->
@@ -893,12 +1382,12 @@ class MainActivity : Activity() {
                     background = rounded(panel, 9); setPadding(dp(6), dp(6), dp(6), dp(10))
                 }
                 val art = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; background = rounded(panel, 6); clipToOutline = true }
-                val file = when (choice) { ThemeSpec.CINEMATIC -> "01-cinematic.png"; ThemeSpec.EDITORIAL -> "02-editorial.png"; ThemeSpec.NEON -> "03-neon.png"; ThemeSpec.CINEMA -> "04-cinema.png"; ThemeSpec.DASHBOARD -> "05-dashboard.png" }
+                val file = when (choice) { ThemeSpec.FLIX -> "flix.png"; ThemeSpec.EDITORIAL -> "editorial.png" }
                 assets.open("themes/$file").use { stream -> art.setImageBitmap(BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = 4 })) }
                 tile.addView(art, margin(-1, ((tileWidth - 12) * 9 / 16)))
                 tile.addView(text(choice.displayName + if (choice == theme) "  ·  Selected" else "", 16, ink, true).apply { setPadding(dp(8), dp(8), dp(8), 0) })
                 tile.addView(text(choice.description, 11, muted).apply { setPadding(dp(8), dp(5), dp(8), 0); maxLines = 2 }, margin(-1, 35))
-                tile.setOnFocusChangeListener { view, focused -> view.foreground = if (focused) FocusRingDrawable(accent, dp(9).toFloat(), true, dp(1).toFloat()) else null }
+                tile.setOnFocusChangeListener { view, focused -> view.foreground = if (focused) FocusRingDrawable(if (flix) Color.WHITE else accent, dp(9).toFloat(), true, dp(1).toFloat()) else null }
                 tile.setOnClickListener {
                     themePreferences.select(choice); theme = choice; destination = "home"; backStack.clear()
                     current = { home() }; shell(); home(); toast("${choice.displayName} theme applied")
@@ -924,20 +1413,44 @@ class MainActivity : Activity() {
     }
 
     private fun search(initialQuery: String = "") {
-        val input = EditText(this).apply {
-            hint = "Movie or TV show"; setText(initialQuery); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT
+        // A full-screen search overlay: one large field, then Search, Voice search and Cancel.
+        val dialog = android.app.Dialog(this, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen)
+        val input = TvEditText(this).apply {
+            hint = "Movie or TV show"; setText(initialQuery); setSelection(text.length); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(18).toFloat()); setTextColor(ink); setHintTextColor(muted)
+            background = null; setPadding(dp(10), 0, dp(10), 0); includeFontPadding = false
         }
-        lateinit var dialog: AlertDialog
         fun submit() {
             val query = input.text.toString().trim().take(200)
             if (query.isEmpty()) return
             (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(input.windowToken, 0)
             dialog.dismiss(); navigate { searchResults(query) }
         }
-        dialog = AlertDialog.Builder(this).setTitle("Search movies & TV shows").setView(input)
-            .setPositiveButton("Search", null).setNeutralButton("🎤 Voice search") { _, _ -> voiceSearch() }
-            .setNegativeButton("Cancel", null).create()
+        val root = FrameLayout(this).apply { setBackgroundColor(withAlpha(bg, 242)) }
+        val card = column().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        card.addView(text("Search", 30, ink, true), margin(-2, -2))
+        card.addView(text("Find movies and TV shows by title", 13, muted), margin(-2, -2, top = 6, bottom = 22))
+        val field = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), 0, dp(12), 0)
+            background = rounded(withAlpha(Color.WHITE, 26), 28, withAlpha(Color.WHITE, 40))
+        }
+        field.addView(NavigationIconView(this, "search", ink), margin(22, 22))
+        field.addView(input, LinearLayout.LayoutParams(0, -1, 1f))
+        input.setOnFocusChangeListener { _, focused ->
+            field.background = rounded(withAlpha(Color.WHITE, if (focused) 38 else 26), 28, if (focused) Color.WHITE else withAlpha(Color.WHITE, 40))
+        }
+        card.addView(field, margin(-1, 56))
+        val actions = LinearLayout(this).apply { gravity = Gravity.CENTER; clipChildren = false }
+        val searchAction = primaryButton("⌕  Search") { submit() }.apply { contentDescription = "Search" }
+        actions.addView(searchAction, margin(150, 40, right = 12))
+        input.onBack = { hideKeyboard(input); searchAction.requestFocus() }
+        actions.addView(button("🎤  Voice search") { dialog.dismiss(); voiceSearch() }.apply { gravity = Gravity.CENTER; tag = "search-voice" }, margin(170, 40, right = 12))
+        actions.addView(button("Cancel") { dialog.dismiss() }.apply { gravity = Gravity.CENTER }, margin(110, 40))
+        card.addView(actions, margin(-2, -2, top = 22))
+        card.addView(text("Press OK to type · the keyboard's Search key searches straight away", 11, muted), margin(-2, -2, top = 18))
+        root.addView(card, FrameLayout.LayoutParams(dp(560), -2, Gravity.CENTER).apply { bottomMargin = dp(60) })
+        dialog.setContentView(root)
         input.setOnEditorActionListener { _, action, event ->
             if (action in setOf(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, android.view.inputmethod.EditorInfo.IME_ACTION_DONE, android.view.inputmethod.EditorInfo.IME_ACTION_GO)) { submit(); true }
             else if (event?.keyCode in setOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
@@ -951,10 +1464,92 @@ class MainActivity : Activity() {
                 true
             } else false
         }
-        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { submit() } }
         searchDialog = dialog; dialog.show(); input.requestFocus()
     }
+    /**
+     * Voice search listens in the app with the device's speech service (Google on Android TV), showing a mic
+     * and the words as they are heard; the system voice screen is only a fallback when that service is missing.
+     */
     private fun voiceSearch() {
+        if (android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) listen()
+            else requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), MIC_REQUEST)
+            return
+        }
+        systemVoiceSearch()
+    }
+
+    @Deprecated("Permission result compatibility for Android TV")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        @Suppress("DEPRECATION") super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != MIC_REQUEST) return
+        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) listen()
+        else { toast("Microphone access is off. Using the TV's voice search instead."); systemVoiceSearch() }
+    }
+
+    private fun listen() {
+        val recognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
+        val dialog = android.app.Dialog(this, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen)
+        val root = FrameLayout(this).apply { setBackgroundColor(withAlpha(bg, 240)) }
+        val column = column().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        val micSize = dp(64)
+        val micFrame = FrameLayout(this)
+        val pulse = View(this).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(withAlpha(accent, 70)) } }
+        val mic = FrameLayout(this).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) } }
+        mic.addView(MicIconView(this), FrameLayout.LayoutParams(micSize / 2, micSize / 2, Gravity.CENTER))
+        micFrame.addView(pulse, FrameLayout.LayoutParams(micSize, micSize, Gravity.CENTER))
+        micFrame.addView(mic, FrameLayout.LayoutParams(micSize, micSize, Gravity.CENTER))
+        column.addView(micFrame, margin(110, 110))
+        val status = text("Listening…", 15, muted, true)
+        val heard = text("Say a movie or show", 30, ink, true).apply { gravity = Gravity.CENTER; maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
+        column.addView(status, margin(-2, -2, top = 16))
+        column.addView(heard, margin(560, -2, top = 12))
+        val retry = primaryButton("🎤  Try again") { }.apply { visibility = View.GONE }
+        column.addView(retry, margin(170, 40, top = 22))
+        root.addView(column, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        dialog.setContentView(root)
+        // The pulse follows the speaker's volume.
+        val idle = ValueAnimator.ofFloat(1f, 1.18f).apply {
+            duration = 900; repeatMode = ValueAnimator.REVERSE; repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { pulse.scaleX = it.animatedValue as Float; pulse.scaleY = pulse.scaleX }
+        }
+        fun start() {
+            status.text = "Listening…"; heard.text = "Say a movie or show"; retry.visibility = View.GONE; idle.start()
+            recognizer.startListening(Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName))
+        }
+        retry.setOnClickListener { start() }
+        recognizer.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) = Unit
+            override fun onBeginningOfSpeech() { status.text = "Listening…" }
+            override fun onRmsChanged(rmsdB: Float) {
+                val level = 1f + (rmsdB.coerceIn(0f, 10f) / 10f) * 0.45f
+                idle.pause(); pulse.scaleX = level; pulse.scaleY = level
+            }
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onEndOfSpeech() { status.text = "Searching…"; idle.resume() }
+            override fun onError(error: Int) {
+                idle.cancel(); pulse.scaleX = 1f; pulse.scaleY = 1f
+                status.text = if (error == android.speech.SpeechRecognizer.ERROR_NO_MATCH || error == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT) "Didn't catch that" else "Voice search is unavailable right now"
+                heard.text = "Press OK to try again"; retry.visibility = View.VISIBLE; retry.requestFocus()
+            }
+            override fun onResults(results: Bundle?) {
+                val query = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty().take(200)
+                if (query.isBlank()) { onError(android.speech.SpeechRecognizer.ERROR_NO_MATCH); return }
+                heard.text = query; dialog.dismiss(); navigate { searchResults(query) }
+            }
+            override fun onPartialResults(partialResults: Bundle?) {
+                partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf(String::isNotBlank)?.let { heard.text = it }
+            }
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+        dialog.setOnDismissListener { idle.cancel(); recognizer.cancel(); recognizer.destroy() }
+        dialog.show(); start()
+    }
+
+    private fun systemVoiceSearch() {
         val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search movies & TV shows")
@@ -975,7 +1570,10 @@ class MainActivity : Activity() {
             }
         }
     }
-    private companion object { const val VOICE_REQUEST = 701; const val PLAYBACK_REQUEST = 702 }
+    private companion object { const val VOICE_REQUEST = 701; const val PLAYBACK_REQUEST = 702; const val MIC_REQUEST = 703; const val FLIX_ROW_LINE = 236; const val FEATURE_INTERVAL_MS = 5_000L; const val AUTOPLAY_FIRST = "sources.autoplay_first"; const val BACKDROP_WIDTH = 1280; const val CONTINUE_CACHE = "wetrakr.continue_cache"
+        const val TMDB_KEY = "tmdb.key"; const val TMDB_REGION = "tmdb.region"
+        const val HOME_KEEP_MS = 15 * 60_000L
+        const val HOME_BACKDROP_SCALE = 0.72f }
 
     private fun searchResults(query: String, filter: String = "all", cached: CatalogApi.SearchResults? = null) {
         current = { searchResults(query, filter, cached) }
@@ -1009,22 +1607,32 @@ class MainActivity : Activity() {
         read(id, { catalog.details(item) }) { result ->
             body.removeAllViews(); hero(result, false); mediaActions(result, episode)
             if (result.type == "series") seasonPicker(result)
+            else if (flix) alignToBottom(id)
         }
     }
 
     private fun mediaActions(result: MediaItemData, episode: PlaybackIdentity? = null) {
         val identity = PlaybackIdentity(result.imdbId, result.type, result.title)
         val actions = horizontalRow()
-        if (result.type == "movie") actions.addView(button("Find movie sources  ▶") { navigate { showSources(identity) } }, margin(200, 44, right = 10))
-        if (episode != null) actions.addView(button("Find S${episode.season} E${episode.episode} sources  ▶") { navigate { showSources(episode) } }, margin(230, 44, right = 10))
-        if (result.description.isNotBlank()) actions.addView(button("Synopsis") {
+        // Flix: one white Play (Resume or the right episode for shows), then compact icon actions.
+        fun play(label: String, width: Int, action: () -> Unit) = actions.addView(
+            if (flix) primaryButton(label, action) else button(label, action).apply { gravity = Gravity.CENTER }, margin(width, 44, right = 12))
+        if (result.type == "movie") play("▶  Play", 130) { navigate { showSources(savedFor(result)?.identity ?: identity) } }
+        if (episode != null) play("▶  Play S${episode.season} E${episode.episode}", 180) { navigate { showSources(episode) } }
+        else if (flix) playTarget(result)?.let { (target, _) ->
+            play("▶  Play S${target.season} E${target.episode}", 200) {
+                navigate { showSources(target) }
+            }
+        }
+        // The flix details page already shows the full synopsis.
+        if (result.description.isNotBlank() && !flix) actions.addView(button("Synopsis") {
             AlertDialog.Builder(this).setTitle(result.title).setMessage(result.description).setPositiveButton("Close", null).show()
         }, margin(110, 44, right = 8))
         val tracker = weTrakrClient()
         if (tracker.connected()) {
-            actions.addView(button("Add to watchlist") { load(generation, { tracker.setWatchlist(identity, true) }) { toast("Added to your ${tracker.name} watchlist") } }, margin(155, 44, right = 8))
-            actions.addView(button("Remove from watchlist") { confirm("Remove ${result.title} from your ${tracker.name} watchlist?") { load(generation, { tracker.setWatchlist(identity, false) }) { removeFromListViews("watchlist:${identity.type}", identity); toast("Removed from your ${tracker.name} watchlist") } } }, margin(190, 44, right = 8))
-            actions.addView(button("Remove from playlist") {
+            actions.addView(button(if (flix) "＋  Watchlist" else "Add to watchlist") { load(generation, { tracker.setWatchlist(identity, true) }) { toast("Added to your ${tracker.name} watchlist") } }.apply { if (flix) gravity = Gravity.CENTER }, margin(155, 44, right = 8))
+            actions.addView(button(if (flix) "－  Watchlist" else "Remove from watchlist") { confirm("Remove ${result.title} from your ${tracker.name} watchlist?") { load(generation, { tracker.setWatchlist(identity, false) }) { removeFromListViews("watchlist:${identity.type}", identity); toast("Removed from your ${tracker.name} watchlist") } } }.apply { if (flix) gravity = Gravity.CENTER }, margin(if (flix) 155 else 190, 44, right = 8))
+            actions.addView(button(if (flix) "☰  Remove from playlist" else "Remove from playlist") {
                 read(generation, { tracker.lists() }) { lists ->
                     if (lists.isEmpty()) toast("No personal playlists on WeTrakr") else AlertDialog.Builder(this).setTitle("Choose your playlist")
                         .setItems(lists.map { it.second }.toTypedArray()) { _, index ->
@@ -1034,7 +1642,7 @@ class MainActivity : Activity() {
                         }.setNegativeButton("Cancel", null).show()
                 }
             }, margin(190, 44, right = 8))
-            if (result.type == "movie" || episode != null) actions.addView(button("Mark watched") { confirm("Mark ${result.title}${episode?.let { " S${it.season} E${it.episode}" }.orEmpty()} as watched?") { load(generation, { tracker.markWatched(episode ?: identity) }) { hideContinue(identityKey(episode ?: identity)); toast("${tracker.name} history updated") } } }, margin(150, 44))
+            if (result.type == "movie" || episode != null) actions.addView(button(if (flix) "✓  Watched" else "Mark watched") { confirm("Mark ${result.title}${episode?.let { " S${it.season} E${it.episode}" }.orEmpty()} as watched?") { load(generation, { tracker.markWatched(episode ?: identity) }) { hideContinue(identityKey(episode ?: identity)); toast("${tracker.name} history updated") } } }, margin(150, 44))
         }
     }
 
@@ -1043,15 +1651,19 @@ class MainActivity : Activity() {
         if (seasons.isEmpty()) { body.addView(text("Episode information is currently unavailable.", 14, muted), margin(-1, -2, top = 18)); return }
         val selector = button("") { }
         val host = column()
+        val tabs = mutableListOf<Pair<Int, TextView>>()
         fun render(season: Int) {
             selectedSeasons[result.imdbId] = season
             val label = if (season == 0) "Specials & extras" else "Season $season"
             val episodes = result.episodes.filter { it.season == season }.sortedBy { it.episode }
             selector.text = "$label · ${episodes.size} episodes  ▾"; selector.contentDescription = selector.text; selector.tag = "season:${result.imdbId}"
-            host.removeAllViews(); host.addView(text(label, 18, ink, true), margin(-1, -2, top = 16, bottom = 10))
+            host.removeAllViews()
+            if (flix) tabs.forEach { (value, tab) -> paintSeasonTab(tab, value == season, tab.hasFocus()) }
+            else host.addView(text(label, 18, ink, true), margin(-1, -2, top = 16, bottom = 10))
             episodes.forEach { episode ->
                 val identity = PlaybackIdentity(result.imdbId, "series", result.title, episode.season, episode.episode)
-                host.addView(episodeButton(identity, episode.title, episode.released, episode.released.take(10)), margin(-1, 62, bottom = 7))
+                if (flix) host.addView(episodeRow(identity, episode, result), margin(-1, 108, bottom = 8))
+                else host.addView(episodeButton(identity, episode.title, episode.released, episode.released.take(10)), margin(-1, 62, bottom = 7))
             }
             focusAfterRender(generation)
         }
@@ -1063,8 +1675,65 @@ class MainActivity : Activity() {
                 dialog.dismiss(); render(seasons[index]); selector.requestFocus()
             }.setNegativeButton("Cancel", null).show()
         }
-        body.addView(selector, margin(370, 44, top = 15)); body.addView(host)
+        if (flix) {
+            // Seasons sit in a row of tabs instead of a pop-up chooser.
+            body.addView(text("Episodes", 20, ink, true), margin(-1, -2, top = 18, bottom = 4))
+            val row = horizontalRow()
+            seasons.forEach { season ->
+                val tab = text(if (season == 0) "Specials" else "Season $season", 13, ink, true).apply {
+                    gravity = Gravity.CENTER; setPadding(dp(18), 0, dp(18), 0); isFocusable = true; isFocusableInTouchMode = true; isClickable = true
+                    tag = "season:${result.imdbId}:$season"; contentDescription = text
+                }
+                tab.setOnFocusChangeListener { view, focused -> paintSeasonTab(tab, selectedSeasons[result.imdbId] == season, focused)
+                    view.animate().scaleX(if (focused) 1.06f else 1f).scaleY(if (focused) 1.06f else 1f).setDuration(120).start() }
+                tab.setOnClickListener { if (selectedSeasons[result.imdbId] != season) render(season) }
+                tabs += season to tab
+                row.addView(tab, margin(-2, 36, right = 8))
+            }
+            body.addView(host, margin(-1, -2, top = 8))
+        } else { body.addView(selector, margin(370, 44, top = 15)); body.addView(host) }
         render(EpisodePresentation.selectedSeason(result.episodes, selectedSeasons[result.imdbId])!!)
+    }
+
+    private fun paintSeasonTab(tab: TextView, selected: Boolean, focused: Boolean) {
+        tab.background = rounded(if (selected) Color.WHITE else withAlpha(Color.WHITE, if (focused) 70 else 24), 18)
+        tab.setTextColor(if (selected) Color.BLACK else ink)
+        tab.foreground = if (focused) FocusRingDrawable(Color.WHITE, dp(18).toFloat(), true, dp(1).toFloat()) else null
+    }
+
+    /** Flix episode list: a still from the episode beside its number, title and air date. */
+    private fun episodeRow(identity: PlaybackIdentity, episode: EpisodeData, show: MediaItemData, label: String = "", note: String = ""): View {
+        val tracker = weTrakrClient()
+        val future = EpisodePresentation.future(episode.released)
+        val number = label.ifBlank { if (identity.season == 0) "Special ${identity.episode}" else "Episode ${identity.episode}" }
+        val detail = if (future) "Not yet released" else note.ifBlank { episode.released.take(10) }
+        val row = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL; setPadding(dp(6), dp(6), dp(12), dp(6)); background = rounded(withAlpha(Color.WHITE, 14), 6)
+            isFocusable = true; isFocusableInTouchMode = true; isClickable = true
+            tag = "episode:${identity.imdbId}:${identity.season}:${identity.episode}"
+            contentDescription = "$number. ${episode.title}. $detail"
+        }
+        val still = FrameLayout(this).apply { background = rounded(panel, 4); clipToOutline = true }
+        val art = FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+        still.addView(art, FrameLayout.LayoutParams(-1, -1))
+        // Stills use the priority pool so they never queue behind the Home page's thumbnails.
+        image(art, episode.thumbnail.ifBlank { backdropFor(show) }, feature = true)
+        if (future) still.addView(View(this).apply { setBackgroundColor(0x99000000.toInt()) }, FrameLayout.LayoutParams(-1, -1))
+        row.addView(still, LinearLayout.LayoutParams(dp(168), dp(95)))
+        val copy = column().apply { setPadding(dp(14), 0, 0, 0) }
+        copy.addView(text(number, 11, muted, true))
+        copy.addView(text(episode.title, 15, ink, true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }, margin(-1, -2, top = 4))
+        copy.addView(text(detail, 11, muted), margin(-1, -2, top = 6))
+        row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+        row.setOnFocusChangeListener { view, focused ->
+            view.background = rounded(if (focused) withAlpha(Color.WHITE, 46) else withAlpha(Color.WHITE, 14), 6)
+            still.foreground = if (focused) FocusRingDrawable(Color.WHITE, dp(4).toFloat(), true, dp(1).toFloat()) else null
+        }
+        row.setOnClickListener { if (future) toast("This episode has not been released yet") else navigate { showSources(identity) } }
+        if (tracker.connected() && !future) row.setOnLongClickListener {
+            confirm("Mark S${identity.season} E${identity.episode} as watched?") { load(generation, { tracker.markWatched(identity) }) { toast("Episode marked watched") } }; true
+        }
+        return row
     }
 
     private fun episodeButton(identity: PlaybackIdentity, title: String, released: String, detail: String): View {
@@ -1091,12 +1760,14 @@ class MainActivity : Activity() {
         if (connected.isEmpty()) {
             body.addView(button("Connect Offcloud or TorBox in Settings") { navigate { settings() } }, margin(310, 44)); return
         }
-        read(id, { resolver.search(identity) }) { result -> sourceResults(identity, result.items, result.unavailableProviders) }
+        read(id, { resolver.search(identity) }) { result ->
+            sourceResults(identity, result.items, result.unavailableProviders, autoplay = store.get(AUTOPLAY_FIRST) == "true")
+        }
     }
 
     private fun sourceResults(identity: PlaybackIdentity, sources: List<SourceItem>) = sourceResults(identity, sources, emptyList())
 
-    private fun sourceResults(identity: PlaybackIdentity, sources: List<SourceItem>, unavailable: List<String>) {
+    private fun sourceResults(identity: PlaybackIdentity, sources: List<SourceItem>, unavailable: List<String>, autoplay: Boolean = false) {
         val providerRevision = store.get(SourceProviders.KEY) + "\u0000" + store.get("sources.endpoint")
         current = {
             if (providerRevision != store.get(SourceProviders.KEY) + "\u0000" + store.get("sources.endpoint")) showSources(identity)
@@ -1113,7 +1784,11 @@ class MainActivity : Activity() {
         if (unavailable.isNotEmpty()) body.addView(text("Unavailable providers: ${unavailable.joinToString(", ")}. Other providers were searched.", 14, muted), margin(-1, -2, bottom = 8))
         if (sources.isEmpty()) body.addView(text("No sources were returned. Try again later or check the source provider in Settings.", 15, muted))
         val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
-        sorting.order.sorted(sources.distinctBy(TvChoiceKeys::source)).forEach { source ->
+        // Sources taller than this TV can decode (such as 8K on a 4K TV) go last and are never auto-played.
+        val limit = DecoderLimits.maxHeight()
+        fun tooTall(source: SourceItem) = (source.qualityHeight ?: 0) > limit
+        val ordered = sorting.order.sorted(sources.distinctBy(TvChoiceKeys::source)).let { all -> all.filterNot(::tooTall) + all.filter(::tooTall) }
+        ordered.forEach { source ->
             val cachedOn = source.cachedServices.map(DebridServices::name)
             val status = when {
                 source.directUrl.isNotEmpty() -> "DIRECT STREAM"
@@ -1121,8 +1796,9 @@ class MainActivity : Activity() {
                 cachedOn.isNotEmpty() -> "CACHED · ${cachedOn.first()}"
                 else -> "TRANSFER MAY BE NEEDED"
             }
+            val limitNote = if (tooTall(source)) " · ABOVE THIS TV'S ${DecoderLimits.label(limit)} LIMIT" else ""
             choices.addChoice(TvChoiceRow(this, TvChoiceKeys.source(source), source.title, source.detail,
-                "$status · ${source.provider}", theme.palette, SourceBadges.from(source)) {
+                "$status$limitNote · ${source.provider}", theme.palette, SourceBadges.from(source)) {
                 if (!source.cached && source.directUrl.isEmpty()) {
                     val service = connected.first()
                     confirm("Add this source to your ${DebridServices.name(service)} account? A transfer may need time to finish.") {
@@ -1133,6 +1809,11 @@ class MainActivity : Activity() {
             })
         }
         focusAfterRender(id)
+        // Only a fresh search auto-plays; returning to this list leaves the choice to the viewer.
+        if (autoplay) ordered.firstOrNull { (it.cached || it.directUrl.isNotEmpty()) && !tooTall(it) }?.let { first ->
+            toast("Playing the top result · ${first.title.take(60)}")
+            resolve(first, identity)
+        }
     }
 
     private fun resolve(source: SourceItem, identity: PlaybackIdentity) {
@@ -1254,13 +1935,16 @@ class MainActivity : Activity() {
         }
         body.addView(button("Refresh downloads") { offcloudCloud() }, margin(220, 44, bottom = 10))
         read(id, { api.cloud() }) { downloads ->
-            val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
             if (downloads.isEmpty()) body.addView(text("No Offcloud downloads yet. Choose a source from a movie or episode.", 15, muted))
-            downloads.forEach { download ->
-                choices.addChoice(cloudRow("offcloud:${download.id}", download.name, download.status) {
-                    if (download.status == "downloaded") navigate { offcloudCloudFiles(download) }
-                    else toast("This download is ${download.status.ifBlank { "not ready" }}. Refresh after Offcloud finishes processing it.")
-                })
+            val open: (OffcloudDownload) -> Unit = { download ->
+                if (download.status == "downloaded") navigate { offcloudCloudFiles(download) }
+                else toast("This download is ${download.status.ifBlank { "not ready" }}. Refresh after Offcloud finishes processing it.")
+            }
+            if (flix) libraryGrid(downloads.map { download ->
+                LibraryEntry("offcloud:${download.id}", download.name, if (download.status == "downloaded") "Ready" else download.status.ifBlank { "Not ready" }) { open(download) }
+            }) else {
+                val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+                downloads.forEach { download -> choices.addChoice(cloudRow("offcloud:${download.id}", download.name, download.status) { open(download) }) }
             }
             focusAfterRender(id)
         }
@@ -1293,11 +1977,15 @@ class MainActivity : Activity() {
         listOf("torrents" to "Torrents", "usenet" to "Usenet", "webdl" to "Web downloads").forEach { (key, title) -> tabs.addView(button(title) { cloud(key) }, margin(150, 39, right = 8)) }
         read(id, { torbox.cloud(kind) }) { folders ->
             if (folders.isEmpty()) body.addView(text("Nothing here yet. Your TorBox downloads will appear in this library.", 15, muted))
-            val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
-            folders.forEach { folder -> choices.addChoice(cloudRow(TvChoiceKeys.folder(folder.kind, folder.id),
-                folder.name, if (folder.ready) "Ready to browse" else "Not ready yet") {
-                navigate { cloudFolder(folder) }
-            }) }
+            if (flix) libraryGrid(folders.map { folder ->
+                LibraryEntry(TvChoiceKeys.folder(folder.kind, folder.id), folder.name, if (folder.ready) "Ready" else "Not ready yet") { navigate { cloudFolder(folder) } }
+            }) else {
+                val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+                folders.forEach { folder -> choices.addChoice(cloudRow(TvChoiceKeys.folder(folder.kind, folder.id),
+                    folder.name, if (folder.ready) "Ready to browse" else "Not ready yet") {
+                    navigate { cloudFolder(folder) }
+                }) }
+            }
         }
     }
 
@@ -1313,25 +2001,52 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Looks up catalog artwork for a download's filename; artwork hints never become playback or tracking identities. */
+    private fun cloudArtworkFor(query: CloudMetadata.Query, done: (MediaItemData?) -> Unit) {
+        val cacheKey = "${query.type}:${query.title}:${query.year}"
+        val request = generation
+        metadataWorker.execute {
+            if (request != generation || Thread.currentThread().isInterrupted) return@execute
+            val found = synchronized(cloudArtwork) {
+                if (cloudArtwork.containsKey(cacheKey)) Result.success(cloudArtwork[cacheKey]) else runCatching {
+                    val candidates = query.type?.let { catalog.search(query.title, it) } ?: catalog.searchAll(query.title).items
+                    CloudMetadata.match(query, candidates)
+                }.onSuccess { if (cloudArtwork.size > 200) cloudArtwork.clear(); cloudArtwork[cacheKey] = it }
+            }
+            runOnUiThread { if (request == generation && !isDestroyed) done(found.getOrNull()) }
+        }
+    }
+
+    private class LibraryEntry(val key: String, val name: String, val caption: String, val action: () -> Unit)
+
+    /** Flix library: downloads as landscape cards in the same four-column grid as "See all", with matched artwork. */
+    private fun libraryGrid(entries: List<LibraryEntry>) {
+        val width = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2
+        val count = 4
+        val cardWidth = (width - 6 - (count - 1) * theme.layout.cardGapDp) / count
+        entries.chunked(count).forEach { chunk ->
+            val row = LinearLayout(this).apply { tag = "media-grid-row"; clipChildren = false }
+            body.addView(row, margin(-1, -2, top = 14))
+            chunk.forEach { entry ->
+                val query = CloudMetadata.query(entry.name)
+                val title = query?.let { listOf(it.title, it.year).filter(String::isNotBlank).joinToString(" ") } ?: entry.name
+                val card = tile(MediaItemData("", query?.type ?: "movie", title), caption = entry.caption, action = entry.action) as FrameLayout
+                card.tag = entry.key; card.contentDescription = "$title, ${entry.caption}"
+                row.addView(card, margin(cardWidth, cardWidth * 9 / 16, right = theme.layout.cardGapDp))
+                if (query != null) cloudArtworkFor(query) { match ->
+                    val address = match?.background?.ifBlank { match.poster }.orEmpty()
+                    val art = ((card.getChildAt(0) as? ViewGroup)?.getChildAt(0) as? ImageView)
+                    if (art != null && card.isAttachedToWindow && address.isNotBlank()) image(art, thumbnail(address))
+                }
+            }
+        }
+    }
+
     private fun cloudRow(key: String, filename: String, detail: String, action: () -> Unit): TvChoiceRow {
         val row = TvChoiceRow(this, key, filename, detail, palette = theme.palette, withPoster = true, action = action)
         val query = CloudMetadata.query(filename) ?: return row
-        val cacheKey = "${query.type}:${query.title}:${query.year}"
-        // Artwork hints never become playback/tracking identities without explicit identification.
-        fun loadPoster() {
-            val request = generation
-            metadataWorker.execute {
-                if (request != generation || Thread.currentThread().isInterrupted) return@execute
-                val found = synchronized(cloudArtwork) {
-                    if (cloudArtwork.containsKey(cacheKey)) Result.success(cloudArtwork[cacheKey]) else runCatching {
-                        val candidates = query.type?.let { catalog.search(query.title, it) } ?: catalog.searchAll(query.title).items
-                        CloudMetadata.match(query, candidates)
-                    }.onSuccess { if (cloudArtwork.size > 200) cloudArtwork.clear(); cloudArtwork[cacheKey] = it }
-                }
-                runOnUiThread {
-                    if (request == generation && row.isAttachedToWindow && !isDestroyed) found.getOrNull()?.poster?.takeIf(String::isNotBlank)?.let { image(row.poster, it) }
-                }
-            }
+        fun loadPoster() = cloudArtworkFor(query) { found ->
+            if (row.isAttachedToWindow) found?.poster?.takeIf(String::isNotBlank)?.let { image(row.poster, it) }
         }
         row.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(view: View) { if (row.poster.drawable == null) loadPoster() }
@@ -1381,7 +2096,7 @@ class MainActivity : Activity() {
     }
 
     private fun identifyCloud(folder: CloudFolder, file: CloudFile, type: String) {
-        val input = EditText(this).apply { hint = "Search title"; setSingleLine() }
+        val input = TvEditText(this).apply { hint = "Search title"; setSingleLine() }
         AlertDialog.Builder(this).setTitle("Identify ${if (type == "movie") "movie" else "show"}").setView(input).setPositiveButton("Search") { _, _ ->
             val query = input.text.toString().trim()
             if (query.isBlank()) return@setPositiveButton
@@ -1395,7 +2110,7 @@ class MainActivity : Activity() {
                     }
                 }.setNegativeButton("Cancel", null).show()
             }
-        }.setNegativeButton("Cancel", null).show()
+        }.setNegativeButton("Cancel", null).show().submitOnEnter(input)
     }
 
     private fun chooseCloudEpisode(folder: CloudFolder, file: CloudFile, detail: MediaItemData) {
@@ -1454,18 +2169,8 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             overridePendingTransition(0, 0)
         }
-        if (!resumeImmediately && (history.resume(key) > 0 || remotePercent > 0)) AlertDialog.Builder(this).setTitle("Resume watching?")
-            .setMessage(if (history.resume(key) > 0) "Continue from ${history.resume(key) / 60_000} minutes?" else "Continue from ${remotePercent.toInt()}% watched on WeTrakr?")
-            .setPositiveButton("Resume") { _, _ -> start() }
-            .setNeutralButton("Start over") { _, _ ->
-                startActivity(Intent(this, PlayerActivity::class.java).putExtra("url", url).putExtra("title", title).putExtra("identity", identity?.toJson()?.toString()).putExtra("key", key)
-                    .putExtra("debrid_service", PlaybackDebrid.normalize(debridService))
-                    .putExtra("playback_account", LastPlayedLinks(store).scope(PlaybackDebrid.normalize(debridService))))
-                @Suppress("DEPRECATION")
-                overridePendingTransition(0, 0)
-            }
-            .setNegativeButton("Cancel") { _, _ -> launchingPlayer = false }.setOnCancelListener { launchingPlayer = false }.show()
-        else start()
+        // Playback always continues where it left off; the timeline can still scrub back to the start.
+        start()
     }
 
     private fun weTrakrPage() {
@@ -1491,7 +2196,7 @@ class MainActivity : Activity() {
                 progress.forEach { (identity, percent) ->
                     remoteProgress[identityKey(identity)] = percent
                     host.addView(button("${identity.title}${if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""}   ·   ${percent.toInt()}%") {
-                        continuePlayback(identity)
+                        navigate { showSources(identity) }
                     }.apply { continueOptions(this, "", identity, identity.title) }, margin(-1, 44, bottom = 7))
                 }
             }
@@ -1572,9 +2277,45 @@ class MainActivity : Activity() {
         current = { settings() }
         destination = "settings"; refreshNavigation()
         page("Settings", "Make POV yours.")
-        section("Appearance")
-        body.addView(button("Themes · ${theme.displayName}  ›") { navigate { appearance() } }, margin(-1, 46, bottom = 9))
-        body.addView(button("Subtitle style · text and size  ›") {
+
+        val home = settingsGroup("Home & appearance", "home")
+        settingsRow(home, "Theme", theme.displayName, "Layout, colours and artwork style.") { navigate { appearance() } }
+        val tmdbKey = store.get(TMDB_KEY)
+        settingsRow(home, "TMDB", if (tmdbKey.isBlank()) "Not set" else "Connected", status = tmdbKey.isNotBlank()) {
+            inputSetting("TMDB API key", "TMDB API key or API Read Access Token", "", secret = true) { key ->
+                load(generation, { TmdbCatalog(this, key, tmdbRegion()).validate() }) { store.put(TMDB_KEY, key); toast("TMDB connected. Home now uses TMDB catalogs."); refreshSettings() }
+            }
+        }
+        settingsRow(home, "Cinema country", countryName(tmdbRegion()), "Used for Now Playing in Cinemas.") {
+            val countries = java.util.Locale.getISOCountries().map { it to countryName(it) }.sortedBy { it.second }
+            AlertDialog.Builder(this).setTitle("Now Playing in Cinemas · country")
+                .setSingleChoiceItems(countries.map { it.second }.toTypedArray(), countries.indexOfFirst { it.first == tmdbRegion() }) { dialog, index ->
+                    store.put(TMDB_REGION, countries[index].first); dialog.dismiss(); refreshSettings()
+                }.setNegativeButton("Cancel", null).show()
+        }
+        if (tmdbKey.isNotBlank()) settingsRow(home, "Remove TMDB key", danger = true) {
+            confirm("Remove your TMDB key? Home will use Cinemeta catalogs.") { store.remove(TMDB_KEY); refreshSettings() }
+        }
+
+        val playback = settingsGroup("Playback", "nowplaying")
+        settingsRow(playback, "Source sorting", SourceSortPreferences(this).label,
+            "Quality first, then file size within each quality. Unknown sizes and resolutions appear last.") {
+            SourceSortPreferences.show(this) { refreshSettings() }
+        }
+        settingsToggle(playback, "Auto-play first result", "Play starts the first cached or direct link in your sort order. The full list stays open behind it, so you can pick another link if it fails.",
+            store.get(AUTOPLAY_FIRST) == "true") { on -> store.put(AUTOPLAY_FIRST, on.toString()) }
+        val videoPreferences = VideoCompatibilityPreferences(this)
+        settingsRow(playback, "Dolby Vision", videoPreferences.mode.label,
+            "Applies to the next video. Uses a verified Profile 7/8 HDR10 or HLG base picture when supported. Profile 5 needs compatible Dolby Vision decoding.") {
+            AlertDialog.Builder(this).setTitle("Dolby Vision compatibility")
+                .setSingleChoiceItems(DolbyVisionMode.entries.map { it.label }.toTypedArray(), videoPreferences.mode.ordinal) { dialog, index ->
+                    videoPreferences.mode = DolbyVisionMode.entries[index]; dialog.dismiss(); refreshSettings()
+                }.setNegativeButton("Cancel", null).show()
+        }
+
+        val captions = settingsGroup("Subtitles & audio", "series")
+        val subtitlePreferences = SubtitlePreferences(this)
+        settingsRow(captions, "Subtitle style", "${subtitlePreferences.sizeLabel} · text and size") {
             val preferences = SubtitlePreferences(this)
             AlertDialog.Builder(this).setTitle("Subtitle style")
                 .setMultiChoiceItems(arrayOf("Transparent background", "Bold text"),
@@ -1585,77 +2326,153 @@ class MainActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("Subtitle size")
                         .setSingleChoiceItems(SubtitlePreferences.SIZE_LABELS.toTypedArray(), SubtitlePreferences.SIZES.indexOf(preferences.sizePercent)) { dialog, index ->
                             preferences.sizePercent = SubtitlePreferences.SIZES[index]
-                            InAppPlaybackSession.refreshSubtitleStyle(); dialog.dismiss()
+                            InAppPlaybackSession.refreshSubtitleStyle(); dialog.dismiss(); refreshSettings()
                         }.setPositiveButton("Done", null).show()
                 }.setPositiveButton("Done", null).show()
-        }, margin(-1, 46, bottom = 9))
-        val subtitlePreferences = SubtitlePreferences(this)
-        body.addView(button("Subtitle position · ${subtitlePreferences.positionLabel}  ›") {
+        }
+        settingsRow(captions, "Subtitle position", subtitlePreferences.positionLabel) {
             SubtitlePositionPicker.show(this, liveVideo = false,
-                changed = { InAppPlaybackSession.refreshSubtitleStyle() }, dismissed = { settings() })
-        }, margin(-1, 46, bottom = 9))
-        body.addView(button("Subtitle language · ${subtitlePreferences.languageLabel}  ›") { subtitleLanguage() }, margin(-1, 46, bottom = 9))
-        body.addView(text("Selects your preferred subtitle language when available. You can choose another track in the player.", 12, muted), margin(-1, -2, bottom = 10))
-        val audioPreferences = AudioPreferences(this)
-        body.addView(button("Audio language · ${audioPreferences.languageLabel}  ›") { audioLanguage() }, margin(-1, 46, bottom = 9))
-        body.addView(text("Selects your preferred audio language when available. You can choose another audio track in the player.", 12, muted), margin(-1, -2, bottom = 10))
-        section("Source results")
-        body.addView(button("Source sorting · ${SourceSortPreferences(this).label}  ›") {
-            SourceSortPreferences.show(this) { settings() }
-        }, margin(-1, 46, bottom = 9))
-        body.addView(text("Quality is sorted first, then file size within each quality. Sizes and resolutions are reported by the source provider; unavailable values appear last.", 12, muted), margin(-1, -2, bottom = 10))
-        section("Video")
-        val videoPreferences = VideoCompatibilityPreferences(this)
-        body.addView(button("Dolby Vision · ${videoPreferences.mode.label}  ›") {
-            AlertDialog.Builder(this).setTitle("Dolby Vision compatibility")
-                .setSingleChoiceItems(DolbyVisionMode.entries.map { it.label }.toTypedArray(), videoPreferences.mode.ordinal) { dialog, index ->
-                    videoPreferences.mode = DolbyVisionMode.entries[index]; dialog.dismiss(); settings()
-                }.setNegativeButton("Cancel", null).show()
-        }, margin(-1, 46, bottom = 9))
-        body.addView(text("Applies to the next video. Uses a verified Profile 7/8 HDR10 or HLG base picture when supported by the TV. Profile 5 requires compatible Dolby Vision decoding.", 12, muted), margin(-1, -2, bottom = 10))
-        section("Accounts")
-        body.addView(button(if (store.has("torbox.token")) "TorBox · connected · reconnect" else "Connect TorBox") { startTorBox() }, margin(-1, 44, bottom = 8))
+                changed = { InAppPlaybackSession.refreshSubtitleStyle() }, dismissed = { refreshSettings() })
+        }
+        settingsRow(captions, "Subtitle language", subtitlePreferences.languageLabel, "Chosen automatically when available. You can pick another track in the player.") { subtitleLanguage() }
+        settingsRow(captions, "Audio language", AudioPreferences(this).languageLabel, "Chosen automatically when available. You can pick another track in the player.") { audioLanguage() }
+
+        val services = settingsGroup("Streaming services", "library")
         val offcloud = OffcloudApi(store)
-        body.addView(button(if (offcloud.connected()) "Offcloud · connected · replace API key" else "Connect Offcloud with API key") {
-            connectOffcloud()
-        }, margin(-1, 44, bottom = 8))
-        if (offcloud.connected()) body.addView(button("Disconnect Offcloud") {
-            confirm("Disconnect Offcloud on this device?") {
-                offcloud.disconnect()
-                settings()
-            }
-        }, margin(-1, 44, bottom = 8))
-        body.addView(button("Debrid priority ›") { debridPriority() }, margin(-1, 44, bottom = 8))
-        body.addView(text(DebridServices.priority(store).mapIndexed { index, id ->
-            "${index + 1}. ${DebridServices.name(id)}"
-        }.joinToString("\n"), 14, muted), margin(-1, -2, bottom = 8))
-        body.addView(text("All connected accounts are checked. Cached copies use the first available service in your priority order. Select a service to move it up or down.", 12, muted), margin(-1, -2, bottom = 10))
-        body.addView(button("Use TorBox API key") { inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { toast("TorBox connected"); settings() } } }, margin(-1, 44, bottom = 8))
-        if (store.has("torbox.token")) body.addView(button("Disconnect TorBox") { confirm("Disconnect TorBox on this device?") { torbox.disconnect(); settings() } }, margin(-1, 44, bottom = 8))
-        body.addView(button(if (wetrakr.connected()) "WeTrakr · connected · reconnect" else "Connect WeTrakr") { startWeTrakr() }, margin(-1, 44, bottom = 8))
-        if (wetrakr.connected()) body.addView(button("Disconnect WeTrakr") { confirm("Disconnect WeTrakr on this device?") {
-            wetrakr.disconnect(); wetrakrOutbox.clearPending(); remoteProgress.clear(); settings()
-        } }, margin(-1, 44, bottom = 8))
-        body.addView(button("WeTrakr scrobbling · ${if (wetrakr.scrobblingEnabled()) "On" else "Off"}") {
-            wetrakr.setScrobblingEnabled(!wetrakr.scrobblingEnabled()); wetrakrOutbox.clearPending(); settings()
-        }, margin(-1, 44, bottom = 8))
-        body.addView(text("Automatic playback updates only. Your library, Continue Watching and manual actions remain available when scrobbling is off.", 12, muted), margin(-1, -2, bottom = 10))
-        body.addView(button("WeTrakr liked lists on Home · ${if (store.get("wetrakr.home_liked_opt_in") == "true") "On" else "Off"}") {
-            store.put("wetrakr.home_liked_opt_in", (store.get("wetrakr.home_liked_opt_in") != "true").toString()); settings()
-        }, margin(-1, 44, bottom = 8))
-        section("App connections")
-        body.addView(button("WeTrakr app Client ID") { configureWeTrakr() }, margin(-1, 44, bottom = 8))
-        body.addView(text("Use the Client ID from WeTrakr Settings → API. Device-code login uses no client secret or callback URI. Library reads are cached to reduce development-key requests.", 12, muted), margin(-1, -2, bottom = 10))
-        body.addView(button("Source providers ›") { sourceProviders() }, margin(-1, 44, bottom = 8))
-        body.addView(text("Add your preferred HTTPS scraper URLs, give each a name, and turn providers on or off. Results combine enabled providers and merge matching files.", 12, muted), margin(-1, -2, bottom = 10))
-        section("Updates")
-        body.addView(button("Check for updates ›") { startActivity(Intent(this, UpdateActivity::class.java)) }, margin(-1, 44, bottom = 8))
-        body.addView(button("Check for updates on startup · ${if (store.get("updates.startup") == "true") "On" else "Off"}") {
-            store.put("updates.startup", (store.get("updates.startup") != "true").toString()); settings()
-        }, margin(-1, 44, bottom = 8))
-        section("About")
-        body.addView(text("POV Rajput · 0.2.13\nPOV Rajput fork by Rajput.\nOriginal Android TV port by Mark Mateo.\nBased on the original POV Kodi add-on by kodifitzwell.\nOriginal project: github.com/kodifitzwell/repo\nLicensed under GNU GPL version 3.\nWeTrakr tracking and API by alberdev, developer of WeTrakr (wetrakr.com).\nCatalogs: Cinemeta and Kitsu. Playback: AndroidX Media3.", 13, muted), margin(-1, -2, bottom = 12))
-        body.addView(button("Open-source notices") { AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show() }, margin(230, 42))
+        settingsRow(services, "Offcloud", if (offcloud.connected()) "Connected" else "Not connected",
+            if (offcloud.connected()) "Select to replace the API key." else "Connect with your Offcloud API key.", status = offcloud.connected()) { connectOffcloud() }
+        val torboxConnected = store.has("torbox.token")
+        settingsRow(services, "TorBox", if (torboxConnected) "Connected" else "Not connected",
+            "Sign in with a code on your phone or computer.", status = torboxConnected) { startTorBox() }
+        settingsRow(services, "TorBox API key", "", "Or paste your own TorBox API key instead of signing in.") {
+            inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { toast("TorBox connected"); refreshSettings() } }
+        }
+        settingsRow(services, "Debrid priority", DebridServices.priority(store).joinToString(" → ") { DebridServices.name(it) },
+            "All connected accounts are checked. Cached copies play from the first available service in this order.") { debridPriority() }
+        settingsRow(services, "Source providers", "", "Your HTTPS scraper add-ons, such as Torrentio. Results from enabled providers are merged.") { sourceProviders() }
+        if (offcloud.connected()) settingsRow(services, "Disconnect Offcloud", danger = true) {
+            confirm("Disconnect Offcloud on this device?") { offcloud.disconnect(); refreshSettings() }
+        }
+        if (torboxConnected) settingsRow(services, "Disconnect TorBox", danger = true) {
+            confirm("Disconnect TorBox on this device?") { torbox.disconnect(); refreshSettings() }
+        }
+
+        val tracking = settingsGroup("WeTrakr", "wetrakr")
+        settingsRow(tracking, "Account", if (wetrakr.connected()) "Connected" else "Not connected",
+            if (wetrakr.connected()) "Select to sign in again." else "Sign in with a code to sync watchlists and progress.", status = wetrakr.connected()) { startWeTrakr() }
+        settingsRow(tracking, "App Client ID", "", "From WeTrakr Settings → API. Device-code login needs no client secret.") { configureWeTrakr() }
+        settingsToggle(tracking, "Scrobbling", "Automatic playback updates. Your library, Continue Watching and manual actions still work when this is off.",
+            wetrakr.scrobblingEnabled(), contentLabel = "WeTrakr scrobbling") { on -> wetrakr.setScrobblingEnabled(on); wetrakrOutbox.clearPending() }
+        settingsToggle(tracking, "Liked lists on Home", "Shows your liked WeTrakr lists as rows on Home.",
+            store.get("wetrakr.home_liked_opt_in") == "true", contentLabel = "WeTrakr liked lists on Home") { on -> store.put("wetrakr.home_liked_opt_in", on.toString()) }
+        if (wetrakr.connected()) settingsRow(tracking, "Disconnect WeTrakr", danger = true) {
+            confirm("Disconnect WeTrakr on this device?") { wetrakr.disconnect(); wetrakrOutbox.clearPending(); remoteProgress.clear(); refreshSettings() }
+        }
+
+        val updates = settingsGroup("Updates", "settings")
+        settingsRow(updates, "Check for updates", "POV Rajput ${packageManager.getPackageInfo(packageName, 0).versionName.orEmpty().removeSuffix("-rajput")}") { startActivity(Intent(this, UpdateActivity::class.java)) }
+        settingsToggle(updates, "Check on startup", "Looks for a newer signed release each time the app opens.",
+            store.get("updates.startup") == "true", contentLabel = "Check for updates on startup") { on -> store.put("updates.startup", on.toString()) }
+
+        val about = settingsGroup("About", null)
+        about.addView(text("POV Rajput fork by Rajput · Android TV port by Mark Mateo · based on the POV Kodi add-on by kodifitzwell (github.com/kodifitzwell/repo). Licensed under GNU GPL v3. WeTrakr tracking and API by alberdev (wetrakr.com). Catalogs: TMDB, Cinemeta and Kitsu. This product uses the TMDB API but is not endorsed or certified by TMDB. Playback: AndroidX Media3.", 12, muted).apply {
+            setLineSpacing(dp(2).toFloat(), 1f); setPadding(dp(14), dp(12), dp(14), dp(12))
+        }, margin(-1, -2))
+        settingsRow(about, "Open-source notices") {
+            AlertDialog.Builder(this).setTitle("Open-source notices").setMessage(assets.open("NOTICE.txt").bufferedReader().use { it.readText() }).setPositiveButton("Close", null).show()
+        }
+        body.addView(View(this), margin(-1, 24))
+    }
+
+    /** A titled card that holds one group of settings rows. */
+    private fun settingsGroup(title: String, icon: String?): LinearLayout {
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        if (icon != null) header.addView(NavigationIconView(this, icon, muted), margin(16, 16, right = 8))
+        header.addView(text(title.uppercase(), 11, muted, true).apply { letterSpacing = 0.12f })
+        body.addView(header, margin(-1, -2, top = if (body.childCount <= 2) 6 else 22, bottom = 8))
+        val card = column().apply { background = rounded(if (flix) withAlpha(Color.WHITE, 13) else panel, 12); setPadding(dp(4), dp(4), dp(4), dp(4)) }
+        body.addView(card, margin(-1, -2))
+        return card
+    }
+
+    private fun settingsDivider(card: LinearLayout) {
+        if (card.childCount == 0) return
+        card.addView(View(this).apply { setBackgroundColor(withAlpha(Color.WHITE, 16)) }, margin(-1, 1).apply { leftMargin = dp(12); rightMargin = dp(12) })
+    }
+
+    /** One settings row: label and help text on the left, the current value and a chevron on the right. */
+    private fun settingsRow(card: LinearLayout, label: String, value: String = "", description: String = "",
+                            status: Boolean? = null, danger: Boolean = false, action: () -> Unit) {
+        settingsDivider(card)
+        val row = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(11), dp(12), dp(11))
+            isFocusable = true; isFocusableInTouchMode = true; isClickable = true; tag = "setting:$label"
+            contentDescription = if (value.isBlank()) label else "$label · $value"
+        }
+        val copy = column()
+        copy.addView(text(label, 14, if (danger) 0xFFFF6B6B.toInt() else ink, true))
+        if (description.isNotBlank()) copy.addView(text(description, 11, muted).apply { setLineSpacing(dp(1).toFloat(), 1f) }, margin(-1, -2, top = 4))
+        row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+        if (value.isNotBlank()) {
+            // A connection value is tinted: green when connected, muted otherwise.
+            val tint = when (status) { true -> 0xFF46D369.toInt(); else -> muted }
+            row.addView(text(value, 12, tint, true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; gravity = Gravity.END }, margin(-2, -2).apply { leftMargin = dp(16) })
+        }
+        if (!danger) row.addView(text("›", 18, muted, true), margin(-2, -2).apply { leftMargin = dp(10) })
+        row.setOnFocusChangeListener { view, focused ->
+            view.background = if (focused) rounded(withAlpha(Color.WHITE, if (flix) 34 else 24), 9) else null
+            view.foreground = if (focused) FocusRingDrawable(if (flix) Color.WHITE else accent, dp(9).toFloat(), true, dp(1).toFloat()) else null
+        }
+        row.setOnClickListener { action() }
+        card.addView(row, margin(-1, -2))
+    }
+
+    private fun settingsToggle(card: LinearLayout, label: String, description: String, initial: Boolean,
+                               contentLabel: String = label, changed: (Boolean) -> Unit) {
+        settingsDivider(card)
+        card.addView(toggleRow(label, description, initial, contentLabel, changed), margin(-1, -2))
+    }
+
+    /** Rebuilds Settings after a change, returning focus and scroll to the row the viewer was on. */
+    private fun refreshSettings() {
+        val index = focusController.focusedIndex(); val scroll = scroller.scrollY
+        settings()
+        body.post { if (!isDestroyed && destination == "settings") focusController.restoreIndex(index, scroll) }
+    }
+
+    /** A settings row with a sliding switch that changes in place; the page never reloads. */
+    private fun toggleRow(label: String, description: String, initial: Boolean, contentLabel: String = label, changed: (Boolean) -> Unit): View {
+        var on = initial
+        val row = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(11), dp(12), dp(11))
+            isFocusable = true; isFocusableInTouchMode = true; isClickable = true; tag = "toggle:$label"
+        }
+        val copy = column()
+        val title = text(label, 14, ink, true)
+        copy.addView(title)
+        copy.addView(text(description, 11, muted).apply { setLineSpacing(dp(1).toFloat(), 1f) }, margin(-1, -2, top = 4))
+        row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+        val state = text("", 12, muted, true).apply { gravity = Gravity.END }
+        row.addView(state, margin(40, -2, right = 10))
+        val track = FrameLayout(this)
+        val knob = View(this).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) } }
+        track.addView(knob, FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER_VERTICAL).apply { leftMargin = dp(3) })
+        row.addView(track, margin(44, 24))
+        fun paint(animate: Boolean) {
+            state.text = if (on) "On" else "Off"; state.setTextColor(if (on) ink else muted)
+            track.background = rounded(if (on) accent else withAlpha(Color.WHITE, 60), 12)
+            val offset = if (on) dp(20).toFloat() else 0f
+            if (animate) knob.animate().translationX(offset).setDuration(140).start() else knob.translationX = offset
+            row.contentDescription = "$contentLabel · ${if (on) "On" else "Off"}"
+        }
+        fun focus(focused: Boolean) {
+            row.background = if (focused) rounded(withAlpha(Color.WHITE, if (flix) 34 else 24), 9) else null
+            row.foreground = if (focused) FocusRingDrawable(if (flix) Color.WHITE else accent, dp(9).toFloat(), true, dp(1).toFloat()) else null
+        }
+        row.setOnFocusChangeListener { _, focused -> focus(focused) }
+        row.setOnClickListener { on = !on; changed(on); paint(true) }
+        paint(false); focus(false)
+        return row
     }
 
     private fun sourceProviders() {
@@ -1692,8 +2509,8 @@ class MainActivity : Activity() {
 
     private fun editSourceProvider(provider: SourceProvider?) {
         val content = column().apply { setPadding(dp(18), dp(8), dp(18), dp(8)) }
-        val name = EditText(this).apply { hint = "Provider name"; setSingleLine(); setText(provider?.name.orEmpty()) }
-        val address = EditText(this).apply {
+        val name = TvEditText(this).apply { hint = "Provider name"; setSingleLine(); setText(provider?.name.orEmpty()) }
+        val address = TvEditText(this).apply {
             hint = "HTTPS Stremio-compatible add-on URL"; setSingleLine()
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             setText(provider?.address.orEmpty())
@@ -1702,7 +2519,7 @@ class MainActivity : Activity() {
         content.addView(name, margin(-1, -2)); content.addView(address, margin(-1, -2, top = 8)); content.addView(status, margin(-1, -2, top = 8))
         val dialog = AlertDialog.Builder(this).setTitle(if (provider == null) "Add source provider" else "Edit source provider")
             .setView(content).setPositiveButton("Save", null).setNegativeButton("Cancel") { _, _ -> sourceProviders() }.create()
-        dialog.show()
+        dialog.show(); dialog.submitOnEnter(name, address)
         dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
             try {
                 val config = SourceProviders(store)
@@ -1717,7 +2534,7 @@ class MainActivity : Activity() {
 
     private fun connectOffcloud() {
         val content = column().apply { setPadding(dp(18), dp(8), dp(18), dp(8)) }
-        val input = EditText(this).apply {
+        val input = TvEditText(this).apply {
             hint = "Paste your own Offcloud API key"; setSingleLine()
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         }
@@ -1727,7 +2544,7 @@ class MainActivity : Activity() {
         val dialog = AlertDialog.Builder(this).setTitle("Offcloud API key").setView(content)
             .setPositiveButton("Connect", null).setNegativeButton("Cancel", null).create()
         dialog.setOnDismissListener { cancelled.set(true); input.setText("") }
-        dialog.show()
+        dialog.show(); dialog.submitOnEnter(input)
         dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
             val key = input.text.toString().trim()
             if (key.isBlank()) { input.error = "Enter your Offcloud API key"; return@setOnClickListener }
@@ -1795,8 +2612,40 @@ class MainActivity : Activity() {
     private fun identityKey(identity: PlaybackIdentity) = "${identity.imdbId}:${identity.season}:${identity.episode}"
 
     private fun inputSetting(title: String, hintText: String, initial: String, secret: Boolean = false, done: (String) -> Unit) {
-        val input = EditText(this).apply { hint = hintText; setText(initial); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT or if (secret) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD }
-        AlertDialog.Builder(this).setTitle(title).setView(input).setPositiveButton("Save") { _, _ -> val value = input.text.toString().trim(); if (value.isNotBlank()) done(value) }.setNegativeButton("Cancel", null).show()
+        val input = TvEditText(this).apply { hint = hintText; setText(initial); setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT or if (secret) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD }
+        AlertDialog.Builder(this).setTitle(title).setView(input).setPositiveButton("Save") { _, _ -> val value = input.text.toString().trim(); if (value.isNotBlank()) done(value) }.setNegativeButton("Cancel", null).show().submitOnEnter(input)
+    }
+
+    private fun hideKeyboard(field: View) =
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(field.windowToken, 0)
+
+    /**
+     * TV keyboards: Enter on the last field presses the dialog's main action and earlier fields advance;
+     * Back closes the keyboard and moves focus to that action, so nobody has to walk past Cancel.
+     */
+    private fun AlertDialog.submitOnEnter(vararg fields: TvEditText): AlertDialog {
+        val positive = getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+        fields.forEachIndexed { index, field ->
+            val last = index == fields.lastIndex
+            field.imeOptions = if (last) android.view.inputmethod.EditorInfo.IME_ACTION_DONE else android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
+            fun advance(): Boolean {
+                hideKeyboard(field)
+                if (last) positive?.let { it.requestFocus(); it.performClick() } else fields[index + 1].requestFocus()
+                return true
+            }
+            field.setOnEditorActionListener { _, action, event ->
+                when {
+                    action != android.view.inputmethod.EditorInfo.IME_NULL -> advance()
+                    event?.keyCode in setOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER) -> { if (event?.action == KeyEvent.ACTION_UP) advance(); true }
+                    else -> false
+                }
+            }
+            field.setOnKeyListener { _, key, event ->
+                if (key == KeyEvent.KEYCODE_ENTER || key == KeyEvent.KEYCODE_NUMPAD_ENTER) { if (event.action == KeyEvent.ACTION_UP) advance(); true } else false
+            }
+            field.onBack = { hideKeyboard(field); positive?.requestFocus() }
+        }
+        return this
     }
 
     private fun <T> read(id: Int, work: () -> T, done: (T) -> Unit) = load(id, work, readOnly = true, done = done)
@@ -1804,10 +2653,12 @@ class MainActivity : Activity() {
     private fun <T> load(id: Int, work: () -> T, readOnly: Boolean = false, done: (T) -> Unit) {
         pendingLoads[id] = pendingLoads[id].orZero() + 1
         val progress = text("Loading…", 13, muted); body.addView(progress, margin(-1, -2, top = 12, bottom = 12))
+        // Flix Home loads behind its splash and backdrop; a text label there only flashes in a corner.
+        if (flix && isHome) progress.visibility = View.INVISIBLE
         worker.execute {
             if (readOnly && id != generation) { runOnUiThread { pendingLoads[id] = (pendingLoads[id].orZero() - 1).coerceAtLeast(0) }; return@execute }
             try { val result = work(); runOnUiThread { pendingLoads[id] = (pendingLoads[id].orZero() - 1).coerceAtLeast(0); if (id == generation && !isFinishing && !isDestroyed) { body.removeView(progress); done(result); focusAfterRender(id) } } }
-            catch (error: Exception) { runOnUiThread { pendingLoads[id] = (pendingLoads[id].orZero() - 1).coerceAtLeast(0); if (id == generation && !isFinishing && !isDestroyed) { body.removeView(progress); showError(error); focusAfterRender(id) } } }
+            catch (error: Exception) { runOnUiThread { pendingLoads[id] = (pendingLoads[id].orZero() - 1).coerceAtLeast(0); if (id == generation && !isFinishing && !isDestroyed) { body.removeView(progress); showError(error); focusAfterRender(id); dismissSplash() } } }
         }
     }
 
@@ -1817,7 +2668,8 @@ class MainActivity : Activity() {
         body.addView(button("Try again") { current() }, margin(150, 40, bottom = 12))
     }
     private fun cardWidth(): Int {
-        val visible = when (theme) { ThemeSpec.CINEMATIC -> 4; ThemeSpec.DASHBOARD -> 3; else -> 5 }
+        if (flix) return theme.layout.cardWidthDp
+        val visible = 5
         val available = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2 - 13
         return minOf(theme.layout.cardWidthDp, (available - (visible - 1) * theme.layout.cardGapDp) / visible)
     }
@@ -1827,6 +2679,23 @@ class MainActivity : Activity() {
     }
     private fun mediaRow(title: String, items: List<MediaItemData>, host: LinearLayout = body) {
         if (items.isEmpty()) return
+        if (flix) {
+            // One press per shelf: the title is a label and "See all" closes the row.
+            host.addView(text(title, theme.layout.sectionTitleSizeSp, ink, true), margin(-1, -2, top = 14, bottom = 6))
+            val row = horizontalRow(host)
+            if (title.contains("watchlist", ignoreCase = true)) row.setTag(R.id.pov_list_scope, "watchlist:${items.first().type}")
+            items.take(20).forEach { row.addView(card(it).apply { tag = "row:$title:${it.type}:${it.imdbId}" }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp)) }
+            row.addView(text("See all  ›", 13, ink, true).apply {
+                gravity = Gravity.CENTER; tag = "shelf:$title"; contentDescription = "See all $title"
+                isFocusable = true; isFocusableInTouchMode = true; isClickable = true; background = rounded(withAlpha(Color.WHITE, 22), theme.layout.cornerRadiusDp)
+                setOnFocusChangeListener { view, focused ->
+                    view.background = rounded(if (focused) Color.WHITE else withAlpha(Color.WHITE, 22), theme.layout.cornerRadiusDp)
+                    setTextColor(if (focused) Color.BLACK else ink)
+                }
+                setOnClickListener { navigate { shelfGrid(title, items) } }
+            }, margin(110, theme.layout.cardHeightDp))
+            return
+        }
         host.addView(button("$title  ›") {
             navigate { shelfGrid(title, items) }
         }.apply { tag = "shelf:$title" }, margin(-1, 40, top = 10, bottom = 7))
@@ -1856,12 +2725,15 @@ class MainActivity : Activity() {
     private fun mediaGrid(items: List<MediaItemData>, showType: Boolean = false, host: LinearLayout = body) {
         if (items.isEmpty()) { host.addView(text("No titles found. Try a different search.", 14, muted)); return }
         val width = 960 - theme.layout.railWidthDp - theme.layout.contentInsetDp * 2
-        val count = (width / (cardWidth() + theme.layout.cardGapDp)).coerceAtLeast(1)
+        val count = if (flix) 4 else (width / (cardWidth() + theme.layout.cardGapDp)).coerceAtLeast(1)
+        // Streaming grids stretch their columns to the full content width.
+        val gridWidth = if (flix) (width - 6 - (count - 1) * theme.layout.cardGapDp) / count else cardWidth()
+        val gridHeight = if (flix) gridWidth * 9 / 16 else theme.layout.cardHeightDp
         items.chunked(count).forEach { chunk ->
             val row = LinearLayout(this).apply { tag = "media-grid-row" }; host.addView(row, margin(-1, -2, top = 14))
             chunk.forEach { item ->
                 val view = if (showType) tile(item, caption = listOf(if (item.type == "movie") "Movie" else "TV show", item.year).filter { it.isNotBlank() }.joinToString(" · ")) { navigate { details(item) } } else card(item)
-                row.addView(view, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
+                row.addView(view, margin(gridWidth, gridHeight, right = theme.layout.cardGapDp))
             }
         }
     }
@@ -1875,16 +2747,25 @@ class MainActivity : Activity() {
             tag = "media:${item.type}:${item.imdbId.ifBlank { item.title }}"
         }
         val artFrame = FrameLayout(this).apply { background = rounded(panel, theme.layout.cornerRadiusDp); clipToOutline = true }
-        val art = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+        val art = FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         artFrame.addView(art, FrameLayout.LayoutParams(-1, -1))
         val fallback = if (item.imdbId.matches(Regex("tt\\d+"))) "https://images.metahub.space/${if (shape == CardFormat.POSTER) "poster" else "background"}/medium/${item.imdbId}/img" else ""
-        image(art, (if (shape == CardFormat.POSTER) item.poster else item.background).ifBlank { fallback.ifBlank { item.poster } })
+        image(art, thumbnail((if (shape == CardFormat.POSTER) item.poster else item.background).ifBlank { fallback.ifBlank { item.poster } }))
         artFrame.addView(View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
             intArrayOf(0xE8000000.toInt(), 0x08000000, Color.TRANSPARENT)) }, FrameLayout.LayoutParams(-1, -1))
         val labels = column().apply { setPadding(dp(10), dp(5), dp(9), dp(if (progress != null) 17 else 9)) }
-        labels.addView(text(item.title, if (theme == ThemeSpec.DASHBOARD) 14 else 12, Color.WHITE, true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END })
+        val name = text(item.title, 12, Color.WHITE, true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
+        if (flix && logoFor(item).isNotBlank()) {
+            // Title artwork replaces the plain caption once it loads; both share one slot so the swap never re-lays out the row.
+            val slot = FrameLayout(this).apply { minimumHeight = dp(30) }
+            val logo = FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START; visibility = View.INVISIBLE }
+            slot.addView(logo, FrameLayout.LayoutParams(-1, dp(30), Gravity.BOTTOM))
+            slot.addView(name, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+            labels.addView(slot, margin(-1, -2))
+            image(logo, logoFor(item)) { loaded -> if (loaded) { logo.visibility = View.VISIBLE; name.visibility = View.INVISIBLE } }
+        } else labels.addView(name)
         val secondary = caption.ifBlank { item.year }
-        if (secondary.isNotBlank() && (caption.isNotBlank() || shape == CardFormat.LANDSCAPE || theme == ThemeSpec.DASHBOARD)) labels.addView(text(secondary, 10, 0xFFCFD8E4.toInt()), margin(-1, -2, top = 2))
+        if (secondary.isNotBlank() && (caption.isNotBlank() || shape == CardFormat.LANDSCAPE)) labels.addView(text(secondary, 10, 0xFFCFD8E4.toInt()), margin(-1, -2, top = 2))
         artFrame.addView(labels, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         frame.addView(artFrame, FrameLayout.LayoutParams(-1, -1))
         if (progress != null) {
@@ -1897,34 +2778,113 @@ class MainActivity : Activity() {
                 if (fill.layoutParams.width != targetWidth) fill.layoutParams = fill.layoutParams.apply { width = targetWidth }
             }
         }
-        frame.foreground = FocusRingDrawable(theme.palette.border, dp(theme.layout.cornerRadiusDp).toFloat(), false, dp(1).toFloat())
+        frame.foreground = if (flix) null else FocusRingDrawable(theme.palette.border, dp(theme.layout.cornerRadiusDp).toFloat(), false, dp(1).toFloat())
         frame.setOnFocusChangeListener { view, focused ->
-            view.foreground = FocusRingDrawable(if (focused) accent else theme.palette.border, dp(theme.layout.cornerRadiusDp).toFloat(), focused, dp(1).toFloat())
+            view.foreground = if (flix) { if (focused) FocusRingDrawable(Color.WHITE, dp(theme.layout.cornerRadiusDp).toFloat(), true, dp(1).toFloat()) else null }
+                else FocusRingDrawable(if (focused) accent else theme.palette.border, dp(theme.layout.cornerRadiusDp).toFloat(), focused, dp(1).toFloat())
             view.animate().scaleX(if (focused) theme.layout.focusScale else 1f).scaleY(if (focused) theme.layout.focusScale else 1f).setDuration(130).start()
+            if (focused) scheduleFeature(item)
         }
         frame.setOnClickListener { action() }
         return frame
     }
 
-    private fun image(view: ImageView, address: String) {
-        if (!address.startsWith("https://")) return
-        if (view.tag != address) view.setImageDrawable(null)
+    private fun image(view: ImageView, address: String, keep: Boolean = false, feature: Boolean = false, loaded: ((Boolean) -> Unit)? = null) {
+        if (!address.startsWith("https://")) { loaded?.invoke(false); return }
+        if (view.tag != address && !keep) view.setImageDrawable(null)
         view.tag = address
-        bitmapCache.get(address)?.let { view.setImageBitmap(it); return }
-        images.execute {
+        val backdrop = flix && view === backdropArt
+        // Home's corner backdrop only needs soft edges; full-screen (details) art needs heavier shading under its text.
+        val corner = backdrop && heroBackdrop.layoutParams.width > 0
+        val key = if (corner) "backdrop-corner:$address" else if (backdrop) "backdrop:$address" else address
+        bitmapCache.get(key)?.let { view.setImageBitmap(it); loaded?.invoke(true); return }
+        // Decode only as large as the slot: cards ~200dp, feature art ~360dp, the backdrop at 1280px.
+        val target = when { backdrop -> BACKDROP_WIDTH; feature || view.width >= dp(350) -> dp(360); else -> dp(200) }
+        val load = Runnable {
             try {
-                val connection = URL(address).openConnection() as HttpsURLConnection
-                connection.connectTimeout = 12_000; connection.readTimeout = 12_000
-                val bitmap = try { connection.inputStream.use { stream -> BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = if (view.width >= dp(350)) 1 else 2 }) } } finally { connection.disconnect() }
-                if (bitmap != null) { bitmapCache.put(address, bitmap); runOnUiThread { if (!isDestroyed && view.tag == address) view.setImageBitmap(bitmap) } }
-            } catch (_: Exception) { /* The title remains usable when artwork is unavailable. */ }
+                if (view.tag != address) return@Runnable
+                bitmapCache.get(key)?.let { cached -> runOnUiThread { if (!isDestroyed && view.tag == address) { view.setImageBitmap(cached); loaded?.invoke(true) } }; return@Runnable }
+                val bitmap = fetchBitmap(address, target)?.let { if (backdrop) shadedBackdrop(it, corner) else it }
+                if (bitmap != null) { bitmapCache.put(key, bitmap); runOnUiThread { if (!isDestroyed && view.tag == address) { view.setImageBitmap(bitmap); loaded?.invoke(true) } } }
+                else if (loaded != null) runOnUiThread { if (!isDestroyed && view.tag == address) loaded(false) }
+            } catch (_: Exception) {
+                /* The title remains usable when artwork is unavailable. */
+                if (loaded != null) runOnUiThread { if (!isDestroyed && view.tag == address) loaded(false) }
+            }
+        }
+        if (feature || backdrop) featureImages.execute(load) else images.execute(ImageTask(generation, imageOrder++, load))
+    }
+
+    private fun fetchBitmap(address: String, targetWidth: Int): Bitmap? {
+        val connection = URL(address).openConnection() as HttpsURLConnection
+        connection.connectTimeout = 12_000; connection.readTimeout = 12_000
+        val bytes = try { connection.inputStream.use { it.readBytes() } } finally { connection.disconnect() }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= targetWidth) sample *= 2
+        // Opaque photos decode at 16 bits per pixel: half the memory and half the texture upload of a card.
+        // (Hardware bitmaps would avoid the upload, but this TV's GPU cannot draw them inside rounded clips.)
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
+            inSampleSize = sample; if (bounds.outMimeType == "image/jpeg") inPreferredConfig = Bitmap.Config.RGB_565
+        })
+        // Starts the texture upload on a render worker so the first draw does not stall a scroll frame.
+        bitmap?.prepareToDraw()
+        return bitmap
+    }
+
+    /** Bakes the flix backdrop's left and bottom shading into the artwork: one full-screen layer instead of three. */
+    private fun shadedBackdrop(source: Bitmap, corner: Boolean = false): Bitmap {
+        val width = BACKDROP_WIDTH; val height = BACKDROP_WIDTH * 9 / 16
+        val out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(out)
+        canvas.drawColor(bg)
+        val scale = maxOf(width.toFloat() / source.width, height.toFloat() / source.height)
+        val drawnWidth = source.width * scale; val drawnHeight = source.height * scale
+        canvas.drawBitmap(source, null, android.graphics.RectF((width - drawnWidth) / 2, (height - drawnHeight) / 2,
+            (width + drawnWidth) / 2, (height + drawnHeight) / 2), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        val shade = android.graphics.Paint()
+        shade.shader = android.graphics.LinearGradient(0f, 0f, width.toFloat(), 0f,
+            if (corner) intArrayOf(bg, withAlpha(bg, 120), withAlpha(bg, 0), withAlpha(bg, 0), withAlpha(bg, 0))
+            else intArrayOf(withAlpha(bg, 250), withAlpha(bg, 170), withAlpha(bg, 0), withAlpha(bg, 0)), null, android.graphics.Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), shade)
+        shade.shader = android.graphics.LinearGradient(0f, height.toFloat(), 0f, 0f,
+            if (corner) intArrayOf(bg, withAlpha(bg, 70), withAlpha(bg, 0), withAlpha(bg, 0))
+            else intArrayOf(bg, withAlpha(bg, 215), withAlpha(bg, 0)), null, android.graphics.Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), shade)
+        source.recycle()
+        return out.copy(Bitmap.Config.HARDWARE, false)?.also { out.recycle() } ?: out
+    }
+
+    /** Thumbnails come from the image service's small renditions (480 px) instead of 1920 px originals. */
+    private fun thumbnail(address: String) = when {
+        address.startsWith("https://images.metahub.space/") -> address.replace("/background/medium/", "/background/small/").replace("/poster/medium/", "/poster/small/")
+        // Cards are ~380 px wide on screen, so TMDB's 780 px backdrop keeps them sharp.
+        address.startsWith("https://image.tmdb.org/t/p/w1280/") -> address.replace("/t/p/w1280/", "/t/p/w780/")
+        else -> address
+    }
+
+    /** Warms the cache so the next rotating feature appears without a wait. */
+    private fun prefetch(address: String, backdrop: Boolean = false) {
+        val corner = backdrop && flix && heroBackdrop.layoutParams.width > 0
+        val key = if (corner) "backdrop-corner:$address" else if (backdrop && flix) "backdrop:$address" else address
+        if (!address.startsWith("https://") || bitmapCache.get(key) != null) return
+        featureImages.execute {
+            try {
+                val shaded = backdrop && flix
+                fetchBitmap(address, if (backdrop) BACKDROP_WIDTH else dp(360))?.let { bitmapCache.put(key, if (shaded) shadedBackdrop(it, corner) else it) }
+            }
+            catch (_: Exception) { }
         }
     }
 
     private fun horizontalRow(host: LinearLayout = body): LinearLayout {
-        val scroller = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; clipChildren = false; clipToPadding = false; isFocusable = false; isFocusableInTouchMode = false; descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS }
-        val row = LinearLayout(this).apply { setPadding(dp(3), dp(4), dp(10), dp(4)); clipChildren = false; clipToPadding = false }
-        scroller.addView(row); host.addView(scroller, margin(-1, -2)); return row
+        val scroller = TvHorizontalScrollView(this) { !(flix && isHome) }.apply { isHorizontalScrollBarEnabled = false; clipChildren = false; clipToPadding = false; isFocusable = false; isFocusableInTouchMode = false; descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS }
+        val row = CullingLinearLayout(this, resources.displayMetrics.widthPixels / 2).apply { setPadding(dp(3), dp(4), dp(10), dp(4)); clipChildren = false; clipToPadding = false }
+        scroller.setOnScrollChangeListener { _, _, _, _, _ -> row.invalidate() }
+        // Titles scrolled past slide out at the content edge instead of beneath the menu.
+        if (flix) { scroller.clipChildren = true; scroller.clipToPadding = true; row.setPadding(dp(9), dp(7), dp(10), dp(7)) }
+        scroller.addView(row); host.addView(scroller, margin(-1, -2).apply { if (flix) leftMargin = -dp(9) }); return row
     }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun text(value: String, size: Int, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -1934,6 +2894,17 @@ class MainActivity : Activity() {
     private fun button(label: String, action: () -> Unit): TextView = text(label, 13, ink, true).apply {
         gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(5), dp(12), dp(5)); background = rounded(panel, 7)
         isFocusable = true; isFocusableInTouchMode = true; isClickable = true; contentDescription = label; tag = "action:$label"
+        if (flix) {
+            // Translucent until focused, then solid white with dark text.
+            background = rounded(withAlpha(0xFF6D6D6E.toInt(), 150), 4)
+            setOnFocusChangeListener { view, focus ->
+                view.background = rounded(if (focus) Color.WHITE else withAlpha(0xFF6D6D6E.toInt(), 150), 4)
+                setTextColor(if (focus) Color.BLACK else ink)
+                view.animate().scaleX(if (focus) 1.05f else 1f).scaleY(if (focus) 1.05f else 1f).setDuration(120).start()
+            }
+            setOnClickListener { action() }
+            return@apply
+        }
         setOnFocusChangeListener { view, focus ->
             view.background = rounded(if (focus) accent else panel, 7)
             view.foreground = if (focus) FocusRingDrawable(accent, dp(7).toFloat(), true, dp(1).toFloat()) else null
@@ -1944,17 +2915,47 @@ class MainActivity : Activity() {
     private fun primaryButton(label: String, action: () -> Unit): TextView = text(label, 15, theme.palette.buttonText, true).apply {
         tag = "primary:$label"
         gravity = Gravity.CENTER; isFocusable = true; isFocusableInTouchMode = true; isClickable = true
-        background = rounded(theme.palette.primaryButton, if (theme == ThemeSpec.EDITORIAL || theme == ThemeSpec.NEON) 23 else 6)
+        if (flix) {
+            background = rounded(withAlpha(Color.WHITE, 225), 4)
+            setOnFocusChangeListener { view, focused ->
+                view.background = rounded(if (focused) Color.WHITE else withAlpha(Color.WHITE, 225), 4)
+                view.foreground = if (focused) FocusRingDrawable(Color.WHITE, dp(4).toFloat(), true, dp(1).toFloat()) else null
+                view.animate().scaleX(if (focused) 1.06f else 1f).scaleY(if (focused) 1.06f else 1f).setDuration(120).start()
+            }
+            setOnClickListener { action() }
+            return@apply
+        }
+        background = rounded(theme.palette.primaryButton, if (theme == ThemeSpec.EDITORIAL) 23 else 6)
         setOnFocusChangeListener { view, focused ->
-            view.foreground = if (focused) FocusRingDrawable(if (theme == ThemeSpec.NEON) theme.palette.secondaryAccent else accent,
-                dp(if (theme == ThemeSpec.EDITORIAL || theme == ThemeSpec.NEON) 23 else 6).toFloat(), true, dp(1).toFloat()) else null
+            view.foreground = if (focused) FocusRingDrawable(accent,
+                dp(if (theme == ThemeSpec.EDITORIAL) 23 else 6).toFloat(), true, dp(1).toFloat()) else null
         }
         setOnClickListener { action() }
     }
+    /** A sharp 2dp white outline: Flix's focus mark where a soft glow or zoom would blur text and video. */
+    private fun crispOutline(radius: Int) = GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = dp(radius).toFloat(); setStroke(dp(2), Color.WHITE) }
     private fun rounded(color: Int, radius: Int, stroke: Int = Color.TRANSPARENT) = GradientDrawable().apply { shape = GradientDrawable.RECTANGLE; setColor(color); cornerRadius = dp(radius).toFloat(); if (stroke != Color.TRANSPARENT) setStroke(dp(2), stroke) }
     private fun withAlpha(color: Int, alpha: Int) = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
     private fun margin(width: Int, height: Int, top: Int = 0, bottom: Int = 0, right: Int = 0) = LinearLayout.LayoutParams(if (width < 0) width else dp(width), if (height < 0) height else dp(height)).apply { setMargins(0, dp(top), dp(right), dp(bottom)) }
     private fun dp(value: Int) = (value * resources.displayMetrics.widthPixels / 960f).roundToInt()
-    private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-    private fun confirm(message: String, action: () -> Unit) { AlertDialog.Builder(this).setMessage(message).setPositiveButton("Continue") { _, _ -> action() }.setNegativeButton("Cancel", null).show() }
+    private var notice: TextView? = null
+    private val hideNotice = Runnable { notice?.animate()?.alpha(0f)?.translationY(dp(12).toFloat())?.setDuration(220)?.withEndAction { notice?.visibility = View.GONE }?.start() }
+    /** A short in-app notice styled like the app's dialogs, instead of the system toast. */
+    private fun toast(message: String) {
+        if (!::shellRoot.isInitialized || isDestroyed) { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); return }
+        val view = notice?.takeIf { it.parent === shellRoot } ?: text("", 14, Color.WHITE, true).apply {
+            gravity = Gravity.CENTER; setPadding(dp(18), dp(11), dp(18), dp(11)); maxLines = 3; elevation = dp(6).toFloat()
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF22A2A30.toInt(), 0xF217171A.toInt())).apply {
+                cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0x2EFFFFFF)
+            }
+            shellRoot.addView(this, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(28) })
+            notice = this
+        }
+        view.text = message; view.bringToFront(); view.visibility = View.VISIBLE
+        view.alpha = 0f; view.translationY = dp(12).toFloat()
+        view.animate().alpha(1f).translationY(0f).setDuration(200).start()
+        view.removeCallbacks(hideNotice); view.postDelayed(hideNotice, 3_500)
+    }
+    private fun confirm(message: String, action: () -> Unit)
+ { AlertDialog.Builder(this).setMessage(message).setPositiveButton("Continue") { _, _ -> action() }.setNegativeButton("Cancel", null).show() }
 }

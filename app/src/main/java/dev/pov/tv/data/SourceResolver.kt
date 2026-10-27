@@ -107,17 +107,28 @@ class SourceResolver internal constructor(
     private fun checkCaches(services: List<String>, hashes: List<String>): List<CacheResult> {
         if (hashes.isEmpty()) return services.map { CacheResult(it, emptySet(), false) }
         fun probe(service: String): CacheResult {
-            val hits = mutableSetOf<String>()
+            val hits = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+            // One Offcloud request answers 100 hashes in about the time it answers 40, and batches run
+            // side by side, so a full Torrentio list costs roughly one round trip instead of several.
+            val batches = hashes.chunked(if (service == "offcloud") 100 else 40)
+            fun check(batch: List<String>) {
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("Source search cancelled.")
+                val found = if (service == "offcloud") checkNotNull(offcloud()) { "Connect Offcloud in Settings." }.cached(batch)
+                    else torbox.cached(batch)
+                hits += found.map { it.lowercase(Locale.ROOT) }.filter { it in batch }
+            }
             return try {
-                hashes.chunked(40).forEach { batch ->
-                    if (Thread.currentThread().isInterrupted) throw InterruptedException("Source search cancelled.")
-                    val found = if (service == "offcloud") checkNotNull(offcloud()) { "Connect Offcloud in Settings." }.cached(batch)
-                        else torbox.cached(batch)
-                    hits += found.map { it.lowercase(Locale.ROOT) }.filter { it in batch }
+                if (batches.size == 1) check(batches.single()) else {
+                    val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(batches.size, 4))
+                    try {
+                        batches.map { batch -> pool.submit(java.util.concurrent.Callable { check(batch) }) }.forEach { task ->
+                            try { task.get() } catch (error: java.util.concurrent.ExecutionException) { throw (error.cause as? Exception ?: error) }
+                        }
+                    } finally { pool.shutdownNow() }
                 }
-                CacheResult(service, hits, false)
+                CacheResult(service, hits.toSet(), false)
             } catch (error: InterruptedException) { throw error }
-            catch (_: Exception) { CacheResult(service, hits, true) }
+            catch (_: Exception) { CacheResult(service, hits.toSet(), true) }
         }
         if (services.size < 2) return services.map(::probe)
         val executor = java.util.concurrent.Executors.newFixedThreadPool(services.size)

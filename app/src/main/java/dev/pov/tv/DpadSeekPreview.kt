@@ -20,15 +20,17 @@ internal class DpadSeekPreview {
     fun step(direction: Int): Long {
         require(active && direction in listOf(-1, 1))
         if (this.direction != direction) { this.direction = direction; distanceInDirection = 0 }
+        // Precise one-second steps for the first minute of a hold, then quickly larger jumps.
         val increment = when {
-            distanceInDirection >= 900_000 -> 30_000L
-            distanceInDirection >= 300_000 -> 10_000L
-            distanceInDirection >= 60_000 -> 5_000L
+            distanceInDirection >= 1_800_000 -> 120_000L
+            distanceInDirection >= 900_000 -> 60_000L
+            distanceInDirection >= 300_000 -> 30_000L
+            distanceInDirection >= 60_000 -> 10_000L
             else -> 1_000L
         }
         val previous = position
         position = if (direction > 0) position + minOf(increment, duration - position) else position - minOf(increment, position)
-        distanceInDirection = (distanceInDirection + kotlin.math.abs(position - previous)).coerceAtMost(900_000)
+        distanceInDirection = (distanceInDirection + kotlin.math.abs(position - previous)).coerceAtMost(1_800_000)
         return position
     }
     fun finish(cancelled: Boolean = false): Long? {
@@ -37,6 +39,8 @@ internal class DpadSeekPreview {
         return result
     }
     companion object {
+        /** A signed offset such as "+0:45" or "-12:30". */
+        fun offset(milliseconds: Long): String = (if (milliseconds < 0) "-" else "+") + time(kotlin.math.abs(milliseconds)).removePrefix("0")
         fun time(position: Long): String {
             val seconds = position.coerceAtLeast(0) / 1000
             return if (seconds >= 3600) "%d:%02d:%02d".format(java.util.Locale.ROOT, seconds / 3600, seconds / 60 % 60, seconds % 60)

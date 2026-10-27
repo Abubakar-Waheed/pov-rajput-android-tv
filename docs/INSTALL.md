@@ -5,13 +5,13 @@ POV Rajput requires Android TV or Google TV running Android 8.0 or later. Kodi i
 1. Download **POV-Rajput-release.apk** from the [latest published release](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases/latest).
 2. Transfer the APK to your TV and open it with a file browser. Allow installation from that browser if Android asks, then select **Install**.
 3. Open **POV Rajput**. Connect your own Offcloud and/or TorBox account in Settings. Trakt is optional.
-4. Open **Settings → Debrid priority** to reorder connected services. Number 1 is preferred when multiple services have the same cached source.
+4. Open **Settings → Streaming services → Debrid priority** to reorder connected services. Number 1 is preferred when multiple services have the same cached source.
 
 POV Rajput uses package ID `dev.pov.tv.rajput` and installs separately from earlier POV packages. Connect your accounts once in POV Rajput; earlier installations retain their own account settings.
 
 ## Future updates
 
-Use **Settings → Check for updates**. View the release notes, choose **Download and install**, and confirm the Android installation prompt. Android may first require allowing **Install unknown apps** for POV Rajput. Return to the updater and select **Install update** after enabling that setting.
+Use **Settings → Updates → Check for updates**. View the release notes, choose **Download and install**, and confirm the Android installation prompt. Android may first require allowing **Install unknown apps** for POV Rajput. Return to the updater and select **Install update** after enabling that setting.
 
 Optional startup update checks can be enabled in Settings. Published stable releases are checked; drafts and prereleases are excluded. The updater verifies the APK checksum, package, newer version code, and signing certificate. Updating the existing POV Rajput installation preserves its settings and accounts.
 

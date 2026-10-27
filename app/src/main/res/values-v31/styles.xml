@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: the system launch screen shows the POV logo on the app's dark background,
+         then the in-app splash holds the same logo until Home is ready. -->
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#65E2ED</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#141414</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:alertDialogTheme">@style/PovDialog</item>
+        <item name="android:editTextStyle">@style/PovDialogField</item>
+        <item name="android:windowSplashScreenBackground">#141414</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/pov_splash_icon</item>
+    </style>
+</resources>

@@ -106,7 +106,7 @@ class SourceSortingInstrumentation : Instrumentation() {
                 check(rows().map { it.tag } == SourceSortOrder(true, false).sorted(items).map(TvChoiceKeys::source))
                 stage = "settings_sort_dialog"
                 onMain { settings.invoke(main) }; waitForIdleSync()
-                onMain { views(main.window.decorView).filterIsInstance<TextView>().first { it.text.startsWith("Source sorting ·") }.performClick() }
+                onMain { views(main.window.decorView).first { it.isClickable && (it.contentDescription ?: "").startsWith("Source sorting ·") }.performClick() }
                 pickDialogItem(0)
                 pickDialogItem(1)
                 check(onMain { SourceSortPreferences(main).order } == SourceSortOrder(false, false))

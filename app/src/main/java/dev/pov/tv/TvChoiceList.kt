@@ -58,7 +58,7 @@ internal class TvChoiceRow(
     title: String,
     detail: String = "",
     eyebrow: String = "",
-    palette: ThemePalette = ThemeSpec.CINEMATIC.palette,
+    palette: ThemePalette = ThemeSpec.FLIX.palette,
     badges: List<SourceBadge> = emptyList(),
     withPoster: Boolean = false,
     action: () -> Unit,
@@ -105,14 +105,17 @@ internal class TvChoiceRow(
         if (detail.isNotBlank()) column.addView(label(detail, 11, 1, false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(5) })
         addView(column, LayoutParams(-1, if (badges.isNotEmpty()) LayoutParams.WRAP_CONTENT else -1))
         if (withPoster) addView(poster, LayoutParams(px(48), px(67), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = px(10) })
+        // Flix lifts the focused row with a light glass tint and a white outline instead of a solid accent fill.
+        val flix = palette == ThemeSpec.FLIX.palette
         fun paint(focused: Boolean) {
             background = GradientDrawable().apply {
-                setColor(if (focused) palette.accent else palette.panel)
-                cornerRadius = px(7).toFloat()
+                setColor(when { !focused -> palette.panel; flix -> 0xFF3A3A40.toInt(); else -> palette.accent })
+                cornerRadius = px(if (flix) 9 else 7).toFloat()
             }
-            foreground = FocusRingDrawable(if (focused) palette.accent else palette.border,
-                px(7).toFloat(), focused, px(if (focused) 2 else 1).toFloat())
-            labels.forEach { it.setTextColor(if (focused) Color.rgb(4, 15, 24) else palette.text) }
+            // Flix: a sharp 2px-wide white outline, with no glow or zoom that would soften the text.
+            foreground = if (flix && focused) GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = px(9).toFloat(); setStroke(px(2), Color.WHITE) }
+                else FocusRingDrawable(if (focused) palette.accent else palette.border, px(7).toFloat(), focused, px(if (focused) 2 else 1).toFloat())
+            labels.forEach { it.setTextColor(if (focused && !flix) Color.rgb(4, 15, 24) else palette.text) }
         }
         setOnFocusChangeListener { _, focused -> paint(focused) }
         setOnClickListener { action() }

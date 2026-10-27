@@ -3,204 +3,138 @@
 ### By Rajput
 
 [![Android APKs](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions/workflows/apks.yml/badge.svg)](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions/workflows/apks.yml)
+[![Latest release](https://img.shields.io/github/v/release/husnainahmedrana/pov-rajput-android-tv?label=release)](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+![Android TV 8.0+](https://img.shields.io/badge/Android%20TV-8.0%2B-3DDC84)
 
-**A native Android TV app with Offcloud and TorBox cloud playback, WeTrakr tracking, five themes, anime browsing, and a Media3 player.** Kodi is not required.
+**A native Android TV app for streaming your Offcloud and TorBox cloud, with a cinematic *Flix* interface, TMDB or Cinemeta catalogs, WeTrakr tracking and a fast Media3 player.** Kodi is not required.
 
-This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv). The original Android TV port was created by **Mark Mateo**, based on the original POV Kodi add-on by **[kodifitzwell](https://github.com/kodifitzwell/repo)**. Their work, attribution, and GPL-3.0 license are preserved.
+![Flix home: a living backdrop, rotating feature and Top 10 shelves](docs/screenshots/home.jpg)
 
-**[Download release APK](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases/latest)** · **[Setup guide](docs/OFFCLOUD.md)** · **[Build and release](docs/BUILD_AND_RELEASE.md)** · **[Release notes](docs/RELEASE_NOTES.md)**
+**[⬇ Download the latest APK](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases/latest)** · [Setup guide](docs/OFFCLOUD.md) · [Release notes](docs/RELEASE_NOTES.md) · [Build and release](docs/BUILD_AND_RELEASE.md)
 
-## Rajput's contributions
+This is **Rajput's Android TV edition**, forked from [MM-482/pov-android-tv](https://github.com/MM-482/pov-android-tv). The original Android TV port was created by **Mark Mateo**, based on the original POV Kodi add-on by **[kodifitzwell](https://github.com/kodifitzwell/repo)**. Their work, attribution and GPL-3.0 license are preserved.
 
-- Added WeTrakr-only device login, encrypted account tokens, watchlist/liked-list thumbnail shelves, remote Continue Watching, safe playback-session removal, and optional scrobbling. Users supply their own registered Client ID; no developer credentials are bundled.
-- Added Offcloud API-key connection with Android Keystore encryption.
-- Updated account validation to the current account API and Bearer authorization, replacing the retired proxy endpoint.
-- Added JSON cache checks, cloud transfer preparation, download-status polling, cloud-history browsing, and exact file selection.
-- Added encrypted 24-hour reuse of the last successfully played stream, with fresh source search when an expired link fails.
-- Added keyboard Search/Enter submission and an optional microphone action using the TV voice service.
-- Added Cinemeta New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies and Popular Shows, expandable shelves, and retained pages when returning from details.
-- Added conservative Cinemeta poster matching for cloud-library filenames without automatically assigning tracking identities.
-- Added combined Offcloud/TorBox cache searches and selectable debrid priority, safe episode matching, duplicate-transfer prevention, and retry reuse for pending downloads.
-- Improved the connection dialog with visible progress/errors and retained input when validation fails.
-- Added account-change/cancellation guards and read-only ADB diagnostics that do not expose keys or playback links.
-- Added transparent backgrounds, bold text, and Small/Medium/Large subtitle sizes for fullscreen and mini-player playback.
-- Added a saved subtitle language preference, selected automatically when a matching track is available.
-- Added a saved preferred audio language, with automatic selection and fallback when unavailable.
-- Added a live subtitle-position slider in Settings and the player subtitle-style menu.
-- Added one-second D-pad seeking with a target-time preview and seek on button release.
-- Added direct cached playback: Offcloud avoids cloud transfers; TorBox resolves direct links and removes newly created cached entries before playback. Uncached downloads remain in the library.
-- Added numbered debrid priorities with Move up / Move down controls.
-- Added verified in-app updates from published GitHub releases and optional startup checks.
-- Added long-press removal from Continue watching across all five themes and the WeTrakr page.
-- Added automated debug/release APK builds, tests, lint reports, checksums, and signed APK publication to tagged GitHub Releases.
+## Highlights
+
+- **Flix interface** — a living backdrop that follows whatever you focus, title logos, a feature that rotates through the Top 10 every five seconds, numbered Top 10 shelves and a menu that stays hidden until you need it.
+- **Smooth on modest TV hardware** — shelves draw only what is on screen, artwork is sized to its card and decoded off the UI thread, and the backdrop is a single pre-shaded image. Measured on an onn 4K box, janky frames fell from 55% to under 10%.
+- **TMDB or Cinemeta catalogs** — add your own free TMDB key for Trending, Popular and *Now Playing in Cinemas* (in your chosen country) movies, plus Trending, Popular and Airing Today shows. Without a key, Home uses Cinemeta.
+- **Play that just works** — Play searches every enabled source provider, checks your debrid caches in parallel and starts the best playable link, resuming where you left off. Continue Watching resumes instantly from the last link (kept 24 hours).
+- **A player built for the remote** — one-second precision seeking that accelerates the longer you hold, an *Ends at* clock, a Stremio-style loading splash, Stop and Browse, audio and subtitle menus and volume boost.
+- **Sensible defaults** — bold subtitles on a transparent background, 3% above the bottom, English subtitles and audio.
+- **Your library as posters** — Offcloud and TorBox downloads appear as artwork cards matched from their filenames.
+- **Voice search** — speak a title; the words appear as you talk and results open when you stop.
+- **Private by design** — every key, token and Client ID is entered on the TV and stored with Android Keystore encryption. Nothing personal is bundled in the source or APK.
 
 ## Screenshots
 
-Screenshots of POV Rajput for Android TV with the Editorial theme, using sample lists and public titles. Video playback and Android dialogs retain their standard styling.
+Captured on a 55" TV in the app's public preview mode, which shows public catalogs only.
 
-### Home
-
-![Editorial Home with public sample titles](docs/screenshots/home.png)
-
-### WeTrakr library
-
-![Movie and TV watchlists open as thumbnail shelves](docs/screenshots/wetrakr-library.png)
-
-![Liked lists with thumbnail previews in WeTrakr](docs/screenshots/wetrakr-liked-lists.png)
-
-### Continue Watching from WeTrakr
-
-![WeTrakr Continue Watching alongside catalog rows](docs/screenshots/continue-watching.png)
-
-### WeTrakr settings
-
-![Scrobbling and optional Home liked-list controls](docs/screenshots/wetrakr-settings.png)
-
-### Settings
-
-![Playback language, subtitle and account settings](docs/screenshots/settings.png)
-
-### Appearance
-
-![Five selectable appearances in POV Rajput](docs/screenshots/appearance.png)
-
-## Source providers
-
-Open **Settings → Source providers** to add a name and HTTPS Stremio-compatible add-on URL for each scraper. Select a saved provider to turn it on or off, edit its name/address, or remove it. Disabling a provider keeps its configuration for later.
-
-Search combines results from all enabled providers. Matching torrent hashes and file indexes, or identical direct URLs, appear once with the contributing provider names. Different torrent files and signed playback URLs remain separate. Quality/file-size sorting and debrid priority apply to the combined results. If one provider is unavailable, results from the others remain accessible.
-
-## Discovery and search
-
-Home shelf headings open a grid of their fetched titles. Everyone gets six Cinemeta shelves in this order: **New Movies, New Shows, Featured Movies, Featured Shows, Popular Movies, Popular Shows**. New uses the current-year catalog and filters inconsistent release years; Featured preserves Cinemeta’s own selection, without claiming a highest-rating order. No tracking account or API key is needed for these catalogs. WeTrakr supplies Continue Watching and optional liked lists, alongside its existing watchlist/library features.
-
-The search dialog accepts the keyboard’s Search/Enter action directly. **Voice search** uses an installed TV speech-input activity; TVs without one retain keyboard search. Cloud-library posters use exact title/year matches from Cinemeta; ambiguous filenames keep their original labels and are never silently scrobbled as a guessed title.
-
-## Features
-
-| Area | Included |
+| Shelves follow your focus | Movie details |
 | --- | --- |
-| Offcloud | Bring-your-own API key, direct cached playback, cloud downloads, library, status, file selection |
-| TorBox | Account connection, cloud libraries, cached playback with temporary-entry removal, direct links |
-| WeTrakr | Own Client ID, device login, watchlists, liked lists, synced Continue Watching, Up Next, optional scrobbling |
-| Catalog | Movie/show discovery, search, details, seasons, episodes, and anime browsing |
-| Player | Native Media3, fullscreen/mini player, audio/subtitle choices, transparent subtitle backgrounds, bold subtitles, three subtitle sizes, resume, compatibility guard |
-| Appearance | Editorial by default for new installs; Cinematic, Neon, Cinema, and Dashboard also available |
-| TV | Android TV launcher, D-pad navigation, Android 8.0/API 26 or later |
+| ![Focused shelf with the feature showing the focused title](docs/screenshots/home-shelves.jpg) | ![Movie details pinned to the bottom with the backdrop open above](docs/screenshots/details-movie.jpg) |
 
-Raw cloud files can play without a catalog identity. They are not silently assigned a guessed movie/episode for WeTrakr tracking. Offcloud account plans, limits, availability, and source-provider results remain controlled by their respective services.
+| Show details and episodes | Hidden menu |
+| --- | --- |
+| ![Show details with IMDb badge, genre chips, season tabs and episode stills](docs/screenshots/details-show.jpg) | ![Menu opened from the left edge over Home](docs/screenshots/menu.jpg) |
 
-## Install and connect
+| Search | Settings |
+| --- | --- |
+| ![Full-screen search with voice search](docs/screenshots/search.jpg) | ![Settings grouped into cards with values on the right](docs/screenshots/settings.jpg) |
 
-1. Download `POV-Rajput-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases).
-2. Sideload it on Android TV 8.0 or later. The launcher name is **POV Rajput**; package ID: `dev.pov.tv.rajput`.
-3. Open **Settings → Connect Offcloud with API key**, enter your own key, and select **Connect**.
-4. Open **Settings → Source providers** to add and name your preferred scrapers. Use HTTPS Stremio-compatible add-on URLs. Each provider can be turned on or off without removing it.
-5. Select a movie or episode and choose a source. A multi-video transfer opens an explicit file/version choice.
-6. Browse completed downloads through **Library**. If a transfer is pending, wait and select the same source again; its saved request is reused.
+| Playback, subtitles and services | Themes |
+| --- | --- |
+| ![Playback, subtitle, audio and streaming-service settings](docs/screenshots/settings-services.jpg) | ![Flix and Editorial themes](docs/screenshots/appearance.jpg) |
 
-Connect TorBox as well to search both caches together. Open **Settings → Debrid priority** to see the numbered order. Select a service, then use **Move up** or **Move down**; number **1** is preferred. Shared cached sources appear once with both services listed; playback uses your preferred cached service, or the other service when only it has a cached copy. Library lets you browse either connected service. No Offcloud key, TorBox key, WeTrakr token, or personal account is bundled. The app can coexist with the original POV package.
+![Animated POV launch splash](docs/screenshots/splash.jpg)
 
-From version 0.2.6, the app is named **POV Rajput**, with package ID `dev.pov.tv.rajput`. It installs separately from earlier POV packages. Connect your accounts once in POV Rajput; earlier installations retain their own settings.
+## Getting started
 
-## Cached playback and cloud downloads
+1. Download `POV-Rajput-release.apk` from [Releases](https://github.com/husnainahmedrana/pov-rajput-android-tv/releases/latest) and sideload it on Android TV 8.0 or later. The launcher name is **POV Rajput** (package `dev.pov.tv.rajput`).
+2. **Settings → Streaming services**: connect **Offcloud** with your own API key and/or sign in to **TorBox** with a code (or paste a TorBox API key).
+3. **Settings → Streaming services → Source providers**: add your preferred HTTPS Stremio-compatible add-ons, each with a name you choose.
+4. *Optional* — **Settings → Home & appearance → TMDB**: paste your free TMDB API key or read-access token from [themoviedb.org](https://www.themoviedb.org/settings/api), then pick a **Cinema country**.
+5. *Optional* — **Settings → WeTrakr**: enter your own registered Client ID and approve the activation code at **https://wetrakr.com/activate**.
 
-All connected debrid services are checked together. A source cached on both uses your priority order. A source cached only on the second service plays through that service without switching Settings. A failed resolver can try another confirmed cached service, and cached failures never silently start an uncached download.
+No API key, token, Client ID or account is included in the app. Every value you enter stays encrypted on your TV.
 
-Source cards show quality and provider-reported file size. Open **Settings → Source sorting**, or **Sort** above the results, to choose highest/lowest quality first and smallest/largest files within each quality. The default is highest quality first, then smallest files first. Unavailable metadata appears last; changing the order reuses the fetched results.
+## Using the app
 
-Bold rounded badges highlight quality, size, and explicit release tags such as DV, HDR, WEB-DL, REMUX, and codecs. 4K is yellow, 1080p red, and 720p purple. Format badges reflect the source's metadata; the full filename remains below them.
+### Home and navigation
 
-![Source quality, file size and release badges](docs/screenshots/source-badges.png)
+- The menu is hidden. Press **Left** from the first item of a row (or **Back**) to open it; it stops at its first and last entries.
+- From any menu page, **Back** returns to Home with the menu open; **Back** again asks to leave the app.
+- **Hold Back for one second** anywhere — even during playback — to open **Settings**.
+- Returning to Home from the menu is instant: the page you left is kept for 15 minutes unless something that affects it changes.
+- Rows end at **See all**, which opens a four-column grid of the shelf.
 
-Offcloud cached sources resolve directly without adding a cloud-dashboard entry. If no connected service can resolve a cached source, the app reports an error instead of silently creating a download. Uncached sources still ask for confirmation before adding a cloud download, which stays in your library. Existing downloads are retained.
+### Playing
 
-TorBox resolves direct links and removes newly created cached entries before playback begins. Cached packs let you choose a video before its playback link is resolved. A temporary entry can appear during resolution. Existing library entries are reused and retained. Uncached downloads remain in your library. If cleanup fails, the app reports an error; a temporary entry may need removal from the dashboard.
+| Where you start | What happens |
+| --- | --- |
+| **Continue Watching** on Home | Resumes instantly from the last link, when it is less than 24 hours old |
+| **Play** anywhere else (details, feature, any shelf) | Searches fresh links, plays the first playable one and resumes your saved position |
+| Long-press a Continue Watching card | **Open Media** or **Remove from Continue Watching** |
 
-![Numbered debrid priority](docs/screenshots/debrid-priority.png)
+With **Auto-play first result** on (Settings → Playback), Play starts the best cached or direct link in your sort order; the list stays open behind it so another link is one Back away. Sources above your TV's decoder limit (for example 8K on a 4K TV) are labelled, moved last and never auto-played.
+
+### Player
+
+- **Seeking** — tap Left/Right for one second. Hold to keep going: one-second steps for the first minute, then 10 s, 30 s, 1 min and 2 min jumps. The preview shows the target time and offset; the video jumps when you release.
+- **Ends at** — the local finish time sits in the top-right corner with the controls.
+- **Loading and buffering** — the title's logo pulses over its blurred artwork, like Stremio.
+- **Stop** ends playback and returns; **Browse** keeps the video playing in the mini player.
+- **Audio, Subtitles and Boost** — choose tracks, subtitle style, size and position, and boost quiet audio.
+
+### Search and voice
+
+Open **Search** from the menu, type with the on-screen keyboard (Enter searches straight away), or choose **Voice search**. Voice search listens inside the app with the TV's speech service, shows your words as you speak and searches when you stop. Android asks for microphone access the first time.
+
+### Library
+
+**Library** shows your Offcloud and TorBox downloads as poster cards, with artwork matched conservatively from each filename. Artwork matches never become tracking identities without your confirmation.
+
+## Cached playback and debrid
+
+All connected debrid services are checked together, with cache lookups batched and run in parallel. A source cached on both uses your **Debrid priority** order; a source cached only on the other service plays through it automatically. Cached failures never silently start an uncached download, and uncached sources always ask before adding a cloud download.
+
+Source cards show quality, provider-reported size and release badges (DV, HDR, WEB-DL, REMUX, codecs). **Source sorting** orders by quality and then size; unknown values appear last.
+
+Offcloud cached sources resolve directly without adding a dashboard entry. TorBox resolves direct links and removes newly created cached entries before playback.
 
 ## WeTrakr
 
-Open **Settings → WeTrakr app Client ID** and enter the Client ID from your registered WeTrakr application. The TV requests an activation code; visit **https://wetrakr.com/activate** on your phone and approve the connection. Device login needs no client secret or callback URI. No developer credentials are bundled.
+Enter your own registered Client ID, approve the code at **wetrakr.com/activate**, and WeTrakr supplies Home's Continue Watching (shown instantly from your last visit, then refreshed), watchlists, liked lists and Up Next. **Scrobbling** and **Liked lists on Home** are switches in Settings. Tokens are stored with Android Keystore encryption; library reads are cached and server retry limits are respected. API reference: [api.wetrakr.com](https://api.wetrakr.com/).
 
-Open **WeTrakr** to see movie and TV watchlists followed by your liked lists, with thumbnail rows shown by default. Continue Watching, Up Next and personal lists remain available in this section. Home Continue Watching comes from WeTrakr when connected, including progress from other devices. Without a connected account, Home uses local playback history. **Settings → WeTrakr liked lists on Home** is **off by default** to avoid fetching liked lists while browsing Home. Enable it to show those rows on Home too; select a list heading to browse all its items. **Settings → WeTrakr scrobbling** controls automatic playback updates and pending retries. Turning it off leaves browsing and deliberate library actions available. Trakt linking and scrobbling have been removed; your WeTrakr connection is retained on upgrade.
+## Updates
 
-WeTrakr tokens are stored with Android Keystore encryption. Library reads are cached for two minutes and server retry delays are respected. Failed pause/stop updates keep their original account and timestamp; retrying them never restarts an old now-playing session or deliberately adds a duplicate play. Playback reaches watched status at 95%. Review your developer-key allowance before sharing a Client ID with other users. API reference: [WeTrakr documentation](https://api.wetrakr.com/).
+**Settings → Updates → Check for updates** downloads published stable releases from this repository, verifying the checksum, package, version and signing certificate. Accounts and settings are kept. **Check on startup** is a switch and defaults to off.
 
-## Subtitle style
+## Privacy
 
-Open **Settings → Subtitle style** or **Subtitles → Subtitle style** during playback. Enable **Transparent background** and/or **Bold text**. Choices are saved on-device and work with text subtitles in fullscreen and the mini player. Background transparency and bold text default to off. Size defaults to **Medium**, with **Small** and **Large** available. Image-based and burned-in subtitles retain their original appearance.
+- API keys (Offcloud, TorBox, TMDB), the WeTrakr Client ID and tokens, and source-provider addresses are entered on the TV and encrypted with Android Keystore.
+- Nothing personal is included in the repository or release APKs.
+- The microphone is used only while the voice-search screen is open.
 
-Text subtitle appearance using a sample caption:
+See [PRIVACY.md](docs/PRIVACY.md).
 
-| Original style | Transparent background + bold |
-| --- | --- |
-| ![Original subtitle style](docs/screenshots/subtitles-original.png) | ![Transparent bold subtitles](docs/screenshots/subtitles-transparent-bold.png) |
+## Building and releases
 
-| Small | Medium | Large |
-| --- | --- | --- |
-| ![Small subtitles](docs/screenshots/subtitles-small.png) | ![Medium subtitles](docs/screenshots/subtitles-medium.png) | ![Large subtitles](docs/screenshots/subtitles-large.png) |
-
-## Playback languages and seeking
-
-Open **Settings → Subtitle language** to choose a preferred language. New playback selects a matching subtitle track when available. **Automatic (device preference)** follows Android's caption preferences; **Off** disables subtitles. You can still choose a different track for the current video from the player's subtitle menu.
-
-Open **Settings → Audio language** to choose the preferred audio language. New playback selects a matching audio track when available, with normal player fallback when it is unavailable. **Automatic (player default)** restores the usual audio selection. Manual audio-track choices remain available in the player.
-
-Choose **Settings → Subtitle position** or **Subtitles → Subtitle style → Subtitle position** during playback. Move the slider left to lower the text or right to raise it. Changes preview immediately on the video, or on a sample in Settings. Choose **Done** to keep the position, **Cancel** to restore the previous choice, or **Reset** to restore the original placement. Image-based and burned-in subtitles retain their original position.
-
-While watching, press **Left/Right** to preview a one-second seek. Hold the button to move further; the overlay shows the target time and seconds moved. During the same hold, steps increase to five seconds after moving a minute, ten seconds after five minutes, and thirty seconds after fifteen minutes. Releasing or reversing direction restores one-second precision. Release to seek and resume if the video was playing. A paused video stays paused. **Back** cancels the preview. With the controls visible, focus the timeline to seek; Left/Right on the action buttons still navigates between them.
-
-| Preferred subtitle language | Seek preview |
-| --- | --- |
-| ![Subtitle language preference](docs/screenshots/subtitle-language.png) | ![Seek target and seconds moved](docs/screenshots/seek-preview.png) |
-
-![Live subtitle position adjustment](docs/screenshots/subtitle-position.png)
-
-## App updates
-
-Open **Settings → Check for updates** to view the latest compatible release and its notes, then choose **Download and install**. If Android asks, allow POV Rajput to install apps; return to the updater and select **Install update**. Android asks you to confirm installation. You can also enable **Check for updates on startup** in Settings; it defaults to off.
-
-The updater downloads only published stable releases from this repository and checks the APK checksum, package, newer version code, and matching signing certificate. Existing POV Rajput accounts and settings are preserved during a normal update. Earlier POV packages need the initial POV Rajput installation separately; subsequent POV Rajput updates keep the same package.
-
-![App update screen](docs/screenshots/updates.png)
-
-## Continue watching
-
-Select a Continue Watching card to resume its last successful stream when the encrypted, account-scoped cache is under 24 hours old. If the link fails to open, the app discards it and searches for fresh sources. A title without a cached link opens source selection.
-
-Hold **OK/Select** on a Continue Watching card for **Open Media** first and **Remove from Continue Watching** second. Open Media shows movie/series details, watchlist and personal-playlist actions, watched controls, and fresh source selection. Removing a card updates the page in place.
-
-Choose **Remove from Continue Watching** to remove that session. This works in all five themes and on the WeTrakr page. When connected, it cancels that movie or episode's WeTrakr playback session, removing it from Continue Watching without deleting watched history. The app only confirms removal after WeTrakr accepts it. Saved local resume positions are preserved. Playing the same movie or episode again starts tracking it again. Without a connected account, removal hides the local item on this TV.
-
-![Continue watching from WeTrakr](docs/screenshots/continue-watching.png)
-
-## Builds and releases
-
-Pushes to `main`, pull requests, and manual runs build APK artifacts after tests and lint. When release signing secrets are configured, version tags such as `v0.2.7-rajput` publish the signed release APK, checksums, update metadata, license, and release notes automatically. Release signing is configured through private GitHub Actions secrets. The private key is never committed or included in download assets. If signing secrets are absent, Actions saves an installable debug APK and a clearly labeled unsigned release artifact, and skips automatic release publication. Unsigned release artifacts must be signed before installation. Pull requests cannot access release signing credentials. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
-
-## Validation and limits
-
-Automated tests and Android lint run before every release. Build results and reports are available in [GitHub Actions](https://github.com/husnainahmedrana/pov-rajput-android-tv/actions).
-
-The screenshots and connection checks do not establish every TV, codec, HDR/audio path, or authenticated playback combination. This is an independent community fork.
+Pushes to `main`, pull requests and manual runs build APKs after unit tests and Android lint. Tags such as `v0.2.14-rajput` publish the **signed release APK**, checksums, update metadata, license and release notes automatically. Signing uses private GitHub Actions secrets; the key is never committed. Developers can install a debug build beside the release with `-PpovAppIdSuffix=.preview`. See [build and release instructions](docs/BUILD_AND_RELEASE.md).
 
 ## Source and acknowledgments
 
-**Thank you to Mark Mateo for creating and sharing the standalone Android TV application that makes this fork possible.** His work provides this edition's core TV interface, remote navigation, themes, catalog and anime browsing, Media3 playback, and original TorBox and Trakt integrations. Rajput's edition builds on that foundation; it does not claim authorship of the original Android TV application.
+**Thank you to Mark Mateo for creating and sharing the standalone Android TV application that makes this fork possible.** His work provides this edition's core TV foundation, remote navigation, catalog and anime browsing, Media3 playback and the original TorBox and Trakt integrations. Rajput's edition builds on that foundation; it does not claim authorship of the original Android TV application.
 
-- Original Android TV source: **[Mark Mateo / MM-482 — pov-android-tv](https://github.com/MM-482/pov-android-tv)**.
-- Fork base revision: [`c5a64e9`](https://github.com/MM-482/pov-android-tv/commit/c5a64e92232fa90889507114721e736c37450f2d), retaining the upstream Git history.
-- Original POV Kodi add-on: **[kodifitzwell/repo](https://github.com/kodifitzwell/repo)**, including the credited POV visual identity and original fanart.
-
-- **Rajput** — this edition, Offcloud and WeTrakr integrations, playback and subtitle improvements, TV interface refinements, branding, and release automation.
-- **Mark Mateo / MM-482** — original standalone Android TV application, TV interface, themes, catalog integration, Media3 player, TorBox and Trakt support. [Upstream source](https://github.com/MM-482/pov-android-tv).
+- **Rajput** — this edition: the Flix interface, performance work, Offcloud, WeTrakr and TMDB integrations, playback and subtitle improvements, branding and release automation.
+- **Mark Mateo / MM-482** — original standalone Android TV application. [Upstream source](https://github.com/MM-482/pov-android-tv); fork base [`c5a64e9`](https://github.com/MM-482/pov-android-tv/commit/c5a64e92232fa90889507114721e736c37450f2d), with upstream history retained.
 - **kodifitzwell** — original POV Kodi add-on and POV visual identity. [Original project](https://github.com/kodifitzwell/repo).
-- **[WeTrakr](https://wetrakr.com/) and [alberdev](https://www.reddit.com/user/alberdev/), its developer** — tracking service, API, official logo, and developer access that made this integration possible. Thank you for building WeTrakr and supporting community integrations. [API documentation](https://api.wetrakr.com/).
-- **Android Open Source Project / AndroidX Media3**, **JetBrains / Kotlin**, and the original project's credited metadata and artwork providers.
+- **[WeTrakr](https://wetrakr.com/) and [alberdev](https://www.reddit.com/user/alberdev/), its developer** — tracking service, API, official logo and developer access that made this integration possible.
+- **[TMDB](https://www.themoviedb.org/)** — this product uses the TMDB API but is not endorsed or certified by TMDB.
+- **Cinemeta**, **Kitsu**, **Android Open Source Project / AndroidX Media3** and **JetBrains / Kotlin**.
 
-This project is not endorsed by Offcloud, TorBox, WeTrakr, Trakt, Kodi, or the upstream authors. Product names and artwork remain with their respective owners. See the in-app open-source notices and [original project documentation](docs/UPSTREAM_README.md).
+This project is not endorsed by Offcloud, TorBox, WeTrakr, TMDB, Trakt, Kodi or the upstream authors. Product names and artwork remain with their respective owners. See the in-app open-source notices and the [original project documentation](docs/UPSTREAM_README.md).
 
 ## License
 

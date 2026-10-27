@@ -7,6 +7,13 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.animation.ValueAnimator
+import android.graphics.BitmapFactory
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.media.AudioManager
 import android.os.Bundle
 import android.view.KeyEvent
@@ -16,7 +23,6 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.Button
 import android.widget.ImageView
-import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.media3.common.C
@@ -47,8 +53,15 @@ class PlayerActivity : Activity() {
     private var revealKey = KeyEvent.KEYCODE_UNKNOWN
     private var cachedLinkAttempt = false
     private var observedError: PlaybackException? = null
+    private lateinit var splash: FrameLayout
+    private lateinit var splashLogo: ImageView
+    private lateinit var splashTitle: TextView
+    private var splashPulse: ValueAnimator? = null
+    private var everReady = false
+    private val splashHandler = Handler(Looper.getMainLooper())
+    private val showSplashLater = Runnable { setSplash(true) }
     private val rowIds = listOf(androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_play_pause,
-        androidx.media3.ui.R.id.exo_ffwd, R.id.pov_audio, R.id.pov_subtitles, R.id.pov_boost, R.id.pov_browse)
+        androidx.media3.ui.R.id.exo_ffwd, R.id.pov_audio, R.id.pov_subtitles, R.id.pov_boost, R.id.pov_browse, R.id.pov_stop)
     private val sessionListener: () -> Unit = {
         if (!stopped) {
             updateControls()
@@ -79,12 +92,14 @@ class PlayerActivity : Activity() {
         controls = PlayerControlVisibility.bind(view)
         configureButtons()
         seekLabel = TextView(this).apply {
-            tag = "pov_seek_preview"; textSize = 26f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
-            setPadding(dp(22), dp(14), dp(22), dp(14)); visibility = View.GONE
-            background = GradientDrawable().apply { setColor(0xDD08121F.toInt()); cornerRadius = dp(10).toFloat() }
+            tag = "pov_seek_preview"; textSize = 30f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD); setLineSpacing(0f, 0.9f)
+            setPadding(dp(28), dp(14), dp(28), dp(14)); visibility = View.GONE
+            background = GradientDrawable().apply { setColor(0xB3000000.toInt()); cornerRadius = dp(16).toFloat(); setStroke(dp(1), 0x33FFFFFF) }
         }
         requireNotNull(view.overlayFrameLayout).addView(seekLabel,
             FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        buildSplash()
         val reuse = InAppPlaybackSession.hasActive() &&
             (intent.getBooleanExtra("reuse_session", false) || (savedInstanceState != null && InAppPlaybackSession.matches(intent)))
         if (!reuse && !InAppPlaybackSession.start(this, intent, savedInstanceState)) {
@@ -94,9 +109,10 @@ class PlayerActivity : Activity() {
     }
 
     private fun configureButtons() {
+        // Focused controls become solid white pills with dark icons and text.
         val tint = ColorStateList(
             arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
-            intArrayOf(accent, 0xFF697D91.toInt(), 0xFFE3E8EF.toInt())
+            intArrayOf(Color.BLACK, 0xFF6B6B70.toInt(), Color.WHITE)
         )
         rowIds.forEachIndexed { index, id ->
             val button = view.findViewById<View>(id)
@@ -106,13 +122,13 @@ class PlayerActivity : Activity() {
             button.nextFocusLeftId = rowIds[(index - 1).coerceAtLeast(0)]
             button.nextFocusRightId = rowIds[(index + 1).coerceAtMost(rowIds.lastIndex)]
             fun style(focused: Boolean) {
+                // Transport buttons are round, the text actions are pills; neither zooms, so the highlight stays inside the strip.
                 button.background = GradientDrawable().apply {
-                    setColor(if (focused) 0x22FFFFFF else Color.TRANSPARENT)
-                    cornerRadius = dp(6).toFloat()
-                    if (focused) setStroke(dp(1), accent)
+                    setColor(if (focused) Color.WHITE else Color.TRANSPARENT)
+                    if (button is ImageView) shape = GradientDrawable.OVAL else cornerRadius = dp(20).toFloat()
                 }
                 if (button is TextView) {
-                    button.setTextColor(if (focused) Color.WHITE else 0xFFE3E8EF.toInt())
+                    button.setTextColor(if (focused) Color.BLACK else Color.WHITE)
                     button.compoundDrawableTintList = tint
                 }
                 if (button is ImageView) button.imageTintList = tint
@@ -125,13 +141,14 @@ class PlayerActivity : Activity() {
         view.findViewById<View>(R.id.pov_subtitles).setOnClickListener { showTracks(C.TRACK_TYPE_TEXT) }
         boostButton.setOnClickListener { showBoost() }
         view.findViewById<View>(R.id.pov_browse).setOnClickListener { finish() }
+        // Stop ends the session (no mini player) and returns to the page the video was started from.
+        view.findViewById<View>(R.id.pov_stop).setOnClickListener { InAppPlaybackSession.stop(); finish() }
         view.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress).apply {
             setPlayedColor(accent)
             setKeyTimeIncrement(1000)
             nextFocusDownId = androidx.media3.ui.R.id.exo_play_pause
             nextFocusUpId = id
         }
-        view.findViewById<ProgressBar>(R.id.pov_loading_spinner).indeterminateTintList = ColorStateList.valueOf(accent)
     }
 
     override fun onStart() {
@@ -140,12 +157,101 @@ class PlayerActivity : Activity() {
         InAppPlaybackSession.addListener(sessionListener)
         InAppPlaybackSession.attachPlayerView(view)
         controls.start()
+        view.removeCallbacks(endTimeTicker); view.post(endTimeTicker)
         updateControls()
         InAppPlaybackSession.error?.let { if (observedError !== it) showPlaybackFailure(it) }
         controls.show()
     }
 
+    /** Stremio-style loading: the title's logo pulses over its blurred artwork while video loads or rebuffers. */
+    private fun buildSplash() {
+        splash = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); visibility = View.GONE; isFocusable = false; tag = "pov_loading_splash" }
+        val art = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0.5f
+            if (Build.VERSION.SDK_INT >= 31) setRenderEffect(RenderEffect.createBlurEffect(dp(14).toFloat(), dp(14).toFloat(), Shader.TileMode.CLAMP))
+        }
+        splash.addView(art, FrameLayout.LayoutParams(-1, -1))
+        splash.addView(View(this).apply {
+            background = GradientDrawable().apply {
+                gradientType = GradientDrawable.RADIAL_GRADIENT; gradientRadius = resources.displayMetrics.widthPixels * 0.7f
+                colors = intArrayOf(0x33000000, 0xE6000000.toInt())
+            }
+        }, FrameLayout.LayoutParams(-1, -1))
+        splashLogo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
+        splash.addView(splashLogo, FrameLayout.LayoutParams(dp(420), dp(160), Gravity.CENTER))
+        splashTitle = TextView(this).apply {
+            textSize = 40f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; maxLines = 2
+            typeface = android.graphics.Typeface.create("sans-serif-black", android.graphics.Typeface.BOLD)
+            setPadding(dp(40), 0, dp(40), 0)
+        }
+        splash.addView(splashTitle, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
+        requireNotNull(view.overlayFrameLayout).addView(splash, 0, FrameLayout.LayoutParams(-1, -1))
+        val imdb = try { intent.getStringExtra("identity")?.let { org.json.JSONObject(it).optString("imdbId") } } catch (_: Exception) { null }
+        if (imdb != null && imdb.matches(Regex("tt\\d+"))) {
+            loadSplashImage("https://images.metahub.space/background/medium/$imdb/img") { art.setImageBitmap(it) }
+            loadSplashImage("https://images.metahub.space/logo/medium/$imdb/img") { splashLogo.setImageBitmap(it); splashLogo.visibility = View.VISIBLE; splashTitle.visibility = View.GONE }
+        }
+    }
+
+    private fun loadSplashImage(address: String, done: (android.graphics.Bitmap) -> Unit) {
+        Thread {
+            try {
+                val connection = java.net.URL(address).openConnection() as javax.net.ssl.HttpsURLConnection
+                connection.connectTimeout = 10_000; connection.readTimeout = 10_000
+                val bitmap = try { connection.inputStream.use(BitmapFactory::decodeStream) } finally { connection.disconnect() }
+                if (bitmap != null) runOnUiThread { if (!isDestroyed) done(bitmap) }
+            } catch (_: Exception) { /* The title text remains on the splash. */ }
+        }.start()
+    }
+
+    private fun setSplash(show: Boolean) {
+        if (!::splash.isInitialized) return
+        if (show) {
+            splashTitle.text = InAppPlaybackSession.title.ifBlank { "Loading" }
+            if (splash.visibility != View.VISIBLE) { splash.alpha = 0f; splash.visibility = View.VISIBLE }
+            splash.animate().cancel(); splash.animate().alpha(1f).setDuration(220).start()
+            if (splashPulse == null) splashPulse = ValueAnimator.ofFloat(1f, 0.35f).apply {
+                duration = 900; repeatMode = ValueAnimator.REVERSE; repeatCount = ValueAnimator.INFINITE
+                addUpdateListener { val value = it.animatedValue as Float; splashLogo.alpha = value; splashTitle.alpha = value }
+                start()
+            }
+        } else if (splash.visibility == View.VISIBLE) {
+            splash.animate().cancel()
+            splash.animate().alpha(0f).setDuration(260).withEndAction {
+                splash.visibility = View.GONE; splashPulse?.cancel(); splashPulse = null
+            }.start()
+        }
+    }
+
+    private fun updateSplash() {
+        val state = player?.playbackState
+        if (state == Player.STATE_READY) everReady = true
+        val waiting = InAppPlaybackSession.error == null && player != null &&
+            (state == Player.STATE_BUFFERING || (state == Player.STATE_IDLE && !everReady))
+        if (!waiting) { splashHandler.removeCallbacks(showSplashLater); setSplash(false); return }
+        // First load shows at once; a rebuffer waits briefly so quick seeks never flash the splash.
+        if (!everReady) setSplash(true)
+        else if (splash.visibility != View.VISIBLE) { splashHandler.removeCallbacks(showSplashLater); splashHandler.postDelayed(showSplashLater, 500) }
+    }
+
+    private val endTimeTicker = object : Runnable {
+        override fun run() { updateEndTime(); if (!stopped) view.postDelayed(this, 15_000) }
+    }
+    /** "Ends at 9:42 PM": remaining time at the current speed, added to the TV's local clock. */
+    private fun updateEndTime() {
+        val label = view.findViewById<TextView>(R.id.pov_end_time) ?: return
+        val exo = player
+        val remaining = exo?.let { it.duration - it.currentPosition } ?: -1
+        if (exo == null || exo.duration <= 0 || remaining <= 0) { label.visibility = View.GONE; return }
+        val speed = exo.playbackParameters.speed.takeIf { it > 0f } ?: 1f
+        val end = java.util.Date(System.currentTimeMillis() + (remaining / speed).toLong())
+        label.text = "Ends at " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(end)
+        label.visibility = View.VISIBLE
+    }
+
     private fun updateControls() {
+        updateSplash()
+        updateEndTime()
         if (player?.playbackState == Player.STATE_READY) cachedLinkAttempt = false
         view.findViewById<TextView>(R.id.pov_playback_title).text = InAppPlaybackSession.title.ifBlank { "Now playing" }
         PlaybackDebrid.bind(view, InAppPlaybackSession.debridService)
@@ -302,8 +408,7 @@ class PlayerActivity : Activity() {
         seekPreview.step(if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
         controls.show(); timeline.requestFocus()
         timeline.previewPosition = seekPreview.position
-        val offset = seekPreview.offsetSeconds
-        seekLabel.text = "${DpadSeekPreview.time(seekPreview.position)} / ${DpadSeekPreview.time(exo.duration)}\n${if (offset >= 0) "+" else ""}${offset}s"
+        seekLabel.text = "${DpadSeekPreview.time(seekPreview.position)}\n${DpadSeekPreview.offset(seekPreview.offsetSeconds * 1000)}  ·  ${DpadSeekPreview.time(exo.duration)}"
         seekLabel.visibility = View.VISIBLE
         return true
     }
@@ -326,7 +431,10 @@ class PlayerActivity : Activity() {
         if (!hasFocus) finishSeek(cancelled = true, restorePlayback = false)
     }
 
+    // Holding Back leaves the player for Settings; the video keeps its mini-player session.
+    private val backHold = BackHoldGesture { BackHoldGesture.settingsRequested = true; if (seekPreview.active) finishSeek(cancelled = true); finish() }
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (backHold.intercept(event)) return true
         val horizontal = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
         if (event.action == KeyEvent.ACTION_UP && horizontal && seekPreview.active) {
             if (event.keyCode == seekKey) finishSeek(cancelled = event.isCanceled)
@@ -406,6 +514,7 @@ class PlayerActivity : Activity() {
     }
 
     override fun onDestroy() {
+        splashHandler.removeCallbacks(showSplashLater); splashPulse?.cancel()
         controls.release()
         InAppPlaybackSession.removeListener(sessionListener)
         super.onDestroy()

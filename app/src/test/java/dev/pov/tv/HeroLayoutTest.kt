@@ -20,9 +20,9 @@ import java.util.concurrent.ExecutorService
 @Config(sdk = [28], qualifiers = "w960dp-h540dp-land-mdpi")
 class HeroLayoutTest {
     @Test fun `long feature titles cannot shrink or hide the primary action in any hero theme`() {
-        for (theme in ThemeSpec.entries.filter { it != ThemeSpec.DASHBOARD }) {
+        for (theme in ThemeSpec.entries) {
             val (hero, activity) = render(theme, "An Extremely Long Movie Title That Must Never Hide the Main Play Action")
-            val action = descendants(hero).filterIsInstance<TextView>().single { it.text.toString().contains("Explore") }
+            val action = descendants(hero).filterIsInstance<TextView>().single { it.text.toString().contains("Explore") || it.text.toString() == "▶  Play" }
             val scale = activity.resources.displayMetrics.widthPixels / 960f
             assertEquals("${theme.displayName} action height", (38 * scale).toInt(), action.height)
             val top = topWithin(action, hero)
@@ -33,9 +33,9 @@ class HeroLayoutTest {
         }
     }
 
-    @Test fun `short feature title leaves the action fully visible in the selected cinematic design`() {
-        val (hero, activity) = render(ThemeSpec.CINEMATIC, "AFTERLIGHT")
-        val action = descendants(hero).filterIsInstance<TextView>().single { it.text.toString().contains("Explore") }
+    @Test fun `short feature title leaves the action fully visible in the editorial design`() {
+        val (hero, activity) = render(ThemeSpec.EDITORIAL, "AFTERLIGHT")
+        val action = descendants(hero).filterIsInstance<TextView>().single { it.text.toString().contains("Explore") || it.text.toString() == "▶  Play" }
         assertEquals((38 * activity.resources.displayMetrics.widthPixels / 960f).toInt(), action.height)
         assertTrue(action.isFocusable)
         assertTrue(action.isClickable)

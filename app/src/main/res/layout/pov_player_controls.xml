@@ -2,6 +2,11 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/pov_controller_root" android:layout_width="match_parent" android:layout_height="match_parent">
+    <!-- When the video will finish, in local 12-hour time; shown and hidden with the controls. -->
+    <TextView android:id="@+id/pov_end_time" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="top|end" android:layout_marginTop="26dp" android:layout_marginEnd="30dp"
+        android:textColor="#FFFFFF" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textStyle="bold"
+        android:shadowColor="#CC000000" android:shadowRadius="8" android:visibility="gone" />
     <LinearLayout android:id="@+id/pov_bottom_scrim" android:tag="pov_unified_controls"
         android:layout_width="match_parent" android:layout_height="124dp" android:layout_gravity="bottom"
         android:orientation="vertical" android:paddingStart="30dp" android:paddingEnd="30dp"
@@ -9,8 +14,8 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="22dp"
             android:orientation="horizontal" android:gravity="center_vertical">
             <TextView android:id="@+id/pov_playback_title" android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:text="Now playing" android:textColor="#ECEFF3" android:textSize="16sp"
-                android:fontFamily="sans-serif-medium" android:includeFontPadding="false" android:maxLines="1" android:ellipsize="end" />
+                android:layout_weight="1" android:text="Now playing" android:textColor="#FFFFFF" android:textSize="16sp"
+                android:fontFamily="sans-serif-medium" android:textStyle="bold" android:shadowColor="#99000000" android:shadowRadius="6" android:includeFontPadding="false" android:maxLines="1" android:ellipsize="end" />
             <LinearLayout android:id="@+id/pov_debrid_badge" android:layout_width="wrap_content"
                 android:layout_height="22dp" android:layout_marginStart="14dp" android:gravity="center_vertical"
                 android:orientation="horizontal" android:visibility="gone" android:focusable="false">
@@ -20,28 +25,20 @@
                     android:layout_marginStart="6dp" android:textColor="#ECEFF3" android:textSize="12sp"
                     android:fontFamily="sans-serif-medium" android:includeFontPadding="false" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/pov_buffering_status" android:layout_width="wrap_content"
-                android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical"
-                android:visibility="gone" android:layout_marginStart="14dp">
-                <ProgressBar android:id="@+id/pov_loading_spinner" style="?android:attr/progressBarStyleSmall"
-                    android:layout_width="14dp" android:layout_height="14dp" android:indeterminate="true" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginStart="7dp" android:text="Loading…" android:textSize="11sp" android:textColor="#CAD4E0" />
-            </LinearLayout>
         </LinearLayout>
         <LinearLayout android:layout_width="match_parent" android:layout_height="30dp"
             android:orientation="horizontal" android:gravity="center_vertical">
             <TextView android:id="@id/exo_position" android:layout_width="50dp" android:layout_height="wrap_content"
-                android:text="0:00" android:textSize="11sp" android:textColor="#CED7E1" android:fontFamily="sans-serif-medium" />
+                android:text="0:00" android:textSize="12sp" android:textColor="#FFFFFF" android:fontFamily="sans-serif-medium" />
             <dev.pov.tv.PreviewTimeBar android:id="@id/exo_progress"
                 android:layout_width="0dp" android:layout_height="30dp" android:layout_weight="1"
                 android:focusable="true" android:contentDescription="Video timeline"
                 android:nextFocusDown="@id/exo_play_pause"
-                app:bar_height="2dp" app:touch_target_height="28dp" app:scrubber_enabled_size="6dp"
-                app:scrubber_dragged_size="10dp" app:played_color="#00D5ED" app:scrubber_color="#FFFFFF"
-                app:buffered_color="#718091" app:unplayed_color="#4DFFFFFF" />
+                app:bar_height="4dp" app:touch_target_height="28dp" app:scrubber_enabled_size="12dp"
+                app:scrubber_dragged_size="16dp" app:played_color="#E50914" app:scrubber_color="#FFFFFF"
+                app:buffered_color="#80FFFFFF" app:unplayed_color="#33FFFFFF" />
             <TextView android:id="@id/exo_duration" android:layout_width="50dp" android:layout_height="wrap_content"
-                android:gravity="end" android:text="0:00" android:textSize="11sp" android:textColor="#A6B6C8" />
+                android:gravity="end" android:text="0:00" android:textSize="12sp" android:textColor="#B3FFFFFF" android:fontFamily="sans-serif-medium" />
         </LinearLayout>
         <LinearLayout android:id="@+id/pov_player_actions" android:layout_width="match_parent"
             android:layout_height="44dp" android:orientation="horizontal" android:gravity="center_vertical">
@@ -66,6 +63,8 @@
                 android:drawableStart="@drawable/pov_ic_boost" android:nextFocusUp="@id/exo_progress" />
             <Button android:id="@+id/pov_browse" style="@style/POVPlayerAction" android:text="Browse"
                 android:drawableStart="@drawable/pov_ic_browse" android:nextFocusUp="@id/exo_progress" />
+            <Button android:id="@+id/pov_stop" style="@style/POVPlayerAction" android:text="Stop"
+                android:drawableStart="@drawable/pov_ic_stop" android:nextFocusUp="@id/exo_progress" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

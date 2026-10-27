@@ -13,6 +13,8 @@ internal data class TvFocusSnapshot(val key: String?, val scrollY: Int)
 internal class TvFocusController(
     private val body: ViewGroup,
     private val scroll: ScrollView,
+    /** Lets a layout place the focused row itself; returns false to use the default reveal. */
+    private val placement: (View) -> Boolean = { false },
     private val obstruction: () -> Rect? = { null },
 ) {
     private var lastKey: String? = null
@@ -54,10 +56,11 @@ internal class TvFocusController(
     private data class FocusRow(val owner: View, val targets: List<View>)
     private fun focusRows(): List<FocusRow> {
         val targets = leaves()
-        fun within(view: View, parent: View): Boolean {
-            var node: View? = view
-            while (node != null && node !== body) { if (node === parent) return true; node = node.parent as? View }
-            return false
+        // Count focus targets under each ancestor once, instead of rescanning every target per branch.
+        val contained = HashMap<View, Int>()
+        for (target in targets) {
+            var node: View? = target
+            while (node != null && node !== body) { contained[node] = (contained[node] ?: 0) + 1; node = node.parent as? View }
         }
         fun owner(view: View): View {
             var branch = view
@@ -65,7 +68,7 @@ internal class TvFocusController(
             while (parent != null && parent !== body) {
                 if (parent is LinearLayout && parent.orientation == LinearLayout.HORIZONTAL) {
                     // Do not collapse several vertically stacked controls in a dashboard column.
-                    return if (branch.isFocusable || targets.count { within(it, branch) } == 1) parent else view
+                    return if (branch.isFocusable || contained[branch] == 1) parent else view
                 }
                 branch = parent; parent = parent.parent as? View
             }
@@ -88,6 +91,16 @@ internal class TvFocusController(
         return true
     }
 
+    fun focusedIndex(): Int = body.findFocus()?.let { leaves().indexOf(it) } ?: -1
+    /** Returns focus to the same position in a rebuilt page, clamped to its last control. */
+    fun restoreIndex(index: Int, scrollY: Int): Boolean {
+        val all = leaves()
+        val target = all.getOrNull(index.coerceAtLeast(0)) ?: all.lastOrNull() ?: return false
+        scroll.scrollTo(0, scrollY)
+        if (!target.requestFocus()) return false
+        lastKey = key(target); reveal(target)
+        return true
+    }
     fun hasVisibleLeafFocus(): Boolean = body.findFocus()?.let { it in leaves() } == true
     fun revealCurrent() { body.findFocus()?.let(::reveal) }
     fun reset() { lastKey = null }
@@ -99,6 +112,7 @@ internal class TvFocusController(
         return result
     }
     private fun reveal(view: View) {
+        if (placement(view)) return
         if (focusRows().firstOrNull()?.targets?.contains(view) == true) { scroll.scrollTo(0, 0); return }
         var ancestor: View? = view
         while (ancestor != null && ancestor !== body) {
@@ -112,7 +126,14 @@ internal class TvFocusController(
             scroll.scrollBy(0, (visible.bottom - blocked.top + 12).coerceAtLeast(0))
         }
     }
-    private fun leaves(): List<View> = descendants(body).filter { it !== body && it.isFocusable && it.isEnabled && it.isShown }
-    private fun descendants(view: View): List<View> = listOf(view) + if (view is ViewGroup)
-        (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
+    private fun leaves(): List<View> {
+        val found = ArrayList<View>()
+        fun visit(view: View) {
+            if (view.visibility != View.VISIBLE) return
+            if (view !== body && view.isFocusable && view.isEnabled && view.isShown) found += view
+            if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
+        }
+        visit(body)
+        return found
+    }
 }

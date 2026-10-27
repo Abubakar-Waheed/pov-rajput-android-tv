@@ -134,7 +134,7 @@ class SubtitleSeekInstrumentation : Instrumentation() {
             onMain {
                 MainActivity::class.java.getDeclaredMethod("settings").apply { isAccessible = true }.invoke(main)
                 fun find(view: View): View? {
-                    if (view is TextView && view.text.startsWith("Subtitle language")) return view
+                    if (view.isClickable && ((view as? TextView)?.text ?: view.contentDescription ?: "").startsWith("Subtitle language")) return view
                     if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
                     return null
                 }
@@ -147,7 +147,7 @@ class SubtitleSeekInstrumentation : Instrumentation() {
             report.putBoolean("settings_language_persisted", true)
             onMain {
                 fun find(view: View): View? {
-                    if (view is TextView && view.text.startsWith("Audio language")) return view
+                    if (view.isClickable && ((view as? TextView)?.text ?: view.contentDescription ?: "").startsWith("Audio language")) return view
                     if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
                     return null
                 }
@@ -159,7 +159,7 @@ class SubtitleSeekInstrumentation : Instrumentation() {
             await("audio_language_saved") { audioPrefs.getString("language", null) == "fr" }
             onMain {
                 fun find(view: View): View? {
-                    if (view is TextView && view.text.startsWith("Subtitle position")) return view
+                    if (view.isClickable && ((view as? TextView)?.text ?: view.contentDescription ?: "").startsWith("Subtitle position")) return view
                     if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
                     return null
                 }

@@ -9,7 +9,7 @@ import androidx.media3.common.TrackSelectionParameters
 internal class AudioPreferences(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("pov_audio", Context.MODE_PRIVATE)
     var language: String
-        get() = preferences.getString("language", "").orEmpty().takeIf { value -> LANGUAGES.any { it.first == value } }.orEmpty()
+        get() = preferences.getString("language", "en").orEmpty().takeIf { value -> LANGUAGES.any { it.first == value } }.orEmpty()
         set(value) { require(LANGUAGES.any { it.first == value }); preferences.edit().putString("language", value).apply() }
     val languageLabel: String get() = LANGUAGES.first { it.first == language }.second
 

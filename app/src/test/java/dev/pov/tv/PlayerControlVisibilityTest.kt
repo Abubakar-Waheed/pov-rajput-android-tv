@@ -25,7 +25,7 @@ import java.time.Duration
 class PlayerControlVisibilityTest {
     private val chromeIds = listOf(androidx.media3.ui.R.id.exo_progress, androidx.media3.ui.R.id.exo_play_pause,
         androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_ffwd, R.id.pov_audio,
-        R.id.pov_subtitles, R.id.pov_boost, R.id.pov_browse, R.id.pov_loading_spinner)
+        R.id.pov_subtitles, R.id.pov_boost, R.id.pov_browse, R.id.pov_stop)
 
     @Test fun `focused audio action does not pin timeline loading indicator or other controls after timeout`() {
         val owner = Robolectric.buildActivity(Activity::class.java).setup().visible()
@@ -41,14 +41,11 @@ class PlayerControlVisibilityTest {
             controller.hide()
             controller.showTimeoutMs = 1_000
             controller.show()
-            view.findViewById<View>(R.id.pov_buffering_status).visibility = View.VISIBLE
             view.findViewById<View>(R.id.pov_audio).requestFocus()
-            // Making the previously GONE loading row visible requires a real layout pass before checking its rendered bounds.
             view.measure(View.MeasureSpec.makeMeasureSpec(960, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(540, View.MeasureSpec.EXACTLY))
             view.layout(0, 0, 960, 540)
             assertTrue(view.findViewById<View>(R.id.pov_audio).hasFocus())
-            assertTrue(rendered(view.findViewById(R.id.pov_loading_spinner)))
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1_001))
             assertEquals(View.GONE, controller.visibility)
             chromeIds.forEach { assertFalse("Chrome leaked outside controller: $it", rendered(view.findViewById(it))) }
@@ -69,7 +66,6 @@ class PlayerControlVisibilityTest {
         try {
             val controller = view.findViewById<PlayerControlView>(androidx.media3.ui.R.id.exo_controller)
             controller.show()
-            view.findViewById<View>(R.id.pov_buffering_status).visibility = View.VISIBLE
             view.measure(View.MeasureSpec.makeMeasureSpec(960, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(540, View.MeasureSpec.EXACTLY))
             view.layout(0, 0, 960, 540)

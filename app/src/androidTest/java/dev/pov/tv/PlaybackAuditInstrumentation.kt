@@ -275,8 +275,6 @@ class PlaybackAuditInstrumentation : Instrumentation() {
         })
         capturePublicScreenshot("pov-public-player-controls.png")
         report.putBoolean("public_geometry_screenshot_saved", true)
-        report.putBoolean("buffering_indicator_inside_controller", onMain { insideController(
-            playerView.findViewById(R.id.pov_loading_spinner), playerView) })
         report.putBoolean("independent_buffering_spinner_hidden", onMain {
             !rendered(playerView.findViewById(androidx.media3.ui.R.id.exo_buffering))
         })
@@ -317,18 +315,6 @@ class PlaybackAuditInstrumentation : Instrumentation() {
         stage = "manual_controls_hide"
         onMain { playerView.hideController(); checkAudit(allControlsHidden(playerView)) }
         report.putBoolean("manual_hide_includes_timeline_loading_and_actions", true)
-        stage = "rendered_loading_fixture"
-        onMain { playerView.controllerShowTimeoutMs = 4_000 }
-        revealControls(fullscreen!!)
-        onMain {
-            // Deliberately exercise rendered loading chrome; this is not a network-buffering claim.
-            playerView.findViewById<View>(R.id.pov_buffering_status).visibility = View.VISIBLE
-        }
-        await("rendered_loading_fixture_visible", 3_000) {
-            rendered(playerView.findViewById(R.id.pov_loading_spinner)) && validControllerGeometry(playerView)
-        }
-        report.putBoolean("loading_visibility_fixture_used", true)
-        report.putBoolean("loading_fixture_rendered_before_timeout", true)
         stage = "timed_controls_hide_with_action_focused"
         onMain { playerView.controllerShowTimeoutMs = 800 }
         revealControls(fullscreen!!)
@@ -339,11 +325,9 @@ class PlaybackAuditInstrumentation : Instrumentation() {
         await("timed_controls_hide_with_action_focused", 3_000) { allControlsHidden(playerView) }
         report.putBoolean("focused_audio_does_not_pin_controls", true)
         report.putBoolean("timeout_hides_timeline_loading_and_actions", true)
-        report.putBoolean("rendered_loading_fixture_hidden_with_controller", true)
         SystemClock.sleep(250)
         capturePublicScreenshot("pov-public-player-hidden.png")
         report.putBoolean("public_hidden_screenshot_saved", true)
-        onMain { playerView.findViewById<View>(R.id.pov_buffering_status).visibility = View.GONE }
         stage = "dpad_restores_controls"
         press(fullscreen!!, KeyEvent.KEYCODE_DPAD_UP)
         checkAudit(onMain { validControllerGeometry(playerView) })
@@ -651,7 +635,7 @@ class PlaybackAuditInstrumentation : Instrumentation() {
 
     private val chromeIds = listOf(androidx.media3.ui.R.id.exo_progress, androidx.media3.ui.R.id.exo_play_pause,
         androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_ffwd, R.id.pov_audio, R.id.pov_subtitles,
-        R.id.pov_boost, R.id.pov_browse, R.id.pov_loading_spinner)
+        R.id.pov_boost, R.id.pov_browse)
 
     private fun validControllerGeometry(playerView: PlayerView): Boolean {
         val bottom = playerView.findViewById<View>(R.id.pov_bottom_scrim)
@@ -661,7 +645,7 @@ class PlaybackAuditInstrumentation : Instrumentation() {
         if (bottomBounds.top < screenBounds.top + screenBounds.height() / 2 || !screenBounds.contains(bottomBounds)) return false
         val heightDp = bottomBounds.height() / playerView.resources.displayMetrics.density
         if (heightDp !in 120f..135f) return false
-        return chromeIds.filter { it != R.id.pov_loading_spinner }.all { id ->
+        return chromeIds.all { id ->
             val child = playerView.findViewById<View>(id)
             val bounds = Rect()
             rendered(child) && child.getGlobalVisibleRect(bounds) && bottomBounds.contains(bounds) && insideController(child, playerView)
@@ -680,7 +664,6 @@ class PlaybackAuditInstrumentation : Instrumentation() {
             "controller" to playerView.findViewById<View>(androidx.media3.ui.R.id.exo_controller),
             "scrim" to playerView.findViewById<View>(R.id.pov_bottom_scrim),
             "actions" to playerView.findViewById<View>(R.id.pov_player_actions),
-            "loading_status" to playerView.findViewById<View>(R.id.pov_buffering_status),
             "timeline" to playerView.findViewById<View>(androidx.media3.ui.R.id.exo_progress),
             "play_pause" to playerView.findViewById<View>(androidx.media3.ui.R.id.exo_play_pause),
             "rewind" to playerView.findViewById<View>(androidx.media3.ui.R.id.exo_rew),
@@ -688,8 +671,7 @@ class PlaybackAuditInstrumentation : Instrumentation() {
             "audio" to playerView.findViewById<View>(R.id.pov_audio),
             "subtitles" to playerView.findViewById<View>(R.id.pov_subtitles),
             "boost" to playerView.findViewById<View>(R.id.pov_boost),
-            "browse" to playerView.findViewById<View>(R.id.pov_browse),
-            "loading_spinner" to playerView.findViewById<View>(R.id.pov_loading_spinner)
+            "browse" to playerView.findViewById<View>(R.id.pov_browse)
         )
         namedViews.forEach { (name, view) ->
             if (view == null) {

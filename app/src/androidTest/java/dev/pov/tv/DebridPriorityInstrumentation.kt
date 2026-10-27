@@ -116,7 +116,7 @@ class DebridPriorityInstrumentation : Instrumentation() {
         }
         fun clickButton(prefix: String) = runOnMainSync {
             fun find(view: View): View? {
-                if (view is TextView && view.text.startsWith(prefix)) return view
+                if (view.isClickable && ((view as? TextView)?.text ?: view.contentDescription ?: "").startsWith(prefix)) return view
                 if (view is ViewGroup) for (index in 0 until view.childCount) find(view.getChildAt(index))?.let { return it }
                 return null
             }

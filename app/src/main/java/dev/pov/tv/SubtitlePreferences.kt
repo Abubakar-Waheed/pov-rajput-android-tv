@@ -16,10 +16,10 @@ import java.util.Locale
 internal class SubtitlePreferences(private val context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("pov_subtitles", Context.MODE_PRIVATE)
     var transparentBackground: Boolean
-        get() = preferences.getBoolean("transparent_background", false)
+        get() = preferences.getBoolean("transparent_background", true)
         set(value) { preferences.edit().putBoolean("transparent_background", value).apply() }
     var boldText: Boolean
-        get() = preferences.getBoolean("bold_text", false)
+        get() = preferences.getBoolean("bold_text", true)
         set(value) { preferences.edit().putBoolean("bold_text", value).apply() }
 
     var sizePercent: Int
@@ -28,7 +28,7 @@ internal class SubtitlePreferences(private val context: Context) {
     val sizeLabel: String get() = SIZE_LABELS[SIZES.indexOf(sizePercent)]
 
     var positionPercent: Int
-        get() = preferences.getInt("position_percent", -1).takeIf { it == -1 || it in 1..30 } ?: -1
+        get() = preferences.getInt("position_percent", DEFAULT_POSITION).takeIf { it == -1 || it in 1..30 } ?: DEFAULT_POSITION
         set(value) { require(value == -1 || value in 1..30); preferences.edit().putInt("position_percent", value).apply() }
     val positionLabel: String get() = if (positionPercent < 0) "Default" else "$positionPercent% from bottom"
 
@@ -43,7 +43,7 @@ internal class SubtitlePreferences(private val context: Context) {
     }
 
     var language: String
-        get() = preferences.getString("language", "").orEmpty().takeIf { value -> LANGUAGES.any { it.first == value } }.orEmpty()
+        get() = preferences.getString("language", "en").orEmpty().takeIf { value -> LANGUAGES.any { it.first == value } }.orEmpty()
         set(value) { require(LANGUAGES.any { it.first == value }); preferences.edit().putString("language", value).apply() }
     val languageLabel: String get() = LANGUAGES.first { it.first == language }.second
 
@@ -99,6 +99,8 @@ internal class SubtitlePreferences(private val context: Context) {
                 .distinctBy { it.first }.sortedBy { it.second }
         val COMMON_LANGUAGES = listOf("", "off", "en", "ur", "hi", "ar", "es", "fr", "de", "pt", "zh", "ja", "ko")
         val SIZES = listOf(80, 100, 130)
+        /** New installs: bold text on a transparent background, 3% above the bottom, English. */
+        const val DEFAULT_POSITION = 3
         val SIZE_LABELS = listOf("Small", "Medium", "Large")
     }
 }

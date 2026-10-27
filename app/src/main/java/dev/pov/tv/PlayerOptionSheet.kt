@@ -31,10 +31,10 @@ internal object PlayerOptionSheet {
         val content = LinearLayout(context).apply {
             tag = "pov_player_sheet"; orientation = LinearLayout.VERTICAL
             setPadding(dp(32), dp(22), dp(32), dp(24))
-            background = GradientDrawable().apply {
-                setColor(0xFF0C1724.toInt())
+            // Same card as the app's dialogs: neutral gradient, hairline border, rounded top.
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFF2A2A30.toInt(), 0xFF17171A.toInt())).apply {
                 cornerRadii = floatArrayOf(dp(20).toFloat(), dp(20).toFloat(), dp(20).toFloat(), dp(20).toFloat(), 0f, 0f, 0f, 0f)
-                setStroke(dp(1), 0xFF2D4156.toInt())
+                setStroke(dp(1), 0x2EFFFFFF)
             }
         }
         val heading = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -43,16 +43,17 @@ internal object PlayerOptionSheet {
         }, LinearLayout.LayoutParams(0, -2, 1f))
         val close = Button(context).apply {
             text = "Done"; textSize = 13f; isAllCaps = false; minWidth = dp(90)
-            setTextColor(accent); background = ColorDrawable(Color.TRANSPARENT)
-            setOnFocusChangeListener { _, focused -> background = GradientDrawable().apply {
-                setColor(if (focused) 0xFF20354B.toInt() else Color.TRANSPARENT); cornerRadius = dp(8).toFloat()
-            } }
+            setTextColor(Color.WHITE); background = GradientDrawable().apply { setColor(0x24FFFFFF); cornerRadius = dp(10).toFloat() }
+            setOnFocusChangeListener { _, focused ->
+                background = GradientDrawable().apply { setColor(if (focused) Color.WHITE else 0x24FFFFFF); cornerRadius = dp(10).toFloat() }
+                setTextColor(if (focused) Color.BLACK else Color.WHITE)
+            }
             setOnClickListener { dialog.dismiss() }
         }
         heading.addView(close, LinearLayout.LayoutParams(dp(96), dp(44)))
         content.addView(heading)
         if (detail.isNotBlank()) content.addView(TextView(context).apply {
-            text = detail; textSize = 13f; setTextColor(0xFFB4C5D7.toInt())
+            text = detail; textSize = 13f; setTextColor(0xFFC4C4C8.toInt())
             setPadding(0, dp(3), dp(12), dp(14))
         }, LinearLayout.LayoutParams(-1, -2))
         val rows = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -65,11 +66,12 @@ internal object PlayerOptionSheet {
                 maxLines = 2; minHeight = dp(47); setPadding(dp(14), dp(7), dp(14), dp(7))
                 isFocusable = true; isFocusableInTouchMode = true
                 fun style(focused: Boolean) {
-                    setTextColor(if (focused) 0xFF03111C.toInt() else if (choice.selectable) Color.WHITE else 0xFF96A5B6.toInt())
+                    // Focused rows turn white with dark text; the current choice keeps a light outline.
+                    setTextColor(if (focused) Color.BLACK else if (choice.selectable) Color.WHITE else 0xFF8E8E93.toInt())
                     background = GradientDrawable().apply {
-                        setColor(if (focused) accent else if (choice.checked) 0xFF1B3349.toInt() else 0xFF111F2E.toInt())
-                        cornerRadius = dp(8).toFloat()
-                        setStroke(dp(1), if (focused) Color.WHITE else if (choice.checked) accent else 0xFF24364B.toInt())
+                        setColor(if (focused) Color.WHITE else if (choice.checked) 0x33FFFFFF else 0x14FFFFFF)
+                        cornerRadius = dp(10).toFloat()
+                        if (!focused && choice.checked) setStroke(dp(1), 0x80FFFFFF.toInt())
                     }
                 }
                 style(false)

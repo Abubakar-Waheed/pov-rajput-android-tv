@@ -93,12 +93,9 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
                 runOnMainSync {
                     themeField.set(main, theme); page()
                     currentField.set(main, { refreshes++; body.removeAllViews() } as () -> Unit)
-                    if (theme == ThemeSpec.DASHBOARD) {
-                        MainActivity::class.java.getDeclaredMethod("dashboard", List::class.java, List::class.java, List::class.java)
-                            .apply { isAccessible = true }.invoke(main, listOf(saved), emptyList<Any>(), emptyList<Any>())
-                    } else MainActivity::class.java.getDeclaredMethod("resumeRow", List::class.java)
+                    MainActivity::class.java.getDeclaredMethod("resumeRow", List::class.java)
                         .apply { isAccessible = true }.invoke(main, listOf(saved))
-                    tile = checkNotNull(tagged(body, if (theme == ThemeSpec.DASHBOARD) "dashboard:pov-history-audit" else "resume:pov-history-audit"))
+                    tile = checkNotNull(tagged(body, "resume:pov-history-audit"))
                     tile!!.requestFocus()
                 }
                 waitForIdleSync(); Thread.sleep(250)
@@ -112,7 +109,7 @@ class UpdateAndHistoryInstrumentation : Instrumentation() {
                 sendKeySync(KeyEvent(time, time + 800, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0, 0,
                     KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_DPAD))
                 find("Remove from Continue Watching")
-                if (theme == ThemeSpec.CINEMATIC) capture("continue-watching-remove.png")
+                if (theme == ThemeSpec.FLIX) capture("continue-watching-remove.png")
                 click("Remove from Continue Watching")
                 check(history.isHidden(saved.key, identity)) { "Removed history item did not stay hidden." }
             }

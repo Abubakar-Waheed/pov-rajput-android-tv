@@ -237,12 +237,20 @@ class WeTrakrApi internal constructor(
         require(id.matches(Regex("[A-Za-z0-9_-]{1,80}"))) { "Invalid WeTrakr list." }
         return pages("/sync/lists/$id/items").mapNotNull(::media)
     }
-    fun continueWatching(): List<Pair<PlaybackIdentity, Double>> = listOf("movies", "episodes").flatMap { kind ->
-        pages("/sync/tracking/playing/$kind?extended=show_level_1").mapNotNull { item ->
-            val progress = item.optJSONObject("playback")?.optDouble("progress_percent", Double.NaN) ?: return@mapNotNull null
-            if (!progress.isFinite() || progress <= 0 || progress >= 95) return@mapNotNull null
-            identity(item)?.let { it to progress }
-        }
+    /** Movies and episodes are fetched side by side; token refresh is already serialized. */
+    fun continueWatching(): List<Pair<PlaybackIdentity, Double>> {
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            return listOf("movies", "episodes").map { kind -> pool.submit(java.util.concurrent.Callable {
+                pages("/sync/tracking/playing/$kind?extended=show_level_1").mapNotNull { item ->
+                    val progress = item.optJSONObject("playback")?.optDouble("progress_percent", Double.NaN) ?: return@mapNotNull null
+                    if (!progress.isFinite() || progress <= 0 || progress >= 95) return@mapNotNull null
+                    identity(item)?.let { it to progress }
+                }
+            }) }.flatMap { task ->
+                try { task.get() } catch (error: java.util.concurrent.ExecutionException) { throw (error.cause as? Exception ?: error) }
+            }
+        } finally { pool.shutdownNow() }
     }
     fun nextEpisodes(): List<PlaybackIdentity> = pages("/sync/tracking/watching/shows?extended=episode_level_1").mapNotNull { show ->
         val next = show.optJSONObject("next_watching_episode") ?: return@mapNotNull null
