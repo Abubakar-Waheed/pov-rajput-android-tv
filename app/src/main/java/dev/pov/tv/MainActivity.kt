@@ -931,6 +931,8 @@ class MainActivity : Activity() {
         frame.findViewWithTag<TextView>("feature-meta").text = listOf(rating, item.year, item.genres.take(2).joinToString(" · "), item.runtime)
             .filter(String::isNotBlank).joinToString("   ")
         frame.findViewWithTag<TextView>("feature-description").apply { text = item.description; visibility = if (item.description.isBlank()) View.GONE else View.VISIBLE }
+        // A longer description may now reach the shelf above the focused one.
+        if (flixScrollTarget > 0) frame.post { if (flixScrollTarget > 0) fadeShelvesAbove(flixScrollTarget + featureCopyBottom()) }
     }
 
     private fun scheduleFeature(item: MediaItemData) {
@@ -964,6 +966,7 @@ class MainActivity : Activity() {
         val actions = hero.findViewWithTag<View>("feature-actions")
         if (within(view, hero)) {
             actions?.animate()?.alpha(1f)?.setDuration(160)?.start()
+            flixScrollTarget = -1
             fadeShelvesAbove(Int.MIN_VALUE)
             scroller.smoothScrollTo(0, 0)
             featureHandler.removeCallbacksAndMessages(null)
@@ -984,9 +987,20 @@ class MainActivity : Activity() {
         actions?.animate()?.alpha(0f)?.setDuration(160)?.start()
         // The last shelves cannot rise all the way to the line, so hide only what would really sit under the feature copy.
         val target = (top - dp(FLIX_ROW_LINE)).coerceIn(0, (body.height - scroller.height).coerceAtLeast(0))
-        fadeShelvesAbove(target + dp(FLIX_ROW_LINE) - dp(8))
+        flixScrollTarget = target
+        fadeShelvesAbove(target + featureCopyBottom())
         scroller.smoothScrollTo(0, target)
         return true
+    }
+
+    private var flixScrollTarget = -1
+
+    /** Where the pinned feature text ends on screen: a short title leaves room for the shelf above the last one. */
+    private fun featureCopyBottom(): Int {
+        val copy = featureHero()?.findViewWithTag<View>("feature-copy") ?: return dp(FLIX_ROW_LINE)
+        val here = IntArray(2); val origin = IntArray(2)
+        copy.getLocationOnScreen(here); scroller.getLocationOnScreen(origin)
+        return (here[1] - origin[1] + copy.height + dp(8)).coerceAtMost(dp(FLIX_ROW_LINE))
     }
 
     /** Hides every shelf that starts above [cutoff] (body coordinates), i.e. that would overlap the pinned feature copy. */
