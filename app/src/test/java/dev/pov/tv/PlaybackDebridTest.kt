@@ -22,7 +22,8 @@ class PlaybackDebridTest {
         val logo = ImageView(context).apply { id = R.id.pov_debrid_logo }
         val name = TextView(context).apply { id = R.id.pov_debrid_name }
         badge.addView(logo); badge.addView(name); root.addView(badge)
-        for ((id, label) in listOf("offcloud" to "Offcloud", "torbox" to "TorBox")) {
+        for ((id, label) in listOf("offcloud" to "Offcloud", "torbox" to "TorBox", "realdebrid" to "Real-Debrid",
+                "alldebrid" to "AllDebrid", "premiumize" to "Premiumize", "debridlink" to "Debrid-Link")) {
             PlaybackDebrid.bind(root, id)
             assertEquals(View.VISIBLE, badge.visibility)
             assertEquals(label, name.text.toString())

@@ -15,7 +15,7 @@ class LastPlayedLinks internal constructor(
     data class Link(val identity: PlaybackIdentity, val url: String, val key: String, val service: String?, val account: String, val savedAt: Long)
     private fun token(identity: PlaybackIdentity) = "${identity.type}:${identity.imdbId}:${identity.season}:${identity.episode}"
     private fun account(service: String?): String {
-        val credential = when (service) { "offcloud" -> get("offcloud.key"); "torbox" -> get("torbox.token"); null -> return "direct"; else -> return "" }
+        val credential = when (service) { null -> return "direct"; in DebridServices.IDS -> get(DebridServices.credential(service)); else -> return "" }
         if (credential.isBlank()) return ""
         return MessageDigest.getInstance("SHA-256").digest(credential.toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
     }

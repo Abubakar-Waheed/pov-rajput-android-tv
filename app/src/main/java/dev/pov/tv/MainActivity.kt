@@ -495,7 +495,7 @@ class MainActivity : Activity() {
     }
     private fun Int?.orZero() = this ?: 0
     private fun pageRevision() = java.security.MessageDigest.getInstance("SHA-256").digest(
-        listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint"), store.get(SourceProviders.KEY), store.get(TMDB_KEY), store.get(TMDB_REGION)).joinToString("\u0000").toByteArray()
+        listOf(theme.id, wetrakr.accountRevision(), store.get("offcloud.key"), store.get("torbox.token"), store.get("wetrakr.home_liked_opt_in"), store.get("sources.endpoint"), store.get(SourceProviders.KEY), store.get(TMDB_KEY), store.get(TMDB_REGION), store.get(RESUME_CARDS)).joinToString("\u0000").toByteArray()
     ).joinToString("") { "%02x".format(it.toInt() and 255) }
     private fun focusAfterRender(id: Int) {
         body.post {
@@ -539,18 +539,25 @@ class MainActivity : Activity() {
         val id = page(""); isHome = true; body.setPadding(0, 0, 0, contentBottomPadding())
         val remoteHome = !publicPreview && wetrakr.connected()
         val recent = if (publicPreview || remoteHome) emptyList() else history.continueWatching()
+        // Something in progress: the feature trims so the first screen ends on a complete row.
+        val compact = flix && if (remoteHome) !cachedContinueWatching().isNullOrEmpty() else recent.isNotEmpty()
         read(id, { homeShelves() }) { shelves ->
             val movies = shelves.first { it.title == "Popular Movies" }.items
             val series = shelves.first { it.title == "Popular Shows" }.items
             val rotation = if (flix) (0 until 10).flatMap { listOfNotNull(movies.getOrNull(it), series.getOrNull(it)) } else emptyList()
-            (movies.firstOrNull() ?: shelves.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull())?.let { if (flix) streamingHero(it, true, rotation) else hero(it) }
+            (movies.firstOrNull() ?: shelves.firstOrNull { it.items.isNotEmpty() }?.items?.firstOrNull())?.let { if (flix) streamingHero(it, true, rotation, compact) else hero(it) }
             if (remoteHome) homeContinueWatching(id) else if (recent.isNotEmpty()) resumeRow(recent)
-            if (flix) {
+            if (flix && !compact) {
                 rankedRow("Top 10 Movies", movies)
                 rankedRow("Top 10 Shows", series)
             }
+            var topTenPending = flix && compact
             shelves.forEach { shelf ->
-                if (shelf.items.isNotEmpty()) mediaRow(shelf.title, shelf.items) else {
+                if (shelf.items.isNotEmpty()) {
+                    mediaRow(shelf.title, shelf.items)
+                    // With Continue Watching on the first screen, the tall Top 10 shelves follow the first regular row.
+                    if (topTenPending) { topTenPending = false; rankedRow("Top 10 Movies", movies); rankedRow("Top 10 Shows", series) }
+                } else {
                     body.addView(button("${shelf.title}  ›") { navigate { shelfGrid(shelf.title, shelf.items) } }
                         .apply { tag = "shelf:${shelf.title}" }, margin(-1, 40, top = 10, bottom = 7))
                     body.addView(text(if (shelf.unavailable) "This catalog is temporarily unavailable." else "No titles returned for this catalog.", 13, muted))
@@ -566,6 +573,12 @@ class MainActivity : Activity() {
             }
         }
     }
+
+    private fun cachedContinueWatching(): List<Pair<PlaybackIdentity, Double>>? = try {
+        org.json.JSONObject(store.get(CONTINUE_CACHE)).takeIf { it.optString("revision") == wetrakr.accountRevision() }?.optJSONArray("items")?.let { items ->
+            (0 until items.length()).map { index -> items.getJSONObject(index).let { PlaybackIdentity.fromJson(it.getJSONObject("id")) to it.getDouble("percent") } }
+        }
+    } catch (_: Exception) { null }
 
     /** TMDB shelves when the viewer has added a key; Cinemeta otherwise, or if TMDB cannot be reached. */
     private fun homeShelves(): List<CatalogApi.HomeShelf> {
@@ -596,18 +609,15 @@ class MainActivity : Activity() {
             progress.forEach { (identity, percent) ->
                 remoteProgress[identityKey(identity)] = percent
                 val caption = listOf(if (identity.type == "series") "S${identity.season} E${identity.episode}" else "", "${percent.toInt()}%").filter { it.isNotBlank() }.joinToString(" · ")
-                row.addView(tile(MediaItemData(identity.imdbId, identity.type, identity.title), percent / 100, caption) {
-                    continuePlayback(identity)
-                }.apply { continueOptions(this, "", identity, identity.title) }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
+                val item = MediaItemData(identity.imdbId, identity.type, identity.title)
+                val open: () -> Unit = { continuePlayback(identity) }
+                row.addView((if (resumeCards()) resumeCard(item, percent / 100, episodeLine(identity), "${percent.toInt()}% watched", open) else tile(item, percent / 100, caption, open))
+                    .apply { continueOptions(this, "", identity, identity.title) }, continueSlot())
             }
         }
         // The last list is kept encrypted with the account revision, so the row shows instantly on launch.
         val revision = wetrakr.accountRevision()
-        val cached = try {
-            org.json.JSONObject(store.get(CONTINUE_CACHE)).takeIf { it.optString("revision") == revision }?.optJSONArray("items")?.let { items ->
-                (0 until items.length()).map { index -> items.getJSONObject(index).let { PlaybackIdentity.fromJson(it.getJSONObject("id")) to it.getDouble("percent") } }
-            }
-        } catch (_: Exception) { null }
+        val cached = cachedContinueWatching()
         cached?.let(::fill)
         read(id, { wetrakr.continueWatching() }) { progress ->
             store.put(CONTINUE_CACHE, org.json.JSONObject().put("revision", revision).put("items", org.json.JSONArray(progress.map { (identity, percent) ->
@@ -625,6 +635,7 @@ class MainActivity : Activity() {
     private fun likedLists(id: Int, home: Boolean) {
         val host = column().apply { tag = if (home) "wetrakr-home-liked" else "wetrakr-section-liked" }
         body.addView(host, margin(-1, -2, top = 10))
+        if (flix) { flixLikedLists(id, host); return }
         read(id, { wetrakr.likedLists() }) { lists ->
             if (lists.isEmpty() && !home) host.addView(text("No liked lists on WeTrakr yet.", 13, muted))
             if (lists.isNotEmpty()) {
@@ -637,6 +648,25 @@ class MainActivity : Activity() {
                     host.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; isFocusable = false; clipChildren = false; addView(row) })
                     read(id, { wetrakr.likedListPreview(listId) }) { items ->
                         items.forEach { item -> row.addView(card(item), margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp)) }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Flix: every liked list becomes an ordinary shelf (title, cards, "See all" for the whole list). Each shelf is
+     * its own page section so it tucks away under the feature like the others; slots keep the lists' order.
+     */
+    private fun flixLikedLists(id: Int, anchor: LinearLayout) {
+        read(id, { wetrakr.likedLists() }) { lists ->
+            var index = body.indexOfChild(anchor)
+            lists.forEach { (listId, title) ->
+                val slot = column().apply { tag = "wetrakr-liked:$listId" }
+                body.addView(slot, ++index, margin(-1, -2))
+                read(id, { wetrakr.likedListPreview(listId) }) { items ->
+                    mediaRow(title, items, slot) {
+                        navigate { val pageId = page(title, "Liked list · WeTrakr"); read(pageId, { wetrakr.likedListItems(listId) }) { mediaGrid(it) } }
                     }
                 }
             }
@@ -757,16 +787,16 @@ class MainActivity : Activity() {
         bottomAligner = listener; body.addOnLayoutChangeListener(listener); body.requestLayout()
     }
 
-    private fun streamingHero(item: MediaItemData, showAction: Boolean, rotation: List<MediaItemData> = emptyList()) {
+    private fun streamingHero(item: MediaItemData, showAction: Boolean, rotation: List<MediaItemData> = emptyList(), compact: Boolean = false) {
         val layout = theme.layout
-        val height = if (showAction) layout.heroHeightDp else 250
+        val height = if (!showAction) 250 else if (compact) COMPACT_HERO_HEIGHT else layout.heroHeightDp
         val frame = (if (showAction) LayoutBoundaryFrame(this) else FrameLayout(this)).apply { clipChildren = false; tag = "featured-hero"; setTag(R.id.pov_feature_item, item) }
         placeBackdrop(home = showAction)
         heroBackdrop.visibility = View.VISIBLE
         image(backdropArt, backdropFor(item), feature = true)
         // Shadowed display text is rasterized into one layer, redrawn only when the feature changes.
         val copy = column().apply { tag = "feature-copy"; setLayerType(View.LAYER_TYPE_HARDWARE, null) }
-        copy.addView(FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START; visibility = View.GONE }, margin(350, 88))
+        copy.addView(FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START; visibility = View.GONE }, margin(350, if (compact) 72 else 88))
         copy.addView(text("", layout.titleSizeSp, ink, true).apply {
             tag = "feature-title"; typeface = Typeface.create(layout.titleTypeface, Typeface.BOLD); maxLines = 2; ellipsize = TextUtils.TruncateAt.END
             setShadowLayer(dp(8).toFloat(), 0f, dp(1).toFloat(), 0xB0000000.toInt())
@@ -774,10 +804,10 @@ class MainActivity : Activity() {
         copy.addView(text("", 12, Color.WHITE, true).apply { tag = "feature-meta" }, margin(-1, -2, top = 10))
         copy.addView(text("", 13, 0xFFE6E6E6.toInt()).apply {
             tag = "feature-description"; setLineSpacing(dp(2).toFloat(), 1f)
-            if (showAction) { maxLines = 3; ellipsize = TextUtils.TruncateAt.END }
+            if (showAction) { maxLines = if (compact) 2 else 3; ellipsize = TextUtils.TruncateAt.END }
             setShadowLayer(dp(4).toFloat(), 0f, 0f, 0xB0000000.toInt())
         }, margin(-1, -2, top = 8))
-        frame.addView(copy, FrameLayout.LayoutParams(dp(if (showAction) 420 else 560), -2).apply { topMargin = dp(if (showAction) 30 else 12) })
+        frame.addView(copy, FrameLayout.LayoutParams(dp(if (showAction) 420 else 560), -2).apply { topMargin = dp(if (!showAction) 12 else if (compact) 24 else 30) })
         if (showAction) {
             val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; tag = "feature-actions"; clipChildren = false }
             // Actions follow whichever title the rotating feature currently shows.
@@ -1097,11 +1127,15 @@ class MainActivity : Activity() {
             val identity = saved.identity
             val item = MediaItemData(identity?.imdbId.orEmpty(), identity?.type ?: "movie", saved.title,
                 background = identity?.imdbId?.let { "https://images.metahub.space/background/medium/$it/img" }.orEmpty())
-            val remaining = "${((saved.duration - saved.position).coerceAtLeast(0) / 60000)}m left"
+            val remaining = listOf(identity?.takeIf { it.type == "series" }?.let { "S${it.season} E${it.episode}" }.orEmpty(),
+                "${((saved.duration - saved.position).coerceAtLeast(0) / 60000)}m left").filter(String::isNotBlank).joinToString(" · ")
             val action: () -> Unit = {
                 resumeSaved(saved)
             }
-            row.addView(tile(item, saved.position.toDouble() / saved.duration.coerceAtLeast(1), remaining, action).apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
+            val progress = saved.position.toDouble() / saved.duration.coerceAtLeast(1)
+            val timeLeft = "${((saved.duration - saved.position).coerceAtLeast(0) / 60000)}m left"
+            row.addView((if (resumeCards()) resumeCard(item, progress, identity?.let(::episodeLine) ?: "Cloud video", timeLeft, action) else tile(item, progress, remaining, action))
+                .apply { tag = "resume:${saved.key}"; continueOptions(this, saved.key, saved.identity, saved.title) }, continueSlot())
         }
     }
 
@@ -1573,7 +1607,9 @@ class MainActivity : Activity() {
     private companion object { const val VOICE_REQUEST = 701; const val PLAYBACK_REQUEST = 702; const val MIC_REQUEST = 703; const val FLIX_ROW_LINE = 236; const val FEATURE_INTERVAL_MS = 5_000L; const val AUTOPLAY_FIRST = "sources.autoplay_first"; const val BACKDROP_WIDTH = 1280; const val CONTINUE_CACHE = "wetrakr.continue_cache"
         const val TMDB_KEY = "tmdb.key"; const val TMDB_REGION = "tmdb.region"
         const val HOME_KEEP_MS = 15 * 60_000L
-        const val HOME_BACKDROP_SCALE = 0.72f }
+        const val HOME_BACKDROP_SCALE = 0.72f
+        const val COMPACT_HERO_HEIGHT = 236
+        const val RESUME_CARD_WIDTH = 300; const val RESUME_CARDS = "home.resume_cards" }
 
     private fun searchResults(query: String, filter: String = "all", cached: CatalogApi.SearchResults? = null) {
         current = { searchResults(query, filter, cached) }
@@ -1758,7 +1794,7 @@ class MainActivity : Activity() {
         val order = connected.joinToString(" → ") { DebridServices.name(it) }
         val id = page(identity.title + suffix, if (connected.isEmpty()) "Connect a debrid service to find playable sources." else "Cached source priority: $order.")
         if (connected.isEmpty()) {
-            body.addView(button("Connect Offcloud or TorBox in Settings") { navigate { settings() } }, margin(310, 44)); return
+            body.addView(button("Connect a debrid service in Settings") { navigate { settings() } }, margin(310, 44)); return
         }
         read(id, { resolver.search(identity) }) { result ->
             sourceResults(identity, result.items, result.unavailableProviders, autoplay = store.get(AUTOPLAY_FIRST) == "true")
@@ -1775,6 +1811,7 @@ class MainActivity : Activity() {
         }
         val connected = DebridServices.connected(store)
         if (connected.isEmpty()) { showSources(identity); return }
+        val checkOnPlay = connected.filter { it in LinkDebrids.CHECK_ON_PLAY }
         val suffix = if (identity.type == "series") "  ·  S${identity.season} E${identity.episode}" else ""
         val id = page(identity.title + suffix, "Cached source priority: ${connected.joinToString(" → ") { DebridServices.name(it) }}.")
         val sorting = SourceSortPreferences(this)
@@ -1794,25 +1831,95 @@ class MainActivity : Activity() {
                 source.directUrl.isNotEmpty() -> "DIRECT STREAM"
                 cachedOn.size > 1 -> "CACHED · ${cachedOn.joinToString(" + ")} · Plays via ${cachedOn.first()}"
                 cachedOn.isNotEmpty() -> "CACHED · ${cachedOn.first()}"
+                checkOnPlay.isNotEmpty() -> "CHECK ON PLAY · ${checkOnPlay.joinToString(" + ") { DebridServices.name(it) }}"
                 else -> "TRANSFER MAY BE NEEDED"
             }
             val limitNote = if (tooTall(source)) " · ABOVE THIS TV'S ${DecoderLimits.label(limit)} LIMIT" else ""
             choices.addChoice(TvChoiceRow(this, TvChoiceKeys.source(source), source.title, source.detail,
                 "$status$limitNote · ${source.provider}", theme.palette, SourceBadges.from(source)) {
                 if (!source.cached && source.directUrl.isEmpty()) {
-                    val service = connected.first()
-                    confirm("Add this source to your ${DebridServices.name(service)} account? A transfer may need time to finish.") {
-                        resolve(source.copy(downloadService = service), identity)
-                    }
+                    if (checkOnPlay.isNotEmpty()) resolveFirstCached(ordered.dropWhile { it !== source }.filterNot(::tooTall), identity, source)
+                    else offerTransfer(source, identity)
                 }
                 else resolve(source, identity)
             })
         }
         focusAfterRender(id)
         // Only a fresh search auto-plays; returning to this list leaves the choice to the viewer.
-        if (autoplay) ordered.firstOrNull { (it.cached || it.directUrl.isNotEmpty()) && !tooTall(it) }?.let { first ->
-            toast("Playing the top result · ${first.title.take(60)}")
-            resolve(first, identity)
+        if (autoplay) {
+            val first = ordered.firstOrNull { (it.cached || it.directUrl.isNotEmpty()) && !tooTall(it) }
+            if (first != null) { toast("Playing the top result · ${first.title.take(60)}"); resolve(first, identity) }
+            else if (checkOnPlay.isNotEmpty()) resolveFirstCached(ordered.filterNot(::tooTall), identity, null)
+        }
+    }
+
+    /** Offcloud and TorBox can download a link that isn't cached; the other services cannot. */
+    private fun offerTransfer(source: SourceItem, identity: PlaybackIdentity) {
+        val service = DebridServices.connected(store).firstOrNull { it in DebridServices.TRANSFERS }
+        if (service == null) { toast("This link isn't cached on your debrid services. Choose another link."); return }
+        confirm("Add this source to your ${DebridServices.name(service)} account? A transfer may need time to finish.") {
+            resolve(source.copy(downloadService = service), identity)
+        }
+    }
+
+    /**
+     * Real-Debrid, AllDebrid and Debrid-Link cannot say in advance what is cached, so the first few links are tried
+     * in order and the first cached one plays. [picked] is the row the viewer chose, offered for download if none play.
+     */
+    private fun resolveFirstCached(candidates: List<SourceItem>, identity: PlaybackIdentity, picked: SourceItem?) {
+        if (resolvingGeneration == generation || launchingPlayer) { toast("Preparing the selected source…"); return }
+        val request = generation; resolvingGeneration = request
+        val progress = text("Checking links…", 14, accent); body.addView(progress, margin(-1, -2, top = 14))
+        worker.execute {
+            try {
+                val prepared = resolver.prepareFirstCached(candidates, identity) { number, total, service ->
+                    runOnUiThread { if (request == generation) progress.text = "Checking link $number of $total on ${DebridServices.name(service)}…" }
+                }
+                runOnUiThread {
+                    if (request == generation && !isFinishing && !isDestroyed) {
+                        resolvingGeneration = null; body.removeView(progress)
+                        when {
+                            prepared == null -> {
+                                val tried = minOf(candidates.count { it.infoHash.isNotBlank() }, LinkDebrids.CHECK_LIMIT)
+                                toast("None of the first $tried links are cached. Pick another link.")
+                                if (picked != null && DebridServices.connected(store).any { it in DebridServices.TRANSFERS }) offerTransfer(picked, identity)
+                                focusAfterRender(request)
+                            }
+                            prepared.files.size == 1 -> playLinkFile(prepared, prepared.files.single())
+                            else -> navigate { linkFiles(prepared) }
+                        }
+                    }
+                }
+            } catch (error: Exception) { runOnUiThread {
+                if (request == generation && !isFinishing && !isDestroyed) { resolvingGeneration = null; body.removeView(progress); showError(error); focusAfterRender(request) }
+            } }
+        }
+    }
+
+    private fun linkFiles(prepared: PreparedSource.Links) {
+        current = { linkFiles(prepared) }
+        val identity = prepared.identity
+        val name = DebridServices.name(prepared.service)
+        val id = page("Choose a $name video", "Choose the correct file for ${identity.title}.")
+        val choices = TvChoiceList(this); body.addView(choices, margin(-1, -2))
+        prepared.files.forEach { file ->
+            choices.addChoice(TvChoiceRow(this, "${prepared.service}:${identity.imdbId}:${file.id}", file.name,
+                if (file.size > 0) "${file.size / (1024 * 1024)} MB" else "$name video", palette = theme.palette) { playLinkFile(prepared, file) })
+        }
+        if (prepared.files.isEmpty()) body.addView(text("No eligible video files are available. Go back and choose another source.", 15, muted))
+        if (pendingFocus == null) prepared.preferredFileId?.let { pendingFocus = TvFocusSnapshot("${prepared.service}:${identity.imdbId}:$it", 0) }
+        focusAfterRender(id)
+    }
+
+    private fun playLinkFile(prepared: PreparedSource.Links, file: DebridFile) {
+        val identity = prepared.identity
+        val request = generation
+        worker.execute {
+            try {
+                val url = resolver.streamUrl(prepared, file)
+                runOnUiThread { if (request == generation && !isFinishing && !isDestroyed)
+                    play(url, identity.title, identity, "media:${identity.imdbId}:${identity.season}:${identity.episode}", prepared.service) }
+            } catch (error: Exception) { runOnUiThread { if (request == generation && !isFinishing && !isDestroyed) showError(error) } }
         }
     }
 
@@ -1837,6 +1944,10 @@ class MainActivity : Activity() {
                                 val only = prepared.automaticFile
                                 if (only != null) playPreparedFile(prepared, only)
                                 else navigate { preparedFiles(prepared) }
+                            }
+                            is PreparedSource.Links -> {
+                                if (prepared.files.size == 1) playLinkFile(prepared, prepared.files.single())
+                                else navigate { linkFiles(prepared) }
                             }
                         }
                     }
@@ -1911,14 +2022,14 @@ class MainActivity : Activity() {
     }
 
     private fun selectedCloud() {
-        val services = DebridServices.connected(store)
+        val services = DebridServices.connected(store).filter { it in DebridServices.TRANSFERS }
         if (services.size == 1) {
             if (services.first() == "offcloud") offcloudCloud() else cloud("torrents")
             return
         }
         current = { selectedCloud() }; destination = "library"; refreshNavigation()
         page("Cloud library", "Choose a connected service to browse its downloads.")
-        if (services.isEmpty()) body.addView(button("Connect Offcloud or TorBox in Settings") { navigate { settings() } }, margin(-1, 44))
+        if (services.isEmpty()) body.addView(button("Connect a debrid service in Settings") { navigate { settings() } }, margin(-1, 44))
         services.forEach { service ->
             body.addView(button("${DebridServices.name(service)} cloud  ›") {
                 navigate { if (service == "offcloud") offcloudCloud() else cloud("torrents") }
@@ -2179,6 +2290,7 @@ class MainActivity : Activity() {
         val tracker = weTrakrClient()
         val id = page("My ${tracker.name}", "Your watchlist. Your progress. Your next episode.")
         if (!tracker.connected()) { body.addView(button("Connect WeTrakr") { startWeTrakr() }, margin(210, 44)); return }
+        if (flix) { flixWeTrakrPage(id); return }
         // Start with the visual library shelves; progress rows must not push them off-screen.
         read(id, { tracker.watchlist("movie") to tracker.watchlist("series") }) { (movies, series) ->
             mediaRow("Movie watchlist", movies); mediaRow("TV watchlist", series)
@@ -2186,6 +2298,51 @@ class MainActivity : Activity() {
             body.addView(button("Personal lists") { navigate { weTrakrLists() } }, margin(180, 42, top = 18))
             weTrakrProgress(id)
         }
+    }
+
+    /**
+     * Flix WeTrakr: the same shelves as Home. Each section has a fixed slot so they keep their order while they
+     * load independently. Playing from here always searches fresh links (and resumes the saved position).
+     */
+    private fun flixWeTrakrPage(id: Int) {
+        fun slot() = column().also { body.addView(it, margin(-1, -2)) }
+        val progressSlot = slot(); val nextSlot = slot(); val movieSlot = slot(); val showSlot = slot(); val personalSlot = slot()
+        val likedAnchor = slot()
+        fun heading(host: LinearLayout, title: String) = host.addView(text(title, theme.layout.sectionTitleSizeSp, ink, true), margin(-1, -2, top = 14, bottom = 6))
+        read(id, { wetrakr.continueWatching() }) { progress ->
+            if (progress.isEmpty()) return@read
+            heading(progressSlot, "Continue Watching")
+            val row = horizontalRow(progressSlot)
+            progress.forEach { (identity, percent) ->
+                remoteProgress[identityKey(identity)] = percent
+                val caption = listOf(if (identity.type == "series") "S${identity.season} E${identity.episode}" else "", "${percent.toInt()}%").filter { it.isNotBlank() }.joinToString(" · ")
+                val item = MediaItemData(identity.imdbId, identity.type, identity.title)
+                val open: () -> Unit = { navigate { showSources(identity) } }
+                row.addView((if (resumeCards()) resumeCard(item, percent / 100, episodeLine(identity), "${percent.toInt()}% watched", open) else tile(item, percent / 100, caption, open))
+                    .apply { continueOptions(this, "", identity, identity.title) }, continueSlot())
+            }
+        }
+        read(id, { wetrakr.nextEpisodes() }) { next ->
+            if (next.isEmpty()) return@read
+            heading(nextSlot, "Up Next")
+            val row = horizontalRow(nextSlot)
+            next.forEach { identity ->
+                row.addView(tile(MediaItemData(identity.imdbId, "series", identity.title), caption = "S${identity.season} E${identity.episode}") { navigate { showSources(identity) } },
+                    margin(cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp))
+            }
+        }
+        read(id, { wetrakr.watchlist("movie") }) { mediaRow("Movie watchlist", it, movieSlot) }
+        read(id, { wetrakr.watchlist("series") }) { mediaRow("TV watchlist", it, showSlot) }
+        read(id, { wetrakr.lists() }) { lists ->
+            lists.forEach { (listId, title) ->
+                val listSlot = column().also { personalSlot.addView(it, margin(-1, -2)) }
+                read(id, { wetrakr.listItems(listId) }) { items ->
+                    listSlot.setTag(R.id.pov_list_scope, "playlist:$listId")
+                    mediaRow(title, items, listSlot) { navigate { personalListGrid(listId, title) } }
+                }
+            }
+        }
+        flixLikedLists(id, likedAnchor)
     }
 
     private fun weTrakrProgress(id: Int) {
@@ -2293,6 +2450,8 @@ class MainActivity : Activity() {
                     store.put(TMDB_REGION, countries[index].first); dialog.dismiss(); refreshSettings()
                 }.setNegativeButton("Cancel", null).show()
         }
+        settingsToggle(home, "Resume cards", "Continue Watching as wide cards with the episode, time left and progress beside the artwork.",
+            store.get(RESUME_CARDS) != "false") { on -> store.put(RESUME_CARDS, on.toString()) }
         if (tmdbKey.isNotBlank()) settingsRow(home, "Remove TMDB key", danger = true) {
             confirm("Remove your TMDB key? Home will use Cinemeta catalogs.") { store.remove(TMDB_KEY); refreshSettings() }
         }
@@ -2337,7 +2496,7 @@ class MainActivity : Activity() {
         settingsRow(captions, "Subtitle language", subtitlePreferences.languageLabel, "Chosen automatically when available. You can pick another track in the player.") { subtitleLanguage() }
         settingsRow(captions, "Audio language", AudioPreferences(this).languageLabel, "Chosen automatically when available. You can pick another track in the player.") { audioLanguage() }
 
-        val services = settingsGroup("Streaming services", "library")
+        val services = settingsGroup("Debrid Services", "library")
         val offcloud = OffcloudApi(store)
         settingsRow(services, "Offcloud", if (offcloud.connected()) "Connected" else "Not connected",
             if (offcloud.connected()) "Select to replace the API key." else "Connect with your Offcloud API key.", status = offcloud.connected()) { connectOffcloud() }
@@ -2347,6 +2506,17 @@ class MainActivity : Activity() {
         settingsRow(services, "TorBox API key", "", "Or paste your own TorBox API key instead of signing in.") {
             inputSetting("TorBox API key", "Paste your own TorBox API key", "", true) { key -> load(generation, { torbox.setApiKey(key) }) { toast("TorBox connected"); refreshSettings() } }
         }
+        val linkDebrids = LinkDebrids(store)
+        LinkDebrids.IDS.forEach { service ->
+            val name = DebridServices.name(service); val on = linkDebrids.connected(service)
+            val note = if (service in LinkDebrids.CHECK_ON_PLAY) " Links are checked when you play: the first cached one of the top ${LinkDebrids.CHECK_LIMIT} plays." else ""
+            settingsRow(services, name, if (on) "Connected" else "Not connected",
+                (if (on) "Select to replace the API key." else "Connect with your $name API key.") + note, status = on) {
+                inputSetting("$name API key", "Paste your $name API key", "", true) { key ->
+                    load(generation, { linkDebrids.setKey(service, key) }) { toast("$name connected"); refreshSettings() }
+                }
+            }
+        }
         settingsRow(services, "Debrid priority", DebridServices.priority(store).joinToString(" → ") { DebridServices.name(it) },
             "All connected accounts are checked. Cached copies play from the first available service in this order.") { debridPriority() }
         settingsRow(services, "Source providers", "", "Your HTTPS scraper add-ons, such as Torrentio. Results from enabled providers are merged.") { sourceProviders() }
@@ -2355,6 +2525,12 @@ class MainActivity : Activity() {
         }
         if (torboxConnected) settingsRow(services, "Disconnect TorBox", danger = true) {
             confirm("Disconnect TorBox on this device?") { torbox.disconnect(); refreshSettings() }
+        }
+        LinkDebrids.IDS.filter(linkDebrids::connected).forEach { service ->
+            val name = DebridServices.name(service)
+            settingsRow(services, "Disconnect $name", danger = true) {
+                confirm("Disconnect $name on this device?") { linkDebrids.disconnect(service); refreshSettings() }
+            }
         }
 
         val tracking = settingsGroup("WeTrakr", "wetrakr")
@@ -2667,6 +2843,57 @@ class MainActivity : Activity() {
         body.addView(text(message, 14, if (theme == ThemeSpec.EDITORIAL) Color.rgb(150, 37, 28) else Color.rgb(255, 185, 170)), margin(-1, -2, top = 12, bottom = 10))
         body.addView(button("Try again") { current() }, margin(150, 40, bottom = 12))
     }
+    /** Flix option: Continue Watching as wide resume cards (artwork plus an info panel) instead of regular cards. */
+    private fun resumeCards() = flix && store.get(RESUME_CARDS) != "false"  // on unless the viewer turns it off
+    private fun continueSlot() = margin(if (resumeCards()) RESUME_CARD_WIDTH else cardWidth(), theme.layout.cardHeightDp, right = theme.layout.cardGapDp)
+    private fun episodeLine(identity: PlaybackIdentity) = if (identity.type == "series") "S${identity.season} E${identity.episode}" else "Movie"
+
+    /** Same height as every shelf, wider: artwork on the left, then title, episode, time left with a play mark, and progress. */
+    private fun resumeCard(item: MediaItemData, progress: Double, detail: String, timeLeft: String, action: () -> Unit): View {
+        val radius = dp(6).toFloat()
+        val idle = rounded(panel, 6); val lifted = rounded(0xFF3A3A40.toInt(), 6)
+        val frame = FrameLayout(this).apply {
+            background = idle; clipToOutline = true; isFocusable = true; isFocusableInTouchMode = true; isClickable = true
+            tag = "media:${item.type}:${item.imdbId.ifBlank { item.title }}"
+            contentDescription = listOf(item.title, detail, timeLeft).filter(String::isNotBlank).joinToString(", ")
+        }
+        val artWidth = dp(170)
+        val art = FixedSizeImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+        frame.addView(art, FrameLayout.LayoutParams(artWidth, -1))
+        image(art, thumbnail(backdropFor(item)))
+        val fade = View(this)
+        frame.addView(fade, FrameLayout.LayoutParams(dp(60), -1).apply { leftMargin = artWidth - dp(60) })
+        fun paintFade(color: Int) { fade.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(withAlpha(color, 0), color)) }
+        paintFade(panel)
+        val info = column().apply { setPadding(dp(8), dp(12), dp(12), dp(10)) }
+        info.addView(text(item.title, 13, Color.WHITE, true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END })
+        info.addView(text(detail, 10, muted), margin(-1, -2, top = 3))
+        info.addView(View(this), LinearLayout.LayoutParams(-1, 0, 1f))
+        val left = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        left.addView(text("▶", 7, Color.BLACK, true).apply {
+            gravity = Gravity.CENTER; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
+        }, margin(16, 16, right = 6))
+        left.addView(text(timeLeft, 10, 0xFFDDDDDD.toInt()))
+        info.addView(left)
+        val track = FrameLayout(this).apply { background = rounded(0xFF4A4A4A.toInt(), 2) }
+        track.addView(View(this).apply { background = rounded(theme.palette.progress, 2) }, FrameLayout.LayoutParams(0, -1))
+        track.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val fill = track.getChildAt(0); val width = (track.width * progress.coerceIn(0.0, 1.0)).roundToInt()
+            if (fill.layoutParams.width != width) fill.layoutParams = fill.layoutParams.apply { this.width = width }
+        }
+        info.addView(track, margin(-1, 3, top = 6))
+        frame.addView(info, FrameLayout.LayoutParams(-1, -1).apply { leftMargin = artWidth })
+        frame.setOnFocusChangeListener { view, focused ->
+            view.background = if (focused) lifted else idle
+            paintFade(if (focused) 0xFF3A3A40.toInt() else panel)
+            view.foreground = if (focused) FocusRingDrawable(Color.WHITE, radius, true, dp(1).toFloat()) else null
+            view.animate().scaleX(if (focused) theme.layout.focusScale else 1f).scaleY(if (focused) theme.layout.focusScale else 1f).setDuration(130).start()
+            if (focused) scheduleFeature(item)
+        }
+        frame.setOnClickListener { action() }
+        return frame
+    }
+
     private fun cardWidth(): Int {
         if (flix) return theme.layout.cardWidthDp
         val visible = 5
@@ -2677,7 +2904,7 @@ class MainActivity : Activity() {
     private fun section(title: String) {
         body.addView(text(title, theme.layout.sectionTitleSizeSp, ink, true), margin(-1, -2, top = if (isHome && body.childCount == 1) 3 else 11, bottom = 7))
     }
-    private fun mediaRow(title: String, items: List<MediaItemData>, host: LinearLayout = body) {
+    private fun mediaRow(title: String, items: List<MediaItemData>, host: LinearLayout = body, seeAll: (() -> Unit)? = null) {
         if (items.isEmpty()) return
         if (flix) {
             // One press per shelf: the title is a label and "See all" closes the row.
@@ -2692,7 +2919,7 @@ class MainActivity : Activity() {
                     view.background = rounded(if (focused) Color.WHITE else withAlpha(Color.WHITE, 22), theme.layout.cornerRadiusDp)
                     setTextColor(if (focused) Color.BLACK else ink)
                 }
-                setOnClickListener { navigate { shelfGrid(title, items) } }
+                setOnClickListener { seeAll?.invoke() ?: navigate { shelfGrid(title, items) } }
             }, margin(110, theme.layout.cardHeightDp))
             return
         }

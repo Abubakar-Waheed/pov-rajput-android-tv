@@ -78,6 +78,15 @@ sealed interface PreparedSource {
         val accountTag: String
     ) : PreparedSource
 
+    /** Real-Debrid, AllDebrid, Premiumize and Debrid-Link: files whose links are unlocked when one is played. */
+    data class Links(
+        val service: String,
+        val files: List<DebridFile>,
+        override val identity: PlaybackIdentity,
+        val preferredFileId: Long?,
+        val accountTag: String
+    ) : PreparedSource
+
     data class Files(
         val folder: CloudFolder,
         val files: List<CloudFile>,

@@ -13,7 +13,8 @@ class SourceResolver internal constructor(
     private val pause: (Long) -> Unit = Thread::sleep,
     private val offcloud: () -> OffcloudApi? = { null },
     private val serviceOrder: (() -> List<String>)? = null,
-    private val configuredProviders: (() -> List<SourceProvider>)? = null
+    private val configuredProviders: (() -> List<SourceProvider>)? = null,
+    private val links: LinkDebrids? = null
 ) {
     constructor(store: SecureStore, torbox: TorBoxApi) : this({ store.get("sources.endpoint") }, object : SourceTorBox {
         override fun cached(hashes: List<String>) = torbox.cached(hashes)
@@ -21,7 +22,8 @@ class SourceResolver internal constructor(
         override fun folder(kind: String, id: Long) = torbox.folder(kind, id)
         override fun streamUrl(kind: String, folderId: Long, fileId: Long) = torbox.streamUrl(kind, folderId, fileId)
         override fun prepareCached(source: SourceItem, identity: PlaybackIdentity) = torbox.prepareCached(source, identity)
-    }, offcloud = { OffcloudApi(store) }, serviceOrder = { DebridServices.connected(store) }, configuredProviders = { SourceProviders(store).load() })
+    }, offcloud = { OffcloudApi(store) }, serviceOrder = { DebridServices.connected(store) }, configuredProviders = { SourceProviders(store).load() },
+        links = LinkDebrids(store))
     fun sources(identity: PlaybackIdentity): List<SourceItem> = search(identity).items
 
     internal data class SearchResult(val items: List<SourceItem>, val unavailableProviders: List<String>)
@@ -107,14 +109,19 @@ class SourceResolver internal constructor(
     private fun checkCaches(services: List<String>, hashes: List<String>): List<CacheResult> {
         if (hashes.isEmpty()) return services.map { CacheResult(it, emptySet(), false) }
         fun probe(service: String): CacheResult {
+            // These services have no up-front cache answer; their links are checked when one is played.
+            if (service in LinkDebrids.CHECK_ON_PLAY) return CacheResult(service, emptySet(), false)
             val hits = java.util.Collections.synchronizedSet(mutableSetOf<String>())
             // One Offcloud request answers 100 hashes in about the time it answers 40, and batches run
             // side by side, so a full Torrentio list costs roughly one round trip instead of several.
-            val batches = hashes.chunked(if (service == "offcloud") 100 else 40)
+            val batches = hashes.chunked(when (service) { "offcloud" -> 100; "premiumize" -> 50; else -> 40 })
             fun check(batch: List<String>) {
                 if (Thread.currentThread().isInterrupted) throw InterruptedException("Source search cancelled.")
-                val found = if (service == "offcloud") checkNotNull(offcloud()) { "Connect Offcloud in Settings." }.cached(batch)
-                    else torbox.cached(batch)
+                val found = when (service) {
+                    "offcloud" -> checkNotNull(offcloud()) { "Connect Offcloud in Settings." }.cached(batch)
+                    "torbox" -> torbox.cached(batch)
+                    else -> checkNotNull(links).cached(service, batch)
+                }
                 hits += found.map { it.lowercase(Locale.ROOT) }.filter { it in batch }
             }
             return try {
@@ -154,7 +161,7 @@ class SourceResolver internal constructor(
         val hash = source.infoHash.lowercase(Locale.ROOT)
         require(HASH.matches(hash)) { "The selected source has no valid torrent hash." }
         val services = activeServices()
-        check(services.isNotEmpty()) { "Connect Offcloud or TorBox in Settings first." }
+        check(services.isNotEmpty()) { "Connect a debrid service in Settings first." }
         val availability = checkCaches(services, listOf(hash))
         val cachedOn = availability.filter { hash in it.hashes }.map { it.service }
         var failure: Exception? = null
@@ -168,14 +175,51 @@ class SourceResolver internal constructor(
         failure?.let { throw it }
         check(!source.cached) { "This source is no longer cached on your connected services. Refresh sources before starting a cloud download." }
         check(availability.none { it.failed }) { "Cache availability could not be verified. Try again before starting a download." }
-        val downloadService = source.downloadService ?: services.first()
+        val downloadService = source.downloadService ?: services.firstOrNull { it in DebridServices.TRANSFERS }
+            ?: throw IllegalStateException("This link isn't cached on your connected services. Choose another link.")
         check(downloadService in services) { "The selected download account changed. Refresh sources." }
         return prepareWith(downloadService, source.copy(cached = false), identity)
     }
 
-    private fun prepareWith(service: String, source: SourceItem, identity: PlaybackIdentity): PreparedSource =
-        if (service == "offcloud") checkNotNull(offcloud()) { "Connect Offcloud in Settings first." }.prepare(source, identity)
-        else prepareTorBox(source, identity)
+    private fun prepareWith(service: String, source: SourceItem, identity: PlaybackIdentity): PreparedSource = when (service) {
+        "offcloud" -> checkNotNull(offcloud()) { "Connect Offcloud in Settings first." }.prepare(source, identity)
+        "torbox" -> prepareTorBox(source, identity)
+        else -> checkNotNull(links).prepare(service, source, identity)
+            ?: throw IllegalStateException("This link is no longer cached on ${DebridServices.name(service)}. Refresh sources.")
+    }
+
+    /** Connected services that can only tell whether a link is cached by trying it. */
+    fun checkOnPlayServices(): List<String> = activeServices().filter { it in LinkDebrids.CHECK_ON_PLAY }
+
+    /**
+     * Tries up to [LinkDebrids.CHECK_LIMIT] links in order on the check-on-play services and returns the first
+     * one that turns out to be cached, or null. [progress] reports each attempt as (number, total, service).
+     */
+    fun prepareFirstCached(candidates: List<SourceItem>, identity: PlaybackIdentity,
+                           progress: (Int, Int, String) -> Unit = { _, _, _ -> }): PreparedSource.Links? {
+        validateIdentity(identity)
+        val services = checkOnPlayServices()
+        if (services.isEmpty()) return null
+        val api = checkNotNull(links)
+        val tries = candidates.filter { HASH.matches(it.infoHash.lowercase(Locale.ROOT)) &&
+            !(identity.type == "series" && EpisodeFilename.isExplicitMismatch(it.title, identity.season, identity.episode)) }
+            .take(LinkDebrids.CHECK_LIMIT)
+        tries.forEachIndexed { index, source ->
+            for (service in services) {
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("Source preparation cancelled.")
+                progress(index + 1, tries.size, service)
+                val prepared = try { api.prepare(service, source, identity) }
+                    catch (error: InterruptedException) { throw error }
+                    // A rejected key fails every link the same way; say so instead of trying the rest.
+                    catch (error: ApiException) { if (error.code == 401 || error.code == 403) throw error; null }
+                    catch (_: IllegalStateException) { null }
+                if (prepared != null && prepared.files.isNotEmpty()) return prepared
+            }
+        }
+        return null
+    }
+
+    fun streamUrl(prepared: PreparedSource.Links, file: DebridFile): String = checkNotNull(links).streamUrl(prepared, file)
 
     private fun prepareTorBox(source: SourceItem, identity: PlaybackIdentity): PreparedSource.Files {
         val hash = source.infoHash.lowercase(Locale.ROOT)
@@ -213,6 +257,8 @@ class SourceResolver internal constructor(
     fun resolve(source: SourceItem, identity: PlaybackIdentity): String = when (val prepared = prepare(source, identity)) {
         is PreparedSource.Direct -> prepared.url
         is PreparedSource.OffcloudFiles -> prepared.files.singleOrNull()?.url
+            ?: throw IllegalStateException("Choose a video file before playing.")
+        is PreparedSource.Links -> prepared.files.singleOrNull()?.let { streamUrl(prepared, it) }
             ?: throw IllegalStateException("Choose a video file before playing.")
         is PreparedSource.Files -> {
             val file = prepared.automaticFile ?: throw IllegalStateException("This source contains multiple video versions. Choose a video file before playing.")

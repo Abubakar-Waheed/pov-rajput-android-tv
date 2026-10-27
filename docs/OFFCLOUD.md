@@ -5,13 +5,13 @@ POV Rajput is based on the [Android TV application by Mark Mateo / MM-482](https
 ## Install and connect
 
 1. Sideload the APK on Android TV 8.0 or later. It appears as **POV Rajput** and uses application ID `dev.pov.tv.rajput`, so it can coexist with the original POV app.
-2. Open **Settings → Streaming services → Offcloud**.
+2. Open **Settings → Debrid Services → Offcloud**.
 3. Enter your own API key from your Offcloud account settings. Offcloud can be used alone or alongside TorBox.
 4. Browse a movie or episode, open its sources, and select a source. For an uncached transfer, confirm adding it to your Offcloud account.
 5. If the download needs longer than the brief preparation window, wait and select the same source again. Its saved request ID is reused. Completed downloads can also be opened through **Library**; choose **Offcloud cloud** when both accounts are connected.
 6. When several eligible videos are available, choose the exact video version. Catalog episode sources are filtered against episode filename markers; ambiguous episode packs require manual file selection from the cloud library.
 
-Connect both accounts to search both caches. **Settings → Streaming services → Debrid priority** shows numbered ranks: select a service and choose **Move up** or **Move down**. Number **1** is preferred when both have a cached copy; a source cached only on the other service plays there automatically. Shared sources show both services in one result. Both use their own credentials. The Offcloud integration does not require a TorBox account. Cloud files opened without a catalog identity do not produce guessed Trakt watched events.
+Connect both accounts to search both caches. **Settings → Debrid Services → Debrid priority** shows numbered ranks: select a service and choose **Move up** or **Move down**. Number **1** is preferred when both have a cached copy; a source cached only on the other service plays there automatically. Shared sources show both services in one result. Both use their own credentials. The Offcloud integration does not require a TorBox account. Cloud files opened without a catalog identity do not produce guessed Trakt watched events.
 
 ## Privacy and account behavior
 

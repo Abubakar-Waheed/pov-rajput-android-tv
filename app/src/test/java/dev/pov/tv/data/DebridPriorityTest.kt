@@ -5,16 +5,16 @@ import org.junit.Test
 
 class DebridPriorityTest {
     @Test fun `existing selected service becomes first priority`() {
-        assertEquals(listOf("offcloud", "torbox"), DebridServices.parsePriority("", "offcloud"))
-        assertEquals(listOf("torbox", "offcloud"), DebridServices.parsePriority("", "torbox"))
+        assertEquals(listOf("offcloud", "torbox") + LinkDebrids.IDS, DebridServices.parsePriority("", "offcloud"))
+        assertEquals(listOf("torbox", "offcloud") + LinkDebrids.IDS, DebridServices.parsePriority("", "torbox"))
     }
     @Test fun `saved priority takes precedence over legacy selection`() {
-        assertEquals(listOf("offcloud", "torbox"), DebridServices.parsePriority("offcloud,torbox", "torbox"))
-        assertEquals(listOf("torbox", "offcloud"), DebridServices.parsePriority("torbox,offcloud", "offcloud"))
+        assertEquals(listOf("offcloud", "torbox") + LinkDebrids.IDS, DebridServices.parsePriority("offcloud,torbox", "torbox"))
+        assertEquals(listOf("torbox", "offcloud") + LinkDebrids.IDS, DebridServices.parsePriority("torbox,offcloud", "offcloud"))
     }
     @Test fun `invalid duplicate and missing entries cannot disable a connected service`() {
-        assertEquals(listOf("torbox", "offcloud"), DebridServices.parsePriority("unknown,torbox,torbox", "offcloud"))
-        assertEquals(listOf("offcloud", "torbox"), DebridServices.parsePriority("unknown", "offcloud"))
+        assertEquals(listOf("torbox", "offcloud") + LinkDebrids.IDS, DebridServices.parsePriority("unknown,torbox,torbox", "offcloud"))
+        assertEquals(listOf("offcloud", "torbox") + LinkDebrids.IDS, DebridServices.parsePriority("unknown", "offcloud"))
     }
     @Test fun `five providers retain saved ranks and append new integrations`() {
         val providers = listOf("offcloud", "torbox", "debridlink", "realdebrid", "alldebrid")

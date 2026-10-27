@@ -2,13 +2,19 @@ package dev.pov.tv.data
 
 /** Connected accounts all participate in cache searches; order chooses the preferred resolver. */
 object DebridServices {
-    val IDS = listOf("offcloud", "torbox")
+    val IDS = listOf("offcloud", "torbox") + LinkDebrids.IDS
     fun name(id: String): String = when (id) {
         "offcloud" -> "Offcloud"
         "torbox" -> "TorBox"
+        "realdebrid" -> "Real-Debrid"
+        "alldebrid" -> "AllDebrid"
+        "premiumize" -> "Premiumize"
+        "debridlink" -> "Debrid-Link"
         else -> error("Unknown debrid service.")
     }
-    private fun credential(id: String) = if (id == "offcloud") "offcloud.key" else "torbox.token"
+    fun credential(id: String) = when (id) { "offcloud" -> "offcloud.key"; "torbox" -> "torbox.token"; else -> "$id.key" }
+    /** Only these keep a browsable cloud library and can start a download for an uncached link. */
+    val TRANSFERS = setOf("offcloud", "torbox")
 
     internal fun parsePriority(value: String, legacy: String, available: List<String> = IDS): List<String> {
         val saved = value.split(',').map { it.trim() }.filter { it in available }.distinct()

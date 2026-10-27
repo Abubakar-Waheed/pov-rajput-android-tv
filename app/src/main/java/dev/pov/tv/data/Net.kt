@@ -40,6 +40,11 @@ object Net {
         body: JSONObject? = null
     ): String = request(url, method, headers, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json; charset=utf-8")
 
+    /** URL-encoded form bodies, for APIs (Real-Debrid, Premiumize) that do not accept JSON. */
+    fun form(url: String, method: String, headers: Map<String, String>, fields: List<Pair<String, String>>): String =
+        request(url, method, headers, fields.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }.toByteArray(Charsets.UTF_8),
+            "application/x-www-form-urlencoded")
+
     internal fun multipart(
         url: String, fields: Map<String, String>, headers: Map<String, String>
     ): JSONObject {
